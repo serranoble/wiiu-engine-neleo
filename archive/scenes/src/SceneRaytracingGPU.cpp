@@ -262,24 +262,11 @@ bool SceneRaytracingGPU::InitGX2Pipeline() {
         }
 
         if (loaded && !buffer.empty()) {
-            BOOL whbFetchOk = FALSE;
-            if (WHBGfxLoadGFDShaderGroup(&m_gfdShaderGroup, 0, buffer.data())) {
-                bool a1 = WHBGfxInitShaderAttribute(&m_gfdShaderGroup, "aPos", 0, 0, GX2_ATTRIB_FORMAT_FLOAT_32_32);
-                bool a2 = WHBGfxInitShaderAttribute(&m_gfdShaderGroup, "aTexCoord", 0, 8, GX2_ATTRIB_FORMAT_FLOAT_32_32);
-                if (a1 && a2 && WHBGfxInitFetchShader(&m_gfdShaderGroup)) {
-                    whbFetchOk = TRUE;
-                    m_gfdShaderLoaded = true;
-                    m_useDirectGFD = false;
-                } else {
-                    WHBGfxFreeShaderGroup(&m_gfdShaderGroup);
-                }
-            }
-            if (!whbFetchOk) {
-                // Fallback Direct GFD sin dependencia de heaps de WHB
-                uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, buffer.data());
-                uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, buffer.data());
-                uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, buffer.data());
-                uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, buffer.data());
+            // Direct GFD sin dependencia de heaps de WHB
+            uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, buffer.data());
+            uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, buffer.data());
+            uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, buffer.data());
+            uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, buffer.data());
 
                 if (vsHeaderSize > 0 && vsProgSize > 0 && psHeaderSize > 0 && psProgSize > 0) {
                     m_directVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHeaderSize, MemoryTag::ShaderProgram, "RaytracingGPU_VS_Hdr"));
@@ -330,7 +317,6 @@ bool SceneRaytracingGPU::InitGX2Pipeline() {
                 }
             }
         }
-    }
 
     if (m_gfdShaderLoaded && !m_quadBufferCreated) {
         struct QuadVertex {

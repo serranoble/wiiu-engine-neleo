@@ -217,7 +217,7 @@ void JobSystem::Wait(std::atomic<uint32_t>* counter) {
 
 void JobSystem::SleepUntilJobAvailable() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    OSWaitEvent(&m_jobAvailableEvent);
+    OSWaitEventWithTimeout(&m_jobAvailableEvent, OSMillisecondsToTicks(1));
 #else
     std::unique_lock<std::mutex> lock(m_syncMutex);
     m_jobAvailableCv.wait(lock, [this]() {
@@ -245,7 +245,7 @@ void JobSystem::SignalCounterDone() {
 
 void JobSystem::WaitForJobDone() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    OSWaitEvent(&m_jobDoneEvent);
+    OSWaitEventWithTimeout(&m_jobDoneEvent, OSMicrosecondsToTicks(500));
 #else
     std::unique_lock<std::mutex> lock(m_syncMutex);
     m_jobDoneCv.wait_for(lock, std::chrono::microseconds(500));

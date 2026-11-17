@@ -1,10 +1,10 @@
 #include "Scene/SceneRaytracingBVHGX2.hpp"
-#include "Scene/SceneMenuGX2.hpp"
 #include "Scene/SceneManager.hpp"
 #include "Core/JobSystem.hpp"
 #include "Core/StackString.hpp"
 #include "Input/InputManager.hpp"
-#include "Graphics/Render2DGX2.hpp"
+#include "Graphics/UI/UIToolkit.hpp"
+#include "Graphics/RaytracingBVHShaderBinary.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -14,12 +14,13 @@ namespace WiiU {
 namespace {
 
 // Botones táctiles en la franja inferior de 1280x720 (alineados a píxel entero)
-constexpr UI::UIRect BTN_BVH      {  20.0f, 654.0f, 185.0f, 46.0f };
-constexpr UI::UIRect BTN_HEATMAP  { 218.0f, 654.0f, 195.0f, 46.0f };
-constexpr UI::UIRect BTN_SHADOWS  { 426.0f, 654.0f, 225.0f, 46.0f };
-constexpr UI::UIRect BTN_WIRE     { 664.0f, 654.0f, 205.0f, 46.0f };
-constexpr UI::UIRect BTN_PAUSE    { 882.0f, 654.0f, 170.0f, 46.0f };
-constexpr UI::UIRect BTN_EXIT     {1065.0f, 654.0f, 195.0f, 46.0f };
+constexpr UI::UIRect BTN_RES     {   14.0f, 654.0f, 182.0f, 46.0f };
+constexpr UI::UIRect BTN_BVH     {  206.0f, 654.0f, 160.0f, 46.0f };
+constexpr UI::UIRect BTN_HEATMAP {  376.0f, 654.0f, 176.0f, 46.0f };
+constexpr UI::UIRect BTN_SHADOWS {  562.0f, 654.0f, 190.0f, 46.0f };
+constexpr UI::UIRect BTN_WIRE    {  762.0f, 654.0f, 176.0f, 46.0f };
+constexpr UI::UIRect BTN_PAUSE   {  948.0f, 654.0f, 148.0f, 46.0f };
+constexpr UI::UIRect BTN_EXIT    { 1106.0f, 654.0f, 160.0f, 46.0f };
 
 } // namespace
 
@@ -46,18 +47,13 @@ void SceneRaytracingBVHGX2::LoadAsync() {
 
 void SceneRaytracingBVHGX2::OnGameInit() {
     SetClearColor({12, 16, 28, 255});
-    SetCameraProjection(60.0f, 0.20f, 200.0f);
+    SetCameraProjection(CAMERA_FOV_DEG, 0.20f, 200.0f);
 
     m_orbitCamera.Initialize();
     m_orbitCamera.SetTarget(Point3D(0.0f, 1.35f, 0.0f));
     m_orbitCamera.SetAngles(22.0f, 18.0f);
     m_orbitCamera.SetDistance(9.2f);
     m_orbitCamera.SetLeftStickZoomEnabled(false);
-
-    m_shadowConfig.cascadeCount = 3;
-    m_shadowConfig.splitLambda = 0.65f;
-    m_shadowConfig.shadowMapResolution = 1024;
-    m_shadowConfig.maxShadowDistance = 80.0f;
 
     if (!m_asyncPrepared) {
         m_bvh.Reserve(SPHERE_COUNT);
@@ -71,25 +67,36 @@ void SceneRaytracingBVHGX2::OnGameInit() {
     m_showBvhWireframe = true;
     m_paused = false;
     m_shadowMode = 2;
+    m_resIndex = 2;
     m_prevTouchDown = false;
     m_exitRequested = false;
 
     m_sunDir = m_lightPos.Normalized();
+    m_orbitCamera.Update(m_ecsWorld, 0.0f);
+    UpdateCameraBasis();
     ComputeAccelerationBounds();
 
-    if (m_fullscreenShader.Initialize("shaders/raytracing_bvh.gsh")) {
-        m_uniforms.camPos            = m_fullscreenShader.GetPixelUniformOffset("uCamPos");
-        m_uniforms.camForward        = m_fullscreenShader.GetPixelUniformOffset("uCamForward");
-        m_uniforms.camRight          = m_fullscreenShader.GetPixelUniformOffset("uCamRight");
-        m_uniforms.camUp             = m_fullscreenShader.GetPixelUniformOffset("uCamUp");
-        m_uniforms.lightPos          = m_fullscreenShader.GetPixelUniformOffset("uLightPos");
-        m_uniforms.renderFlags       = m_fullscreenShader.GetPixelUniformOffset("uRenderFlags");
-        m_uniforms.sunDirAndNodes    = m_fullscreenShader.GetPixelUniformOffset("uSunDirAndNodes");
-        m_uniforms.screenBounds      = m_fullscreenShader.GetPixelUniformOffset("uScreenBounds");
-        m_uniforms.shadowFloorBounds = m_fullscreenShader.GetPixelUniformOffset("uShadowFloorBounds");
-        m_uniforms.spheres           = m_fullscreenShader.GetPixelUniformOffset("uSpheres");
-        m_uniforms.sphereColors      = m_fullscreenShader.GetPixelUniformOffset("uSphereColors");
-        m_uniforms.bvhNodes          = m_fullscreenShader.GetPixelUniformOffset("uBvhNodes");
+    if (m_fullscreenShader.Initialize("shaders/raytracing_bvh.gsh",
+                                      RAYTRACING_BVH_GSH_DATA,
+                                      RAYTRACING_BVH_GSH_SIZE)) {
+        (void)m_fullscreenShader.EnableOffscreenScaler(1280u, 720u);
+        auto resolveUniform = [this](const char* name, int32_t defaultOffset) noexcept -> int32_t {
+            const int32_t reflected = m_fullscreenShader.GetPixelUniformOffset(name);
+            return (reflected >= 0) ? reflected : defaultOffset;
+        };
+
+        m_uniforms.camPos            = resolveUniform("uCamPos", 0);
+        m_uniforms.camForward        = resolveUniform("uCamForward", 4);
+        m_uniforms.camRight          = resolveUniform("uCamRight", 8);
+        m_uniforms.camUp             = resolveUniform("uCamUp", 12);
+        m_uniforms.lightPos          = resolveUniform("uLightPos", 16);
+        m_uniforms.renderFlags       = resolveUniform("uRenderFlags", 20);
+        m_uniforms.sunDirAndNodes    = resolveUniform("uSunDirAndNodes", 24);
+        m_uniforms.screenBounds      = resolveUniform("uScreenBounds", 28);
+        m_uniforms.shadowFloorBounds = resolveUniform("uShadowFloorBounds", 32);
+        m_uniforms.spheres           = resolveUniform("uSpheres", 36);
+        m_uniforms.sphereColors      = resolveUniform("uSphereColors", 84);
+        m_uniforms.bvhNodes          = resolveUniform("uBvhNodes", 132);
     }
 }
 
@@ -206,13 +213,19 @@ void SceneRaytracingBVHGX2::RebuildBVHAndUniforms() {
     }
 }
 
+void SceneRaytracingBVHGX2::UpdateCameraBasis() noexcept {
+    m_camPos = m_orbitCamera.GetPosition();
+    const Point3D camTarget = m_orbitCamera.GetTarget();
+    m_camForward = (camTarget - m_camPos).Normalized();
+    const Point3D worldUp = (std::fabs(m_camForward.y) > 0.999f)
+                          ? Point3D(0.0f, 0.0f, 1.0f)
+                          : Point3D(0.0f, 1.0f, 0.0f);
+    m_camRight = Point3D::Cross(m_camForward, worldUp).Normalized();
+    m_camUp    = Point3D::Cross(m_camRight, m_camForward).Normalized();
+}
+
 void SceneRaytracingBVHGX2::ComputeAccelerationBounds() noexcept {
     // 1. Pre-culling de pantalla (Screen-Space NDC Bounding Box de las 12 esferas)
-    const Point3D camPos = m_orbitCamera.GetPosition();
-    const Point3D camTarget = m_orbitCamera.GetTarget();
-    const Point3D forward = (camTarget - camPos).Normalized();
-    const Point3D right = Point3D::Cross(forward, Point3D(0.0f, 1.0f, 0.0f)).Normalized();
-    const Point3D up = Point3D::Cross(right, forward);
     const float tanHalfFovY = std::tan(m_fovYRad * 0.5f);
     const float tanHalfFovX = tanHalfFovY * m_aspectRatio;
 
@@ -223,10 +236,10 @@ void SceneRaytracingBVHGX2::ComputeAccelerationBounds() noexcept {
     bool fullScreenFallback = false;
 
     for (const SphereInstance& s : m_spheres) {
-        const Point3D rel = s.currentCenter - camPos;
-        const float cx = Point3D::Dot(rel, right);
-        const float cy = Point3D::Dot(rel, up);
-        const float cz = Point3D::Dot(rel, forward);
+        const Point3D rel = s.currentCenter - m_camPos;
+        const float cx = Point3D::Dot(rel, m_camRight);
+        const float cy = Point3D::Dot(rel, m_camUp);
+        const float cz = Point3D::Dot(rel, m_camForward);
         const float padR = s.radius * 1.15f + 0.08f;
 
         if (cz - padR <= 0.35f) {
@@ -305,6 +318,11 @@ void SceneRaytracingBVHGX2::CycleShadowMode() noexcept {
     m_shadowMode = (m_shadowMode + 1) % 3;
 }
 
+void SceneRaytracingBVHGX2::CycleResolution(int delta) noexcept {
+    constexpr int count = static_cast<int>(RHIFullscreenShader::STANDARD_16X9_PRESET_COUNT);
+    m_resIndex = (m_resIndex + delta % count + count) % count;
+}
+
 void SceneRaytracingBVHGX2::HandleControls(float dt) {
     auto& input = InputManager::Instance();
     const VirtualGamepad& pad = input.GetGamepad(0);
@@ -312,6 +330,12 @@ void SceneRaytracingBVHGX2::HandleControls(float dt) {
     if (pad.WasJustPressed(VirtualButton::B) || pad.WasJustPressed(VirtualButton::Plus) || input.IsBackRequested()) {
         m_exitRequested = true;
         return;
+    }
+    if (pad.WasJustPressed(VirtualButton::ZL) || pad.WasJustPressed(VirtualButton::DPadLeft)) {
+        CycleResolution(-1);
+    }
+    if (pad.WasJustPressed(VirtualButton::ZR) || pad.WasJustPressed(VirtualButton::DPadRight)) {
+        CycleResolution(1);
     }
     if (pad.WasJustPressed(VirtualButton::X)) {
         m_bvhEnabled = !m_bvhEnabled;
@@ -335,7 +359,9 @@ void SceneRaytracingBVHGX2::HandleControls(float dt) {
 
     const TouchState& touch = input.GetTouchState();
     if (touch.active && !m_prevTouchDown) {
-        if (BTN_BVH.Contains(touch.x, touch.y)) {
+        if (BTN_RES.Contains(touch.x, touch.y)) {
+            CycleResolution(1);
+        } else if (BTN_BVH.Contains(touch.x, touch.y)) {
             m_bvhEnabled = !m_bvhEnabled;
         } else if (BTN_HEATMAP.Contains(touch.x, touch.y)) {
             m_heatmapEnabled = !m_heatmapEnabled;
@@ -355,11 +381,12 @@ void SceneRaytracingBVHGX2::HandleControls(float dt) {
 void SceneRaytracingBVHGX2::OnGameUpdate(float dt) {
     HandleControls(dt);
     if (m_exitRequested) {
-        SceneManager::Instance().ChangeScene(std::make_unique<SceneMenuGX2>());
+        SceneManager::Instance().NavigateToParentMenu(true);
         return;
     }
 
     m_orbitCamera.Update(m_ecsWorld, dt);
+    UpdateCameraBasis();
 
     if (!m_paused) {
         m_animTime += dt;
@@ -369,7 +396,7 @@ void SceneRaytracingBVHGX2::OnGameUpdate(float dt) {
     }
 
     CameraComponent camComp;
-    camComp.fov = 60.0f;
+    camComp.fov = CAMERA_FOV_DEG;
     camComp.aspectRatio = m_aspectRatio;
     camComp.nearClip = m_nearPlane;
     camComp.farClip = m_farPlane;
@@ -387,7 +414,7 @@ void SceneRaytracingBVHGX2::OnGameUpdate(float dt) {
 
     // Paralelismo asimétrico Core 1 + Core 2:
     // Core 2: cinemática, SpatialBVH SAH Pre-Order Stackless y CullingSystem::UpdateWithBVH
-    // Core 1: ShadowSystem::ComputeCascades y normalización de vector solar
+    // Core 1: normalización solar mientras Core 2 reconstruye el BVH
     std::atomic<uint32_t> bvhJobCounter{0};
     if (m_smpActive) {
         jobs.Dispatch(&SceneRaytracingBVHGX2::BVHParallelJobTask, &m_jobParams, &bvhJobCounter);
@@ -395,16 +422,6 @@ void SceneRaytracingBVHGX2::OnGameUpdate(float dt) {
         BVHParallelJobTask(&m_jobParams);
     }
 
-    ShadowCameraDesc shadowCam;
-    shadowCam.position = m_orbitCamera.GetPosition();
-    shadowCam.target = m_orbitCamera.GetTarget();
-    shadowCam.up = Point3D(0.0f, 1.0f, 0.0f);
-    shadowCam.fovDeg = 60.0f;
-    shadowCam.aspectRatio = m_aspectRatio;
-    shadowCam.nearClip = m_nearPlane;
-    shadowCam.farClip = m_farPlane;
-    const Point3D lightDir = (Point3D(0.0f, 0.0f, 0.0f) - m_lightPos).Normalized();
-    ShadowSystem::ComputeCascades(shadowCam, lightDir, m_shadowConfig, m_cascades.data());
     m_sunDir = m_lightPos.Normalized();
 
     if (m_smpActive) {
@@ -420,18 +437,12 @@ void SceneRaytracingBVHGX2::OnGameRender3D(ForwardRendererGX2& /*renderer*/) {
         return;
     }
 
-    const Point3D camPos = m_orbitCamera.GetPosition();
-    const Point3D camTarget = m_orbitCamera.GetTarget();
-    const Point3D forward = (camTarget - camPos).Normalized();
-    const Point3D worldUp(0.0f, 1.0f, 0.0f);
-    const Point3D right = Point3D::Cross(forward, worldUp).Normalized();
-    const Point3D up = Point3D::Cross(right, forward);
     const float tanHalfFovY = std::tan(m_fovYRad * 0.5f);
 
-    const float uCamPos[4]      = { camPos.x, camPos.y, camPos.z, tanHalfFovY };
-    const float uCamForward[4]  = { forward.x, forward.y, forward.z, m_aspectRatio };
-    const float uCamRight[4]    = { right.x, right.y, right.z, m_animTime };
-    const float uCamUp[4]       = { up.x, up.y, up.z, 0.0f };
+    const float uCamPos[4]      = { m_camPos.x, m_camPos.y, m_camPos.z, tanHalfFovY };
+    const float uCamForward[4]  = { m_camForward.x, m_camForward.y, m_camForward.z, m_aspectRatio };
+    const float uCamRight[4]    = { m_camRight.x, m_camRight.y, m_camRight.z, m_animTime };
+    const float uCamUp[4]       = { m_camUp.x, m_camUp.y, m_camUp.z, 0.0f };
     const float uLightPos[4]    = { m_lightPos.x, m_lightPos.y, m_lightPos.z, m_lightRadius };
     const float uRenderFlags[4] = {
         m_bvhEnabled ? 1.0f : 0.0f,
@@ -444,7 +455,8 @@ void SceneRaytracingBVHGX2::OnGameRender3D(ForwardRendererGX2& /*renderer*/) {
         static_cast<float>(m_packedNodeCount)
     };
 
-    m_fullscreenShader.BindPipeline(1280, 720);
+    const auto& res = RHIFullscreenShader::STANDARD_16X9_PRESETS[m_resIndex];
+    m_fullscreenShader.BindPipeline(res);
     m_fullscreenShader.SetPixelUniform4fv(m_uniforms.camPos, 4, uCamPos);
     m_fullscreenShader.SetPixelUniform4fv(m_uniforms.camForward, 4, uCamForward);
     m_fullscreenShader.SetPixelUniform4fv(m_uniforms.camRight, 4, uCamRight);
@@ -479,32 +491,45 @@ void SceneRaytracingBVHGX2::OnGameRenderDebug3D() {
 }
 
 void SceneRaytracingBVHGX2::OnGameRenderHUD() {
-    auto& r2d = Render2DGX2::Instance();
+    static constexpr UI::UIRect TOP_PANEL{16.0f, 12.0f, 1248.0f, 66.0f};
+    static constexpr UI::UIRect BOTTOM_BAR{0.0f, 644.0f, 1280.0f, 76.0f};
+    static constexpr ColorRGBA TOP_BG{10, 14, 24, 205};
+    static constexpr ColorRGBA TOP_BORDER{70, 190, 255, 220};
+    static constexpr ColorRGBA BAR_BG{8, 10, 18, 215};
+    static constexpr ColorRGBA BAR_BORDER{35, 65, 105, 190};
 
-    r2d.DrawBox(16.0f, 12.0f, 1248.0f, 66.0f,
-                ColorRGBA{10, 14, 24, 200}, ColorRGBA{70, 190, 255, 220}, 2.0f);
+    UI::UIToolkit::DrawPanel(TOP_PANEL, &TOP_BG, &TOP_BORDER, 2.0f);
+    UI::UIToolkit::DrawTextFit(30.0f, 20.0f, 1220.0f,
+                               "CAP. 11: RAY TRACING BVH STACKLESS + SMP CORE 1/2 (GX2)",
+                               UI::TextScale::Normal, ColorRGBA{120, 230, 255, 255});
 
-    r2d.DrawText("CAP. 11: RAY TRACING BVH STACKLESS + SMP CORE 1/2 (GX2)", 30.0f, 20.0f, 2.0f, ColorRGBA{120, 230, 255, 255});
-
+    const auto& res = RHIFullscreenShader::STANDARD_16X9_PRESETS[m_resIndex];
     const char* shadowLabel = (m_shadowMode == 0) ? "OFF" : ((m_shadowMode == 1) ? "HARD" : "SOFT");
-    StackString<128> statsLine;
-    statsLine.Format("FPS: %.1f (%.1f ms) | BVH: %s (%u) | %s | FRUSTUM: %u/12 | SOMBRAS: %s",
+    StackString<160> statsLine;
+    statsLine.Format("FPS: %.1f (%.1f ms) | RES: %ux%u->720p | BVH: %s (%u) | %s | FRUSTUM: %u/12 | SOMBRAS: %s",
                      GetFPS(), GetFrameTimeMs(),
+                     static_cast<unsigned>(res.width),
+                     static_cast<unsigned>(res.height),
                      m_bvhEnabled ? "STACKLESS" : "BRUTA",
                      static_cast<unsigned>(m_packedNodeCount),
                      m_smpActive ? "SMP C1+C2" : "1 CORE",
                      static_cast<unsigned>(m_visibleEntities),
                      shadowLabel);
-    r2d.DrawText(statsLine.c_str(), 30.0f, 48.0f, 1.0f, ColorRGBA{235, 240, 250, 255});
+    UI::UIToolkit::DrawTextFit(30.0f, 50.0f, 1220.0f, statsLine.c_str(),
+                               UI::TextScale::Small, ColorRGBA{235, 240, 250, 255});
 
-    r2d.DrawRect(0.0f, 644.0f, 1280.0f, 76.0f, ColorRGBA{8, 10, 18, 210});
+    UI::UIToolkit::DrawPanel(BOTTOM_BAR, &BAR_BG, &BAR_BORDER, 1.0f);
 
-    auto drawBtn = [&r2d](const UI::UIRect& r, const char* label, bool active, const ColorRGBA& activeCol) {
+    auto drawBtn = [](const UI::UIRect& r, const char* label, bool active, const ColorRGBA& activeCol) {
+        static constexpr ColorRGBA TEXT_WHITE{255, 255, 255, 255};
         const ColorRGBA fill = active ? activeCol : ColorRGBA{28, 34, 48, 230};
         const ColorRGBA border = active ? ColorRGBA{240, 250, 255, 255} : ColorRGBA{110, 130, 165, 220};
-        r2d.DrawButton(label, r.x, r.y, r.w, r.h, active,
-                       fill, fill, border, border, ColorRGBA::White(), 1.0f);
+        UI::UIToolkit::DrawButton(r, label, active, UI::TextScale::Small, &fill, &border, &TEXT_WHITE);
     };
+
+    StackString<32> resBtn;
+    resBtn.Format("[ZL/ZR] RES: %s", res.shortLabel);
+    drawBtn(BTN_RES, resBtn.c_str(), res.width < 1280u, ColorRGBA{50, 100, 170, 235});
 
     drawBtn(BTN_BVH,     m_bvhEnabled ? "[X] BVH: ON" : "[X] BVH: OFF", m_bvhEnabled, ColorRGBA{30, 120, 70, 235});
     drawBtn(BTN_HEATMAP, m_heatmapEnabled ? "[Y] HEATMAP: ON" : "[Y] HEATMAP: OFF", m_heatmapEnabled, ColorRGBA{175, 75, 25, 235});

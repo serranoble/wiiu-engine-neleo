@@ -18,6 +18,11 @@
 #include <cstdio>
 #include <malloc.h>
 
+#if defined(__WIIU__) || defined(__wiiu__)
+#include <gx2/utils.h>
+#include <gx2/shaders.h>
+#endif
+
 namespace WiiU {
 
 SceneInteractiveGX2::SceneInteractiveGX2()
@@ -248,18 +253,63 @@ bool SceneInteractiveGX2::InitGX2Pipeline() {
         }
 
         if (loaded && !shaderData.empty()) {
-            if (WHBGfxLoadGFDShaderGroup(&m_shaderGroup, 0, shaderData.data())) {
-                bool a1 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aPos", 0,
-                                                    offsetof(InteractiveGX2Vertex, pos),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a2 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aNormal", 0,
-                                                    offsetof(InteractiveGX2Vertex, normal),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a3 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aColor", 0,
-                                                    offsetof(InteractiveGX2Vertex, color),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32);
-                if (a1 && a2 && a3 && WHBGfxInitFetchShader(&m_shaderGroup)) {
-                    m_shaderLoaded = true;
+            uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, shaderData.data());
+            uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
+            uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
+            uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+
+            if (vsHeaderSize > 0 && vsProgSize > 0 && psHeaderSize > 0 && psProgSize > 0) {
+                m_directVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHeaderSize, MemoryTag::ShaderProgram, "Inter_VS_Hdr"));
+                m_directVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "Inter_VS_Prog");
+                m_directPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHeaderSize, MemoryTag::ShaderProgram, "Inter_PS_Hdr"));
+                m_directPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "Inter_PS_Prog");
+
+                if (m_directVs && m_directVsProgram && m_directPs && m_directPsProgram) {
+                    BOOL vsOk = GFDGetVertexShader(m_directVs, m_directVsProgram, 0, shaderData.data());
+                    BOOL psOk = GFDGetPixelShader(m_directPs, m_directPsProgram, 0, shaderData.data());
+                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directVsProgram, vsProgSize);
+                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directPsProgram, psProgSize);
+
+                    if (vsOk && psOk) {
+                        GX2AttribStream attrs[3];
+                        std::memset(attrs, 0, sizeof(attrs));
+                        attrs[0].location = 0;
+                        attrs[0].buffer = 0;
+                        attrs[0].offset = offsetof(InteractiveGX2Vertex, pos);
+                        attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[0].aluDivisor = 0;
+                        attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+
+                        attrs[1].location = 1;
+                        attrs[1].buffer = 0;
+                        attrs[1].offset = offsetof(InteractiveGX2Vertex, normal);
+                        attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[1].aluDivisor = 0;
+                        attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+
+                        attrs[2].location = 2;
+                        attrs[2].buffer = 0;
+                        attrs[2].offset = offsetof(InteractiveGX2Vertex, color);
+                        attrs[2].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32;
+                        attrs[2].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[2].aluDivisor = 0;
+                        attrs[2].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
+                        attrs[2].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+
+                        uint32_t fsSize = GX2CalcFetchShaderSizeEx(3, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+                        m_directFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "Inter_FS_Prog");
+                        if (m_directFsProgram) {
+                            GX2InitFetchShaderEx(&m_directFetchShader, static_cast<uint8_t*>(m_directFsProgram), 3, attrs,
+                                                 GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+                            GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directFsProgram, fsSize);
+                            m_shaderLoaded = true;
+                            m_useDirectGFD = true;
+                        }
+                    }
                 }
             }
         }
@@ -365,7 +415,15 @@ void SceneInteractiveGX2::DestroyGX2Pipeline() {
     }
 
     if (m_shaderLoaded) {
-        WHBGfxFreeShaderGroup(&m_shaderGroup);
+        if (!m_useDirectGFD) {
+            WHBGfxFreeShaderGroup(&m_shaderGroup);
+        } else {
+            if (m_directVs) { void* p = m_directVs; MemoryManager::Instance().Free(p); m_directVs = nullptr; }
+            if (m_directVsProgram) { MemoryManager::Instance().FreeAligned(m_directVsProgram); m_directVsProgram = nullptr; }
+            if (m_directPs) { void* p = m_directPs; MemoryManager::Instance().Free(p); m_directPs = nullptr; }
+            if (m_directPsProgram) { MemoryManager::Instance().FreeAligned(m_directPsProgram); m_directPsProgram = nullptr; }
+            if (m_directFsProgram) { MemoryManager::Instance().FreeAligned(m_directFsProgram); m_directFsProgram = nullptr; }
+        }
         m_shaderLoaded = false;
     }
 
@@ -659,9 +717,15 @@ void SceneInteractiveGX2::RenderScene3D_GX2() {
     GX2SetPixelUniformReg(0, 16, psUniforms);
 
     // 4. Vincular Shaders y Buffers de la GPU Latte
-    GX2SetFetchShader(&m_shaderGroup.fetchShader);
-    GX2SetVertexShader(m_shaderGroup.vertexShader);
-    GX2SetPixelShader(m_shaderGroup.pixelShader);
+    if (!m_useDirectGFD) {
+        GX2SetFetchShader(&m_shaderGroup.fetchShader);
+        GX2SetVertexShader(m_shaderGroup.vertexShader);
+        GX2SetPixelShader(m_shaderGroup.pixelShader);
+    } else {
+        GX2SetFetchShader(&m_directFetchShader);
+        GX2SetVertexShader(m_directVs);
+        GX2SetPixelShader(m_directPs);
+    }
 
     GX2RSetAttributeBuffer(&m_vertexBuffer, 0, sizeof(InteractiveGX2Vertex), 0);
 

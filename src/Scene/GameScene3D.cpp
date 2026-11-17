@@ -1,5 +1,7 @@
 #include "Scene/GameScene3D.hpp"
 #include "Graphics/GX2StateHelper.hpp"
+#include "Graphics/RHI/RHIFullscreenShader.hpp"
+#include "Graphics/RHI/RHIPipelineCache.hpp"
 #include "Core/MemoryManager.hpp"
 #include <cstring>
 
@@ -109,6 +111,20 @@ void GameScene3D::Render(SDL_Renderer* renderer) {
         GX2ClearDepthStencilEx(&m_depthBuffer, 1.0f, 0, GX2_CLEAR_FLAGS_DEPTH);
     }
 
+    // Restaurar contexto, targets, viewport/scissor y Color Control tras GX2Clear*
+    // (en silicio real gx2.rpl cambia al contexto de borrado y desactiva escritura de color).
+    GX2SetContextState(m_nativeContextState);
+    GX2SetColorBuffer(m_pColorBuffer, GX2_RENDER_TARGET_0);
+    if (m_depthBufferCreated) {
+        GX2SetDepthBuffer(&m_depthBuffer);
+    }
+    const RHIFullscreenShader::ScopedActiveFrameTargets scopedTargets(
+        m_pColorBuffer, m_depthBufferCreated ? &m_depthBuffer : nullptr);
+    GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
+    GX2SetScissor(0, 0, 1280, 720);
+    GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
+    RHIPipelineCache::Instance().Invalidate();
+
     // Preparación de matrices de cámara y actualización del estado de DebugDraw3D
     Matrix4x4 viewMatrix = GetViewMatrix();
     Matrix4x4 projMatrix = GetProjectionMatrix();
@@ -188,6 +204,9 @@ bool GameScene3D::InitGX2Pipeline() {
 
 void GameScene3D::DestroyGX2Pipeline() {
 #if defined(__WIIU__) || defined(__wiiu__)
+    // Limpiar registro global de targets antes de liberar las superficies GPU
+    RHIFullscreenShader::ClearActiveFrameTargets();
+
     // Guarda de micronúcleo de Cafe OS: solo drenar si el proceso está activo en primer plano
     DrainGPUQueueIfForeground();
 

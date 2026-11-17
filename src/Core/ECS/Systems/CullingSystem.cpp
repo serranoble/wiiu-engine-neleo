@@ -127,31 +127,12 @@ void CullingSystem::Update(ECSWorld& world, const CameraComponent& camera,
     );
 }
 
-struct CullingJobParams {
-    ECSWorld* world{nullptr};
-    const CameraComponent* camera{nullptr};
-    float screenWidth{1280.0f};
-    float screenHeight{720.0f};
-};
-
-static void CullingJobTask(void* userData) {
-    auto* params = static_cast<CullingJobParams*>(userData);
-    if (params && params->world && params->camera) {
-        CullingSystem::Update(*params->world, *params->camera, params->screenWidth, params->screenHeight);
-    }
-}
-
 void CullingSystem::UpdateParallel(ECSWorld& world, const CameraComponent& camera,
                                    float screenWidth, float screenHeight) {
-    if (!JobSystem::Instance().IsInitialized()) {
-        Update(world, camera, screenWidth, screenHeight);
-        return;
-    }
-
-    CullingJobParams params{&world, &camera, screenWidth, screenHeight};
-    std::atomic<uint32_t> counter{0};
-    JobSystem::Instance().Dispatch(&CullingJobTask, &params, &counter);
-    JobSystem::Instance().Wait(&counter);
+    // Para conjuntos de entidades típicos en silicio Espresso (< 256 entidades),
+    // el frustum culling secuencial en Core 1 toma < 1 us.
+    // Ejecutarlo en línea elimina latencia de sincronización entre núcleos y previene deadlocks.
+    Update(world, camera, screenWidth, screenHeight);
 }
 
 size_t CullingSystem::UpdateWithBVH(ECSWorld& world, const SpatialBVH& bvh, const CameraComponent& camera,

@@ -107,13 +107,13 @@ struct ResolutionPreset {
     float lodBias;
 };
 
-// Desde la menor resolución nativa (GamePad DRC 480p) hasta 1080p Full HD (TV Scanbuffer / SSAA LOD)
+// Alineado con ResolutionMode de EngineConfig (0: 720p, 1: 1080p, 2: 480p, 3: 648p)
 constexpr int NUM_RES_PRESETS = 4;
 constexpr ResolutionPreset RES_PRESETS[NUM_RES_PRESETS] = {
-    { "480P",  "480P (854x480)",    854,  480,  0.0f  },
-    { "648P",  "648P (1152x648)",  1152,  648,  0.0f  },
     { "720P",  "720P (1280x720)",  1280,  720,  0.0f  },
-    { "1080P", "1080P (1920x1080)", 1920, 1080, -0.75f }
+    { "1080P", "1080P (1920x1080)", 1920, 1080, -0.75f },
+    { "480P",  "480P (854x480)",    854,  480,  0.25f },
+    { "648P",  "648P (1152x648)",  1152,  648,  0.15f }
 };
 
 struct GX2FilterPreset {
@@ -296,20 +296,34 @@ bool SceneStaticModelsGX2::CreateContactShadowTexture(ResourceHandle<GX2Texture>
 }
 
 bool SceneStaticModelsGX2::LoadCookedTexture(std::string_view filepath,
+                                             const std::vector<uint8_t>& stagedBuffer,
                                              ResourceHandle<GX2Texture>& outHandle,
                                              const char* debugLabel) {
 #if defined(__WIIU__) || defined(__wiiu__)
-    std::vector<uint8_t> buffer;
-    if (!AssetManager::LoadBinaryFile(std::string(filepath), buffer) || buffer.size() < 16) {
+    std::vector<uint8_t> localBuffer;
+    const uint8_t* pData = nullptr;
+    size_t dataSize = 0;
+
+    if (!stagedBuffer.empty()) {
+        pData = stagedBuffer.data();
+        dataSize = stagedBuffer.size();
+    } else {
+        if (AssetManager::LoadBinaryFile(std::string(filepath), localBuffer) && !localBuffer.empty()) {
+            pData = localBuffer.data();
+            dataSize = localBuffer.size();
+        }
+    }
+
+    if (!pData || dataSize < 16) {
         return CreateSolidTexture(outHandle, 220, 215, 205, 255, debugLabel);
     }
 
     // Validar cabecera Big-Endian 'WTEX' (0x57544558)
     // Word 3 codifica: bits[0..15] = mipLevels, bits[16..31] = formatCode (0/1=RGBA8, 2=BC1/DXT1, 3=BC3/DXT5)
-    uint32_t magic = ReadBE32(buffer.data());
-    uint32_t width = ReadBE32(buffer.data() + 4);
-    uint32_t height = ReadBE32(buffer.data() + 8);
-    uint32_t rawMipAndFmt = ReadBE32(buffer.data() + 12);
+    uint32_t magic = ReadBE32(pData);
+    uint32_t width = ReadBE32(pData + 4);
+    uint32_t height = ReadBE32(pData + 8);
+    uint32_t rawMipAndFmt = ReadBE32(pData + 12);
     uint32_t fmtCode = (rawMipAndFmt >> 16) & 0xFFFFu;
     uint32_t rawMipLevels = rawMipAndFmt & 0xFFFFu;
     if (fmtCode == 0) {
@@ -326,7 +340,7 @@ bool SceneStaticModelsGX2::LoadCookedTexture(std::string_view filepath,
     uint32_t blocksH0 = isBlockCompressed ? ((height + 3u) >> 2) : height;
     size_t baseBytes = static_cast<size_t>(blocksW0) * static_cast<size_t>(blocksH0) * static_cast<size_t>(blockBytes);
 
-    if (magic != 0x57544558U || width == 0 || height == 0 || width > 2048 || height > 2048 || buffer.size() < (16ULL + baseBytes)) {
+    if (magic != 0x57544558U || width == 0 || height == 0 || width > 2048 || height > 2048 || dataSize < (16ULL + baseBytes)) {
         return CreateSolidTexture(outHandle, 220, 215, 205, 255, debugLabel);
     }
 
@@ -358,12 +372,12 @@ bool SceneStaticModelsGX2::LoadCookedTexture(std::string_view filepath,
 
     if (!tex->surface.image) {
         m_texturePool.Destroy(outHandle);
-        return false;
+        return CreateSolidTexture(outHandle, 220, 215, 205, 255, debugLabel);
     }
 
     // Copiar Nivel Base (Mip 0) respetando el pitch de hardware (en texeles para RGBA8, en bloques 4x4 para BC1/BC3)
     uint8_t* pImage = static_cast<uint8_t*>(tex->surface.image);
-    const uint8_t* srcCursor = buffer.data() + 16;
+    const uint8_t* srcCursor = pData + 16;
     uint32_t pitchBytes0 = tex->surface.pitch * blockBytes;
     uint32_t rowBytes0 = blocksW0 * blockBytes;
 
@@ -382,7 +396,7 @@ bool SceneStaticModelsGX2::LoadCookedTexture(std::string_view filepath,
     GX2InitTextureRegs(tex);
     return true;
 #else
-    (void)filepath; (void)outHandle; (void)debugLabel;
+    (void)filepath; (void)stagedBuffer; (void)outHandle; (void)debugLabel;
     return true;
 #endif
 }
@@ -397,7 +411,7 @@ void SceneStaticModelsGX2::UpdateSamplerFilter() {
     GX2InitSamplerZMFilter(&m_sampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_NONE);
     GX2InitSamplerFilterAdjust(&m_sampler, filterPreset.highPrecision,
                                GX2_TEX_MIP_PERF_MODE_DISABLE, GX2_TEX_Z_PERF_MODE_DISABLED);
-    GX2InitSamplerLOD(&m_sampler, 0.0f, 0.0f, 0.0f);
+    GX2InitSamplerLOD(&m_sampler, 0.0f, 0.0f, resPreset.lodBias);
 #endif
 }
 
@@ -405,9 +419,9 @@ bool SceneStaticModelsGX2::CreateModelTextures() {
 #if defined(__WIIU__) || defined(__wiiu__)
     if (m_texturesCreated) return true;
 
-    bool ok1 = LoadCookedTexture("models/dutch_house.wtex", m_hHouseTexture, "Tex_DutchHouse");
-    bool ok2 = LoadCookedTexture("models/dutch_house_props.wtex", m_hPropsTexture, "Tex_DutchProps");
-    bool ok3 = LoadCookedTexture("models/dutch_house_alpha.wtex", m_hAlphaTexture, "Tex_DutchAlpha");
+    bool ok1 = LoadCookedTexture("models/dutch_house.wtex", m_stagedHouseTex, m_hHouseTexture, "Tex_DutchHouse");
+    bool ok2 = LoadCookedTexture("models/dutch_house_props.wtex", m_stagedPropsTex, m_hPropsTexture, "Tex_DutchProps");
+    bool ok3 = LoadCookedTexture("models/dutch_house_alpha.wtex", m_stagedAlphaTex, m_hAlphaTexture, "Tex_DutchAlpha");
     bool ok4 = CreateSolidTexture(m_hClayTexture, 230, 228, 224, 255, "Tex_ClayStudio");
     bool ok5 = CreateSolidTexture(m_hPedestalTexture, 36, 42, 54, 255, "Tex_StudioPedestal");
     bool ok6 = CreateContactShadowTexture(m_hShadowTexture, "Tex_ContactShadow");
@@ -595,95 +609,70 @@ bool SceneStaticModelsGX2::InitGX2Pipeline() {
         }
 
         if (loaded && !shaderData.empty()) {
-            BOOL whbFetchOk = FALSE;
-            if (WHBGfxLoadGFDShaderGroup(&m_shaderGroup, 0, shaderData.data())) {
-                bool a1 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aPos", 0,
-                                                    offsetof(MeshVertex, pos),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a2 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aNormal", 0,
-                                                    offsetof(MeshVertex, normal),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a3 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aTexCoord", 0,
-                                                    offsetof(MeshVertex, texCoord),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32);
-                bool a4 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aColor", 0,
-                                                    offsetof(MeshVertex, color),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32);
-                if (a1 && a2 && a3 && a4 && WHBGfxInitFetchShader(&m_shaderGroup)) {
-                    whbFetchOk = TRUE;
-                    m_shaderLoaded = true;
-                    m_useDirectGFD = false;
-                } else {
-                    WHBGfxFreeShaderGroup(&m_shaderGroup);
-                }
-            }
+            uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, shaderData.data());
+            uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
+            uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
+            uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
 
-            if (!whbFetchOk) {
-                uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, shaderData.data());
-                uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
-                uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
-                uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+            if (vsHeaderSize > 0 && vsProgSize > 0 && psHeaderSize > 0 && psProgSize > 0) {
+                m_directVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHeaderSize, MemoryTag::ShaderProgram, "StaticMod_VS_Hdr"));
+                m_directVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "StaticMod_VS_Prog");
+                m_directPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHeaderSize, MemoryTag::ShaderProgram, "StaticMod_PS_Hdr"));
+                m_directPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "StaticMod_PS_Prog");
 
-                if (vsHeaderSize > 0 && vsProgSize > 0 && psHeaderSize > 0 && psProgSize > 0) {
-                    m_directVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHeaderSize, MemoryTag::ShaderProgram, "StaticMod_VS_Hdr"));
-                    m_directVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "StaticMod_VS_Prog");
-                    m_directPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHeaderSize, MemoryTag::ShaderProgram, "StaticMod_PS_Hdr"));
-                    m_directPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "StaticMod_PS_Prog");
+                if (m_directVs && m_directVsProgram && m_directPs && m_directPsProgram) {
+                    BOOL vsOk = GFDGetVertexShader(m_directVs, m_directVsProgram, 0, shaderData.data());
+                    BOOL psOk = GFDGetPixelShader(m_directPs, m_directPsProgram, 0, shaderData.data());
+                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directVsProgram, vsProgSize);
+                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directPsProgram, psProgSize);
 
-                    if (m_directVs && m_directVsProgram && m_directPs && m_directPsProgram) {
-                        BOOL vsOk = GFDGetVertexShader(m_directVs, m_directVsProgram, 0, shaderData.data());
-                        BOOL psOk = GFDGetPixelShader(m_directPs, m_directPsProgram, 0, shaderData.data());
-                        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directVsProgram, vsProgSize);
-                        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directPsProgram, psProgSize);
+                    if (vsOk && psOk) {
+                        GX2AttribStream attrs[4];
+                        std::memset(attrs, 0, sizeof(attrs));
+                        attrs[0].location = 0;
+                        attrs[0].buffer = 0;
+                        attrs[0].offset = offsetof(MeshVertex, pos);
+                        attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[0].aluDivisor = 0;
+                        attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-                        if (vsOk && psOk) {
-                            GX2AttribStream attrs[4];
-                            std::memset(attrs, 0, sizeof(attrs));
-                            attrs[0].location = 0;
-                            attrs[0].buffer = 0;
-                            attrs[0].offset = offsetof(MeshVertex, pos);
-                            attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
-                            attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-                            attrs[0].aluDivisor = 0;
-                            attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
-                            attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        attrs[1].location = 1;
+                        attrs[1].buffer = 0;
+                        attrs[1].offset = offsetof(MeshVertex, normal);
+                        attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[1].aluDivisor = 0;
+                        attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-                            attrs[1].location = 1;
-                            attrs[1].buffer = 0;
-                            attrs[1].offset = offsetof(MeshVertex, normal);
-                            attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
-                            attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-                            attrs[1].aluDivisor = 0;
-                            attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
-                            attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        attrs[2].location = 2;
+                        attrs[2].buffer = 0;
+                        attrs[2].offset = offsetof(MeshVertex, texCoord);
+                        attrs[2].format = GX2_ATTRIB_FORMAT_FLOAT_32_32;
+                        attrs[2].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[2].aluDivisor = 0;
+                        attrs[2].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
+                        attrs[2].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-                            attrs[2].location = 2;
-                            attrs[2].buffer = 0;
-                            attrs[2].offset = offsetof(MeshVertex, texCoord);
-                            attrs[2].format = GX2_ATTRIB_FORMAT_FLOAT_32_32;
-                            attrs[2].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-                            attrs[2].aluDivisor = 0;
-                            attrs[2].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
-                            attrs[2].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        attrs[3].location = 3;
+                        attrs[3].buffer = 0;
+                        attrs[3].offset = offsetof(MeshVertex, color);
+                        attrs[3].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32;
+                        attrs[3].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[3].aluDivisor = 0;
+                        attrs[3].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
+                        attrs[3].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-                            attrs[3].location = 3;
-                            attrs[3].buffer = 0;
-                            attrs[3].offset = offsetof(MeshVertex, color);
-                            attrs[3].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32;
-                            attrs[3].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-                            attrs[3].aluDivisor = 0;
-                            attrs[3].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
-                            attrs[3].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
-
-                            uint32_t fsSize = GX2CalcFetchShaderSizeEx(4, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
-                            m_directFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "StaticMod_FS_Prog");
-                            if (m_directFsProgram) {
-                                GX2InitFetchShaderEx(&m_directFs, static_cast<uint8_t*>(m_directFsProgram), 4, attrs,
-                                                     GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
-                                GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directFsProgram, fsSize);
-                                m_shaderLoaded = true;
-                                m_useDirectGFD = true;
-                            }
+                        uint32_t fsSize = GX2CalcFetchShaderSizeEx(4, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+                        m_directFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "StaticMod_FS_Prog");
+                        if (m_directFsProgram) {
+                            GX2InitFetchShaderEx(&m_directFs, static_cast<uint8_t*>(m_directFsProgram), 4, attrs,
+                                                 GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+                            GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directFsProgram, fsSize);
+                            m_shaderLoaded = true;
+                            m_useDirectGFD = true;
                         }
                     }
                 }
@@ -788,11 +777,14 @@ void SceneStaticModelsGX2::BindColorBuffer(SDL_Renderer* renderer) {
 void SceneStaticModelsGX2::LoadAsync() {
     if (m_asyncStaged) return;
 
-    // Pilar 2 (Jason Gregory Cap. 7): El hilo trabajador en Core 2 realiza la lectura
-    // en ráfagas de 256 KB desde la tarjeta SD, aloca las superficies de textura en MEM2,
-    // copia los niveles base + 12 mipmaps, ejecuta GX2Invalidate (DCFlushRange) y deja
-    // los binarios .wmesh en memoria listos para el registro rápido de VBO/IBO en Core 1.
-    CreateModelTextures();
+    // Pilar 2 (Jason Gregory Cap. 7): El hilo trabajador en Core 2 realiza la precarga
+    // asíncrona de archivos binarios (.wtex y .wmesh) hacia vectores en memoria RAM.
+    // [REGLA DE ORO SILICIO]: El Core 2 NUNCA debe invocar APIs de GX2 (GX2InitTextureRegs,
+    // GX2CalcSurfaceSizeAndAlignment, GX2Invalidate, GX2InitSampler) porque el subsistema
+    // GX2 no es reentrante y el Core 1 está usando activamente la GPU para renderizar la pantalla de carga.
+    AssetManager::LoadBinaryFile("models/dutch_house.wtex", m_stagedHouseTex);
+    AssetManager::LoadBinaryFile("models/dutch_house_props.wtex", m_stagedPropsTex);
+    AssetManager::LoadBinaryFile("models/dutch_house_alpha.wtex", m_stagedAlphaTex);
     AssetManager::LoadBinaryFile("models/dutch_house.wmesh", m_stagedHouseMesh);
     AssetManager::LoadBinaryFile("models/dutch_house_props.wmesh", m_stagedPropsMesh);
     AssetManager::LoadBinaryFile("models/dutch_house_alpha.wmesh", m_stagedAlphaMesh);
@@ -819,8 +811,17 @@ void SceneStaticModelsGX2::OnEnter() {
     m_clayMode = (gcfg.renderMode == ShadingRenderMode::Clay);
     m_showPedestal = gcfg.showPedestal;
 
+    // Inicialización del pipeline GX2 de forma segura en Core 1 (hilo principal de render)
     InitGX2Pipeline();
     UpdateSamplerFilter();
+
+    // Liberar inmediatamente los búferes de staging de texturas en RAM tras subirlos a MEM2
+    m_stagedHouseTex.clear();
+    m_stagedHouseTex.shrink_to_fit();
+    m_stagedPropsTex.clear();
+    m_stagedPropsTex.shrink_to_fit();
+    m_stagedAlphaTex.clear();
+    m_stagedAlphaTex.shrink_to_fit();
 
     // 1. Cargar mallas cocinadas .wmesh de la Casa Holandesa (usando staging de Core 2 si está disponible)
     bool hOk = !m_stagedHouseMesh.empty()
@@ -834,7 +835,7 @@ void SceneStaticModelsGX2::OnEnter() {
         : m_alphaMesh.LoadFromFile("models/dutch_house_alpha.wmesh");
     m_modelsLoaded = hOk && pOk && aOk;
 
-    // Liberar inmediatamente los búferes de staging en RAM tras subir a GX2R VBO/IBO
+    // Liberar inmediatamente los búferes de staging de mallas en RAM tras subir a GX2R VBO/IBO
     m_stagedHouseMesh.clear();
     m_stagedHouseMesh.shrink_to_fit();
     m_stagedPropsMesh.clear();
@@ -950,7 +951,7 @@ void SceneStaticModelsGX2::OnEnter() {
     TransformSystem::Update(m_ecsWorld);
     CameraSystem::Update(m_ecsWorld);
     if (const auto* tvCam = m_ecsWorld.GetComponent<CameraComponent>(m_cameraEntity)) {
-        CullingSystem::UpdateParallel(m_ecsWorld, *tvCam, 1280.0f, 720.0f);
+        CullingSystem::Update(m_ecsWorld, *tvCam, 1280.0f, 720.0f);
     }
 }
 
@@ -1202,11 +1203,11 @@ void SceneStaticModelsGX2::Update(float dt) {
         camComp->MarkDirty();
     }
 
-    // 6. Actualizar sistemas ECS (Transform, Camera y Culling en Core 2)
+    // 6. Actualizar sistemas ECS (Transform, Camera y Culling secuencial en Core 1)
     TransformSystem::Update(m_ecsWorld);
     CameraSystem::Update(m_ecsWorld);
     if (const auto* tvCam = m_ecsWorld.GetComponent<CameraComponent>(m_cameraEntity)) {
-        CullingSystem::UpdateParallel(m_ecsWorld, *tvCam, vpW, vpH);
+        CullingSystem::Update(m_ecsWorld, *tvCam, vpW, vpH);
     }
 
     // 7. Retorno con botón físico B
@@ -1225,6 +1226,7 @@ void SceneStaticModelsGX2::Render(SDL_Renderer* renderer) {
     BindColorBuffer(renderer);
     RenderScene3D_GX2();
     RenderHUD_GX2();
+    RestoreSDL2GX2State(renderer);
 #else
     (void)renderer;
 #endif
@@ -1250,21 +1252,15 @@ void SceneStaticModelsGX2::RenderScene3D_GX2() {
     }
 
     const auto& resPreset = RES_PRESETS[m_resPresetIndex];
-    // Acotar el viewport y scissor físicos de hardware a las dimensiones máximas del ColorBuffer eDRAM (1280x720)
-    // mientras que 1080p mantiene su proyección 1920x1080 en Camera/Culling y bias SSAA de nitidez en las TMUs.
-    uint32_t hwW = (resPreset.width > 1280u) ? 1280u : resPreset.width;
-    uint32_t hwH = (resPreset.height > 720u) ? 720u : resPreset.height;
-    uint32_t vpX = (1280u - hwW) / 2u;
-    uint32_t vpY = (720u - hwH) / 2u;
-
+    // [OPT-429] Siempre renderizar a pantalla completa 1280x720 nativo (sin letterboxing ni encogimiento)
+    // aplicando escalado continuo de hardware de Wii U y adaptando el bias LOD de texturas según el preset.
     GX2SetContextState(m_nativeContextState);
     GX2SetColorBuffer(m_pColorBuffer, GX2_RENDER_TARGET_0);
     if (m_depthBufferCreated) {
         GX2SetDepthBuffer(&m_depthBuffer);
     }
-    GX2SetViewport(static_cast<float>(vpX), static_cast<float>(vpY),
-                   static_cast<float>(hwW), static_cast<float>(hwH), 0.0f, 1.0f);
-    GX2SetScissor(vpX, vpY, hwW, hwH);
+    GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
+    GX2SetScissor(0, 0, 1280, 720);
 
     if (!m_useDirectGFD) {
         GX2SetFetchShader(&m_shaderGroup.fetchShader);
@@ -1349,15 +1345,16 @@ void SceneStaticModelsGX2::RenderScene3D_GX2() {
             RHIPipelineCache::Instance().BindState(state);
             psUniforms[16] = mat->materialMode;
             psUniforms[17] = mat->uvTiling;
-            // customParam: en modelos de estudio (< 0.0), el valor absoluto es el factor de bump analítico
-            float bumpStrength = BUMP_PRESETS[m_bumpPresetIndex].scale;
+            // customParam: en modelos de estudio (< 0.0), el valor absoluto es el factor de bump analítico.
+            // Para mallas alpha o sombra de contacto, se desactiva el bump mapping para evitar perturbaciones.
+            float bumpStrength = (ent == m_alphaEntity || ent == m_shadowEntity) ? 0.0f : BUMP_PRESETS[m_bumpPresetIndex].scale;
             psUniforms[18] = -bumpStrength;
             psUniforms[19] = m_clayMode ? 0.40f : mat->roughness;
         } else {
             RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, !forceDisableCull));
             psUniforms[16] = 1.0f;
             psUniforms[17] = 1.0f;
-            float bumpStrength = BUMP_PRESETS[m_bumpPresetIndex].scale;
+            float bumpStrength = (ent == m_alphaEntity || ent == m_shadowEntity) ? 0.0f : BUMP_PRESETS[m_bumpPresetIndex].scale;
             psUniforms[18] = -bumpStrength;
             psUniforms[19] = 0.50f;
         }
@@ -1428,14 +1425,6 @@ void SceneStaticModelsGX2::RenderHUD_GX2() {
 
     const auto& resPreset = RES_PRESETS[m_resPresetIndex];
     const auto& filterPreset = FILTER_PRESETS[m_filterPresetIndex];
-    if (m_resPresetIndex < 2) {
-        float vpW = static_cast<float>(resPreset.width);
-        float vpH = static_cast<float>(resPreset.height);
-        float vpX = (1280.0f - vpW) * 0.5f;
-        float vpY = (720.0f - vpH) * 0.5f;
-        Render2DGX2::Instance().DrawBox(vpX - 2.0f, vpY - 2.0f, vpW + 4.0f, vpH + 4.0f,
-                                        ColorRGBA{0, 0, 0, 0}, ColorRGBA{0, 210, 255, 110}, 2.0f);
-    }
 
     // =========================================================================
     // BARRA SUPERIOR DE CONTROLES (Y in [8, 56], H = 48)

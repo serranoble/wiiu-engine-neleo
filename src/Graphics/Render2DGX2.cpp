@@ -389,6 +389,7 @@ void Render2DGX2::End() {
 #if defined(__WIIU__) || defined(__wiiu__)
     if (!m_initialized || m_vertexBatch.empty()) {
         m_vertexBatch.clear();
+        RHIPipelineCache::Instance().Invalidate();
         return;
     }
 
@@ -407,6 +408,7 @@ void Render2DGX2::End() {
         // Avanzar ranura de búfer circular para el siguiente fotograma
         m_currentBufferSlot = (m_currentBufferSlot + 1) % BUFFER_SLOTS;
     }
+    RHIPipelineCache::Instance().Invalidate();
 #endif
     m_vertexBatch.clear();
 }

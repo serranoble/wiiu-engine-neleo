@@ -95,6 +95,9 @@ public:
     void ConsumePauseRequest() noexcept { m_pauseRequested = false; }
     [[nodiscard]] bool IsResourceMonitorRequested() const noexcept { return m_resourceMonitorRequested; }
     void ConsumeResourceMonitorRequest() noexcept { m_resourceMonitorRequested = false; }
+    [[nodiscard]] bool IsExitRequested() const noexcept { return m_exitRequested; }
+    void RequestExit() noexcept { m_exitRequested = true; }
+    void ConsumeExitRequest() noexcept { m_exitRequested = false; }
     [[nodiscard]] uint32_t GetButtonsHold() const noexcept { return m_buttonsHold; }
     [[nodiscard]] uint32_t GetButtonsTrigger() const noexcept { return m_buttonsTrigger; }
     [[nodiscard]] bool IsButtonHeld(uint32_t buttonMask) const noexcept { return (m_buttonsHold & buttonMask) != 0; }
@@ -105,6 +108,7 @@ private:
     ~InputManager() = default;
 
     void OpenConnectedControllers();
+    void PollSDLEvents(bool& outRunning);
     void PollWiiUHardware(float dt);
     void PollSDLHardware(bool& outRunning);
 
@@ -114,6 +118,7 @@ private:
     bool m_backRequested{false};
     bool m_pauseRequested{false};
     bool m_resourceMonitorRequested{false};
+    bool m_exitRequested{false};
     uint32_t m_buttonsHold{0};
     uint32_t m_buttonsTrigger{0};
     TouchState m_touchState{};

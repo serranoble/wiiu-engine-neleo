@@ -52,8 +52,9 @@ void RHIPipelineCache::BindState(const RHIPipelineState& state) {
         );
     }
 
-    // 2. Configurar Blend Mode y Hardware Alpha-Test si cambió
+    // 2. Configurar Blend Mode, Color Control y Hardware Alpha-Test si cambió
     if (HasAny(dirty, RHIStateBits::AllBlend)) {
+        GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
         if (state.blendMode == BlendMode::AlphaBlend) {
             GX2SetAlphaTest(FALSE, GX2_COMPARE_FUNC_ALWAYS, 0.0f);
             GX2SetBlendControl(

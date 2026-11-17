@@ -99,7 +99,7 @@ private:
     void BindColorBuffer(SDL_Renderer* renderer);
 
     bool CreateModelTextures();
-    bool LoadCookedTexture(std::string_view filepath, ResourceHandle<GX2Texture>& outHandle, const char* debugLabel);
+    bool LoadCookedTexture(std::string_view filepath, const std::vector<uint8_t>& stagedBuffer, ResourceHandle<GX2Texture>& outHandle, const char* debugLabel);
     bool CreateSolidTexture(ResourceHandle<GX2Texture>& outHandle, uint8_t r, uint8_t g, uint8_t b, uint8_t a, const char* debugLabel);
     bool CreateContactShadowTexture(ResourceHandle<GX2Texture>& outHandle, const char* debugLabel);
     bool CreateStudioPedestalMeshes();
@@ -142,6 +142,9 @@ private:
     bool m_modelsLoaded{false};
 
     // Búferes de Staging en RAM (Pilar 2 — Precarga asíncrona en Core 2 libre de llamadas GX2)
+    std::vector<uint8_t> m_stagedHouseTex;
+    std::vector<uint8_t> m_stagedPropsTex;
+    std::vector<uint8_t> m_stagedAlphaTex;
     std::vector<uint8_t> m_stagedHouseMesh;
     std::vector<uint8_t> m_stagedPropsMesh;
     std::vector<uint8_t> m_stagedAlphaMesh;

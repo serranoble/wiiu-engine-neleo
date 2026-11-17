@@ -142,8 +142,7 @@ void RumbleManager::SetHardwareRumble(PlayerIndex player, float intensity, bool 
             }
         }
     }
-#endif
-
+#else
     // Soporte PC / SDL2
     int targetIdx = static_cast<int>(player);
     int numJoysticks = SDL_NumJoysticks();
@@ -155,6 +154,7 @@ void RumbleManager::SetHardwareRumble(PlayerIndex player, float intensity, bool 
             SDL_GameControllerRumble(controller, freq, freq, ms);
         }
     }
+#endif
 }
 
 } // namespace WiiU

@@ -473,61 +473,42 @@ bool SceneShadowsGX2::InitGX2Pipeline() {
         }
 
         if (loaded && !shaderData.empty()) {
-            // Método 1: WHBGfxLoadGFDShaderGroup (idéntico a SceneGX2Native y SceneInteractiveGX2)
-            if (WHBGfxLoadGFDShaderGroup(&m_shaderGroup, 0, shaderData.data())) {
-                bool a1 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aPos", 0,
-                                                    offsetof(ShadowsGX2Vertex, pos),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a2 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aNormal", 0,
-                                                    offsetof(ShadowsGX2Vertex, normal),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a3 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aColor", 0,
-                                                    offsetof(ShadowsGX2Vertex, color),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32);
-                if (a1 && a2 && a3 && WHBGfxInitFetchShader(&m_shaderGroup)) {
-                    m_shaderLoaded = true;
-                    m_useDirectGFD = false;
-                }
-            }
+            uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, shaderData.data());
+            uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
+            uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
+            uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
 
-            // Método 2: Fallback Directo GFD con máscaras canónicas GX2_SEL_MASK
-            if (!m_shaderLoaded) {
-                uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, shaderData.data());
-                uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
-                uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
-                uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+            if (vsHeaderSize > 0 && vsProgSize > 0 && psHeaderSize > 0 && psProgSize > 0) {
+                m_directVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHeaderSize, MemoryTag::ShaderProgram, "ShadowsGX2_VS_Hdr"));
+                m_directVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "ShadowsGX2_VS_Prog");
+                m_directPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHeaderSize, MemoryTag::ShaderProgram, "ShadowsGX2_PS_Hdr"));
+                m_directPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "ShadowsGX2_PS_Prog");
 
-                if (vsHeaderSize > 0 && vsProgSize > 0 && psHeaderSize > 0 && psProgSize > 0) {
-                    m_directVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHeaderSize, MemoryTag::ShaderProgram, "ShadowsGX2_VS_Hdr"));
-                    m_directVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "ShadowsGX2_VS_Prog");
-                    m_directPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHeaderSize, MemoryTag::ShaderProgram, "ShadowsGX2_PS_Hdr"));
-                    m_directPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "ShadowsGX2_PS_Prog");
+                if (m_directVs && m_directVsProgram && m_directPs && m_directPsProgram) {
+                    BOOL vsOk = GFDGetVertexShader(m_directVs, m_directVsProgram, 0, shaderData.data());
+                    BOOL psOk = GFDGetPixelShader(m_directPs, m_directPsProgram, 0, shaderData.data());
+                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directVsProgram, vsProgSize);
+                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directPsProgram, psProgSize);
 
-                    if (m_directVs && m_directVsProgram && m_directPs && m_directPsProgram) {
-                        BOOL vsOk = GFDGetVertexShader(m_directVs, m_directVsProgram, 0, shaderData.data());
-                        BOOL psOk = GFDGetPixelShader(m_directPs, m_directPsProgram, 0, shaderData.data());
-                        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directVsProgram, vsProgSize);
-                        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_directPsProgram, psProgSize);
+                    if (vsOk && psOk) {
+                        GX2AttribStream attrs[3];
+                        std::memset(attrs, 0, sizeof(attrs));
+                        attrs[0].location = 0;
+                        attrs[0].buffer = 0;
+                        attrs[0].offset = offsetof(ShadowsGX2Vertex, pos);
+                        attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[0].aluDivisor = 0;
+                        attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-                        if (vsOk && psOk) {
-                            GX2AttribStream attrs[3];
-                            std::memset(attrs, 0, sizeof(attrs));
-                            attrs[0].location = 0;
-                            attrs[0].buffer = 0;
-                            attrs[0].offset = offsetof(ShadowsGX2Vertex, pos);
-                            attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
-                            attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-                            attrs[0].aluDivisor = 0;
-                            attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
-                            attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
-
-                            attrs[1].location = 1;
-                            attrs[1].buffer = 0;
-                            attrs[1].offset = offsetof(ShadowsGX2Vertex, normal);
-                            attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
-                            attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-                            attrs[1].aluDivisor = 0;
-                            attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[1].location = 1;
+                        attrs[1].buffer = 0;
+                        attrs[1].offset = offsetof(ShadowsGX2Vertex, normal);
+                        attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[1].aluDivisor = 0;
+                        attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
                             attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
                             attrs[2].location = 2;
@@ -555,7 +536,6 @@ bool SceneShadowsGX2::InitGX2Pipeline() {
                 }
             }
         }
-    }
 
     // 2. Crear Búferes VRAM (Búfer de Vértices Unificado idéntico a SceneGX2Native)
     if (m_shaderLoaded && !m_buffersCreated) {

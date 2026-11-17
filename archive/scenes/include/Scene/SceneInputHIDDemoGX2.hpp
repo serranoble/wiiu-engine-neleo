@@ -83,6 +83,8 @@ private:
     std::vector<uint8_t> m_stagedGroundMesh;
     std::vector<uint8_t> m_stagedActorMesh;
     std::vector<uint8_t> m_stagedPillarMesh;
+    std::vector<uint8_t> m_stagedSkydomeTex;
+    std::vector<uint8_t> m_stagedGrassTex;
 
     // Entidades del mundo ECS
     Entity m_skydomeEntity{};
