@@ -253,7 +253,7 @@ bool SceneSkeletalAnimationGX2::InitGX2Pipeline() {
                     attrs[4].type = GX2_ATTRIB_INDEX_PER_VERTEX;
                     attrs[4].aluDivisor = 0;
                     attrs[4].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
-                    attrs[4].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                    attrs[4].endianSwap = GX2_ENDIAN_SWAP_NONE;
 
                     attrs[5].location = 5;
                     attrs[5].buffer = 0;
@@ -794,7 +794,7 @@ void SceneSkeletalAnimationGX2::Update(float dt) {
     CameraSystem::Update(m_ecsWorld);
 
     if (const auto* tvCam = m_ecsWorld.GetComponent<CameraComponent>(m_cameraEntity)) {
-        CullingSystem::UpdateParallel(m_ecsWorld, *tvCam, 1280.0f, 720.0f);
+        CullingSystem::Update(m_ecsWorld, *tvCam, 1280.0f, 720.0f);
     }
 
     // 6. Retorno físico al menú si se solicita
@@ -827,6 +827,19 @@ void SceneSkeletalAnimationGX2::RenderScene3D_GX2() {
     if (m_depthBufferCreated) {
         GX2ClearDepthStencilEx(&m_depthBuffer, 1.0f, 0, GX2_CLEAR_FLAGS_DEPTH);
     }
+
+    // Restaurar estado de contexto y render targets tras el clear en silicio GX2
+    GX2SetContextState(m_nativeContextState);
+    GX2SetColorBuffer(m_pColorBuffer, GX2_RENDER_TARGET_0);
+    if (m_depthBufferCreated) {
+        GX2SetDepthBuffer(&m_depthBuffer);
+    }
+    GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
+    GX2SetScissor(0, 0, 1280, 720);
+    GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
+    GX2SetPolygonControl(GX2_FRONT_FACE_CCW, FALSE, FALSE, FALSE,
+                         GX2_POLYGON_MODE_TRIANGLE, GX2_POLYGON_MODE_TRIANGLE,
+                         TRUE, TRUE, FALSE);
 
     // 1. Obtener matrices de vista y proyección desde CameraComponent
     const auto* camComp = m_ecsWorld.GetComponent<CameraComponent>(m_cameraEntity);
@@ -1013,6 +1026,7 @@ void SceneSkeletalAnimationGX2::Render(SDL_Renderer* renderer) {
     BindColorBuffer(renderer);
     RenderScene3D_GX2();
     RenderHUD_GX2();
+    RestoreSDL2GX2State(renderer);
 #else
     (void)renderer;
 #endif

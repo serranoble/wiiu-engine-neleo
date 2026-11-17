@@ -4,7 +4,6 @@
 #include "Core/Engine.hpp"
 #include "Scene/SceneManager.hpp"
 #include "Scene/SceneMenu.hpp"
-#include "Scene/SceneMenuModels.hpp"
 #include "Scene/SceneOptions.hpp"
 #include <memory>
 #include <utility>
@@ -18,7 +17,7 @@ int main(int argc, char* argv[]) {
             return std::make_unique<WiiU::SceneMenu>();
         });
         sceneMgr.SetModelsMenuFactory([]() {
-            return std::make_unique<WiiU::SceneMenuModels>();
+            return std::make_unique<WiiU::SceneMenu>();
         });
         sceneMgr.SetOptionsSceneFactory([](std::function<void()> onBack) {
             return std::make_unique<WiiU::SceneOptions>(std::move(onBack));

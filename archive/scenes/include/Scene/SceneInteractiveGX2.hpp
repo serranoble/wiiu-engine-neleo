@@ -169,6 +169,13 @@ private:
     // Recursos de Silicio Latte GX2
     WHBGfxShaderGroup m_shaderGroup{};
     bool m_shaderLoaded{false};
+    bool m_useDirectGFD{true};
+    GX2VertexShader* m_directVs{nullptr};
+    void* m_directVsProgram{nullptr};
+    GX2PixelShader* m_directPs{nullptr};
+    void* m_directPsProgram{nullptr};
+    GX2FetchShader m_directFetchShader{};
+    void* m_directFsProgram{nullptr};
     GX2RBuffer m_vertexBuffer{};
     GX2RBuffer m_indexBuffer{};
     bool m_buffersCreated{false};

@@ -102,13 +102,30 @@ void SceneInputHIDDemoGX2::LoadAsync() {
     AssetManager::LoadBinaryFile("models/ground_plane.wmesh", m_stagedGroundMesh);
     AssetManager::LoadBinaryFile("models/beacon.wmesh", m_stagedActorMesh);
     AssetManager::LoadBinaryFile("models/pillar.wmesh", m_stagedPillarMesh);
+    AssetManager::LoadBinaryFile("models/skydome.wtex", m_stagedSkydomeTex);
+    AssetManager::LoadBinaryFile("models/ground_grass.wtex", m_stagedGrassTex);
 }
 
 bool SceneInputHIDDemoGX2::CreateTextures() {
     if (m_texturesCreated) return true;
-    m_hSkydomeTex = LoadSceneTexture("models/skydome.wtex", "HIDDemo_SkydomeTex");
-    m_hGrassTex   = LoadSceneTexture("models/ground_grass.wtex", "HIDDemo_GrassTex");
-    m_hWhiteTex   = CreateSceneSolidTexture(0xFFFFFFFFu, "HIDDemo_WhiteTex");
+
+    if (!m_stagedSkydomeTex.empty()) {
+        m_hSkydomeTex = LoadSceneTextureFromMemory(m_stagedSkydomeTex.data(), m_stagedSkydomeTex.size(), "HIDDemo_SkydomeTex");
+        m_stagedSkydomeTex.clear();
+        m_stagedSkydomeTex.shrink_to_fit();
+    } else {
+        m_hSkydomeTex = LoadSceneTexture("models/skydome.wtex", "HIDDemo_SkydomeTex");
+    }
+
+    if (!m_stagedGrassTex.empty()) {
+        m_hGrassTex = LoadSceneTextureFromMemory(m_stagedGrassTex.data(), m_stagedGrassTex.size(), "HIDDemo_GrassTex");
+        m_stagedGrassTex.clear();
+        m_stagedGrassTex.shrink_to_fit();
+    } else {
+        m_hGrassTex = LoadSceneTexture("models/ground_grass.wtex", "HIDDemo_GrassTex");
+    }
+
+    m_hWhiteTex = CreateSceneSolidTexture(0xFFFFFFFFu, "HIDDemo_WhiteTex");
     m_texturesCreated = true;
     return true;
 }
@@ -164,6 +181,13 @@ void SceneInputHIDDemoGX2::OnGameExit() {
     m_groundMesh.Destroy();
     m_actorMesh.Destroy();
     m_pillarMesh.Destroy();
+
+    m_stagedSkydomeMesh.clear();
+    m_stagedGroundMesh.clear();
+    m_stagedActorMesh.clear();
+    m_stagedPillarMesh.clear();
+    m_stagedSkydomeTex.clear();
+    m_stagedGrassTex.clear();
 
     m_hSkydomeTex = {};
     m_hGrassTex = {};
@@ -323,10 +347,10 @@ void SceneInputHIDDemoGX2::OnGameRenderDebug3D() {
     topPt.y += 1.2f;
     DebugDraw3D::DrawLine(m_actorPosition, topPt, 2.0f, ColorRGBA::Yellow());
 
-    // Círculo de sombra/base sobre el suelo
+    // Círculo de sombra/base sobre el suelo (yOffset = 0.0f relativo a groundPt.y, 24 segmentos)
     Point3D groundPt = m_actorPosition;
     groundPt.y = 0.02f;
-    DebugDraw3D::DrawCircleXZ(groundPt, 0.5f, 16.0f, 2.0f, ColorRGBA{0, 220, 255, 180});
+    DebugDraw3D::DrawCircleXZ(groundPt, 0.5f, 0.0f, 2.0f, ColorRGBA{0, 220, 255, 180}, 24);
 }
 
 void SceneInputHIDDemoGX2::OnGameRenderHUD() {

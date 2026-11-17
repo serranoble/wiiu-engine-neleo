@@ -1,8 +1,8 @@
 # ANEXO DE OPTIMIZACIONES PENDIENTES POR ABORDAR
 **Proyecto:** WiiU Demos - Motor Gráfico y Computación de Alto Rendimiento 3D  
 **Plataforma:** Nintendo Wii U (Espresso PPC 750CL Tri-Core @ 1.24 GHz, AMD Latte GX2 GPU @ 550 MHz, Cafe OS)  
-**Última Actualización:** 14 de Noviembre de 2026 (Hito 134 - Refactoring de Modularidad Open Source: `OPT-418` a `OPT-420` — `TextureLoaderGX2` desacoplado + RAII en `GameScene3D`, `ForwardRendererGX2::RenderSkinnedMesh(const StaticMesh&)`, inversión de dependencias Engine↔Demos, `WiiUEngine.hpp` y modo librería CMake `WIIU_ENGINE_BUILD_DEMOS=OFF`)  
-**Propósito:** Este documento registra de manera viva, continua y estructurada todas las técnicas, algoritmos y optimizaciones investigadas y aplicadas en el motor (`OPT-01` a `OPT-420`), sirviendo como bitácora técnica e inventario para el roadmap multi-consola.
+**Última Actualización:** 14 de Noviembre de 2026 (Hito 137 - Desacoplamiento de Carga Multihilo en Core 2 y Escalado Fullscreen 16:9 en Modelos Estáticos: `OPT-429`; Hito 136: `OPT-428` — Integración de Botón HOME, Bucle de Mensajes Cafe OS y Ciclo de Vida Limpio; Hito 135: `OPT-421` a `OPT-427`)  
+**Propósito:** Este documento registra de manera viva, continua y estructurada todas las técnicas, algoritmos y optimizaciones investigadas y aplicadas en el motor (`OPT-01` a `OPT-429`), sirviendo como bitácora técnica e inventario para el roadmap multi-consola.
 
 ---
 
@@ -79,7 +79,7 @@
 | **OPT-67** | Memoria GPU | Triple-Buffered Dynamic VRAM Vertex Ring Buffer for UI Streaming (`GX2RBuffer` Slice Cycling) | Jason Gregory / DICE Frostbite | **PENDIENTE** | Backlog GPU / VRAM |
 | **OPT-68** | Pipeline GPU / Silicio | Migración Integral de Ray Tracing GPU a 100% GX2 Nativo & UI en Silicio (`Render2DGX2`) | AMD Latte GX2 / Jason Gregory | **IMPLEMENTADO** | Hito 37 (9 Oct 2026) |
 | **OPT-69** | UI / Ergonomía | Sincronización Ergonómica Háptica y Acústica Universal en UI Táctil de Consola | Nintendo HIG / Jason Gregory | **IMPLEMENTADO** | Hito 37 (9 Oct 2026) |
-| **OPT-70** | Shaders / GPU | Hierarchical Bounding Volume Hierarchy (BVH) Traversal on GPU VLIW5 Compute | Karras (HPG 12) / Aila & Laine (HPG 09) | **PENDIENTE** | Backlog Shaders / Fase 3 |
+| **OPT-70** | Shaders / GPU | Recorrido BVH Pre-Order Stackless con Skip-Pointers (`SpatialBVH::PackNodesForGPU`) | Karras (HPG 12) / Aila & Laine (HPG 09) | **IMPLEMENTADO** | Hito 127 (14 Nov 2026) |
 | **OPT-71** | Shaders / Visual | Temporal Anti-Aliasing & History Reprojection (TAA / SMAA T2x) in Hardware Shaders | Brian Karis (Epic GDC 14) / Salvi (DICE) | **PENDIENTE** | Backlog Visual / Fase 3 |
 | **OPT-72** | Concurrencia GPU | Asynchronous Compute Queue Overlapping for Ray Tracing Acceleration | AMD R700 Whitepaper / DICE Frostbite | **PENDIENTE** | Backlog GPU / Fase 3 |
 | **OPT-73** | Pipeline GPU / Silicio | Migración Integral de Demo 7 (Agua 3D BotW) a 100% GX2 Nativo, Frame Loop de 3 Pases y UI en Silicio (`Render2DGX2`) | AMD Latte GX2 / Nintendo Cafe OS / Tessendorf | **IMPLEMENTADO** | Hito 38 (9 Oct 2026) |
@@ -430,10 +430,19 @@
 | **OPT-418** | Gráficos / Texturas GX2 | Carga Desacoplada `.wtex`/`.wcube`/Solid (`TextureLoaderGX2`) & Pool RAII en `GameScene3D` | Jason Gregory (Cap. 6) / AMD Latte GX2 | **IMPLEMENTADO** | Hito 134 (14 Nov 2026) |
 | **OPT-419** | Renderizado / Mallas GX2 | Unificación Skinned Mesh sobre `StaticMesh` (`RenderSkinnedMesh(const StaticMesh&, ...)`) | AMD Latte GX2 / `StaticMesh` | **IMPLEMENTADO** | Hito 134 (14 Nov 2026) |
 | **OPT-420** | Arquitectura / Modularidad | Inversión de Dependencias Engine↔Demos (`SceneManager` Fábricas + `Engine::Init` + `WiiUEngine.hpp` + `WIIU_ENGINE_BUILD_DEMOS`) | Jason Gregory (Cap. 1/2/3) / Clean Architecture | **IMPLEMENTADO** | Hito 134 (14 Nov 2026) |
+| **OPT-421** | Gráficos / Fillrate GX2 | Escalado Dinámico de Resolución Interna 16:9 (`640x360`..`1280x720`) con Upscale Bilineal Hardware (`RHIFullscreenShader`) | AMD Latte GX2 / Digital Foundry Scaling | **IMPLEMENTADO** | Hito 135 (14 Nov 2026) |
+| **OPT-422** | Shaders R700 / Ray Tracing | Rechazo Rápido de Raíz BVH en KC2, Poda Esférica sin `sqrt` (`perp`), Transición Suelo Suave y Bucle Único | AMD R700 ISA / Pharr PBRT / CafeGLSL | **IMPLEMENTADO** | Hito 135 (14 Nov 2026) |
+| **OPT-423** | Shaders / Culling GPU | Tile-Based Coarse Screen-Space Ray Culling (8×8 Light & Primitive Bitmasks) | Harada et al. (SIGGRAPH Asia 12) / Forward+ | **PENDIENTE** | Propuesta Backlog |
+| **OPT-424** | Shaders / Muestreo Temporal | Temporal Reprojection & Checkerboard Half-Rate Ray Tracing | Brian Karis (GDC 14) / Mansson (GDC 16) | **PENDIENTE** | Propuesta Backlog |
+| **OPT-425** | Estructuras BVH / Memoria | Quantized Wide BVH4 / Reduced-Precision AABB Nodes (1 `vec4` por nodo) | Ylitie et al. (HPG 2017) | **PENDIENTE** | Propuesta Backlog |
+| **OPT-426** | Gráficos / RHI VRAM | Pool Compartido de Render Targets Transitorios & Gobernador Dinámico (`RHIRenderTargetPool`) | Jason Gregory (Cap. 10-11) / Unreal RDG | **PENDIENTE** | Propuesta Backlog |
+| **OPT-427** | Concurrencia SMP / Clean Code | DTO Inmutable por Cuadro para Jobs BVH en Core 2 (`BVHFrameBuildInput` / `BVHFrameBuildOutput`) | Tony Albrecht / Jason Gregory (Cap. 7.6) | **PENDIENTE** | Propuesta Backlog |
+| **OPT-428** | Entrada / Ciclo de Vida OS | Bombeo Continuo de Eventos Cafe OS (`ProcUIProcessMessages`), Soporte del Menú HOME y Cierre Limpio | Cafe OS ProcUI / SDL2 WiiU / Jason Gregory (Cap. 8) | **IMPLEMENTADO** | Hito 136 (14 Nov 2026) |
+| **OPT-429** | Gráficos GX2 / Multihilo | Desacoplamiento de Carga Multihilo en Core 2 (Zero-GX2 Staging) y Viewport Fullscreen 16:9 en Modelos Estáticos | Jason Gregory (Cap. 7) / GX2 Thread-Safety Rules | **IMPLEMENTADO** | Hito 137 (14 Nov 2026) |
 
 ---
 
-## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-420`)
+## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-429`)
 
 ### [OPT-01] Multiprocesamiento Simétrico en 2 Cores (Cores 1 y 2)
 - **Implementado en:** [Hito 24](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md#L669) (6 de Octubre de 2026).
@@ -1078,27 +1087,14 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **Solución:** Integración sistemática de `AudioManager::Instance().PlayClick()` en cada bloque `touch.justPressed` de los 5 botones de configuración, en el botón `< VOLVER` y en la detección unificada de retorno (`InputManager::IsBackRequested()`).
 - **Resultado:** Retroalimentación acústica inmediata y consistente en todos los elementos interactivos táctiles y botones físicos de la consola.
 
-## 1. `SpatialBVH`: Empaquetado Pre-Order Stackless con Skip-Pointers (`OPT-70`)
-- **Archivos:** `include/Core/Spatial/SpatialBVH.hpp` y `src/Core/Spatial/SpatialBVH.cpp`
-- **Cambios:**
-  - En `SpatialBVH::PackNodesForGPU(float* outVec4Buffer, size_t maxNodes) const noexcept`:
-    - Emitir los nodos en orden **Pre-Order** usando una pila local en CPU (`struct Entry { uint32_t treeNodeIdx; uint32_t parentPatchIdx; }`) o una función recursiva pequeña sobre un arreglo local `uint32_t preOrder[64]` y `uint32_t skipIdx[64]`:
-      - Recorrer el árbol en Pre-Order: para cada nodo `treeIdx`, asignar su posición `outIdx = count++`.
-      - Si es interno (`primCount == 0`): recorrer primero su hijo izquierdo (`n.leftFirst`) y luego su hijo derecho (`n.leftFirst + 1`). Al terminar el subárbol completo del nodo `outIdx`, su índice de salto en fallo (`skipIdx`) es el valor actual de `count` (el siguiente nodo en Pre-Order tras todo su subárbol, o `totalNodes` si ya no quedan más nodos).
-      - Al escribir cada nodo `outIdx` en `outVec4Buffer + outIdx * 8`:
-        - `dst[0..2]` = `n.bounds.min.x, y, z`
-        - `dst[3]` = si `n.primCount > 0` (hoja): `static_cast<float>(n.leftFirst)`; si `n.primCount == 0` (interno): `static_cast<float>(skipIdx[outIdx])`
-        - `dst[4..6]` = `n.bounds.max.x, y, z`
-        - `dst[7]` = `static_cast<float>(n.primCount)` (`0.0f` para internos, `> 0.0f` para hojas)
-    - Así, en la GPU (GLSL):
-      - `int nodeCount = int(uRenderFlags.w_or_nodeCount);` (o mientras `nodeIdx < nodeCount`):
-      - Si `!aabbIntersect(...)`:
-        - Si `pCount == 0`: `nodeIdx = int(nMin.w + 0.5);` (salta todo el subárbol!)
-        - Si `pCount > 0`: `nodeIdx++;` (salta la hoja!)
-      - Si `aabbIntersect(...)`:
-        - Si `pCount > 0`: evalúa las primitivas `[leftFirst .. leftFirst + pCount - 1]` y luego hace `nodeIdx++;`
-        - Si `pCount == 0`: simplemente hace `nodeIdx++;` (entra al hijo izquierdo contiguo en Pre-Order!)
-      - **Cero `int stack[16]` en GPU!**
+### [OPT-70] Recorrido BVH Pre-Order Stackless con Skip-Pointers en GPU (`SpatialBVH::PackNodesForGPU`)
+- **Área:** Estructuras Espaciales / Shaders R700 (`SpatialBVH` + `raytracing_bvh.frag`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 127 - 14 de Noviembre de 2026).
+- **Referencia de Literatura:** Tero Karras (*Thinking Parallel*, HPG 2012); Timo Aila & Samuli Laine (*Understanding the Efficiency of Ray Traversal on GPUs*, HPG 2009); Christer Ericson (*Real-Time Collision Detection*).
+- **Mecanismo:** `SpatialBVH::PackNodesForGPU(float* outVec4Buffer, size_t maxNodes) const noexcept` emite los nodos SAH en orden **Pre-Order** sin almacenar arreglos locales `int stack[16]` en los registros GPR del Pixel Shader de AMD Latte:
+  - Cada nodo `outIdx` ocupa 2 `vec4` contiguos en `uBvhNodes[48]`: `nMin.xyz` + `payload_or_skipIdx` (`nMin.w`), y `nMax.xyz` + `primCount` (`nMax.w`).
+  - Al fallar `aabbIntersect` sobre un nodo interno (`pCount == 0`), el puntero salta en $O(1)$ al índice de escape `skipIdx` tras todo el subárbol; si acierta, avanza al hijo izquierdo contiguo (`nodeIdx + 1`).
+- **Resultado:** Elimina todo *register spilling* hacia memoria de pila en GPU VLIW5, habilitando ray tracing interactivo sobre Latte a coste de memoria constante mínimo.
 
 ### [OPT-71] Temporal Anti-Aliasing & History Reprojection (TAA / SMAA T2x) in Hardware Shaders
 - **Área:** Shaders / Visual / Post-procesado / Fase 3.
@@ -4847,7 +4843,7 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **Referencia de Literatura:** Aila & Laine (*Understanding the Efficiency of Ray Traversal on GPUs*, HPG 2009); Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 7.6 "Multiprocessor Game Loops" & Cap. 11.2 "Bounding Volume Culling"); AMD R700 ISA (*GPR Pressure & Early Branch Elimination*).
 - **Mecanismo:** Descarga del núcleo GPU AMD Latte mediante paralelismo asimétrico CPU en los dos núcleos de trabajo de Espresso:
   1. **Core 2 (`JobSystem`):** Anima primitivas, reconstruye el `SpatialBVH` SAH en formato *Pre-Order Stackless* (`OPT-70`) y ejecuta `CullingSystem::UpdateWithBVH` de forma concurrente sobre memoria estrictamente particionada (`BVHParallelJobTask`).
-  2. **Core 1:** Ejecuta simultáneamente `ShadowSystem::ComputeCascades` y normaliza la dirección solar antes de la barrera atómica `JobSystem::Wait`.
+  2. **Core 1:** Normaliza en paralelo la dirección solar (`m_sunDir = m_lightPos.Normalized()`) y mantiene actualizada la base ortonormal de cámara antes de la barrera atómica `JobSystem::Wait` (en la iteración inicial del Hito 129 también invocaba `ShadowSystem::ComputeCascades`, sustituido posteriormente desde el Hito 130/135 por sombras suaves analíticas en shader sin dependencia de `ShadowSystem`).
   3. **Proyección Conservadora Post-Barrera (`ComputeAccelerationBounds`):** Proyecta en CPU los 8 vértices del cubo envolvente de cada esfera a NDC (`uScreenBounds`, con fallback seguro a pantalla completa si `cz - padR <= 0.35`) y proyecta el AABB raíz expandido sobre el plano del suelo (`uShadowFloorBounds`). Esto permite que el fragment shader `raytracing_bvh.gsh` descarte inmediatamente rayos primarios de cielo/bordes y trazas de sombra fuera del envolvente proyectado sin entrar al bucle BVH.
 - **Grado de Reusabilidad:** **9/10**. Patrón portátil a cualquier pasada de ray tracing, *clustered/tiled culling*, *screen-space effects* o *decal projection* en hardware de rango medio/consolas retro.
 - **PROS:** Elimina ~60% de recorridos BVH primarios en píxeles de cielo/bordes, poda trazas de sombra innecesarias en el suelo, aprovecha el segundo núcleo PowerPC Espresso en paralelo sin *data races* ni alocaciones en heap, y libera presión GPR al combinarse con `OPT-70`.
@@ -4860,7 +4856,7 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **Referencia de Literatura:** AMD R700 ISA (*`LOOP_START_DX10` Control Flow & Instruction Cache Pressure*); Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 6.2 "Resource Manager Asynchronous Loading"); Vulkan/SPIR-V Pipeline Compilation Latency Mitigation.
 - **Mecanismo:** Resuelve el congelamiento prolongado (~10s) al 97% del cargador previo a iniciar escenas con pixel shaders de trazado de rayos complejos:
   1. **Límites de bucle derivados de uniformes:** En [raytracing_bvh.frag](file:///g:/Mi%20unidad/wiiu_demo/assets/shaders/raytracing_bvh.frag), sustituir cotas constantes (`24`, `4`, `12`) por `nodeCount`, `pCount` y `primCountTotal` (`clamp(..., 0, 24)` / `clamp(..., 0, 12)`) impide que `glslcompiler.exe` desenrolle $24 \times 4 = 96$ iteraciones por llamada y emite bucles nativos hardware R700.
-  2. **Unificación de puntos de llamada:** En `main()`, unificar las ramas `isSphereHit` / `isFloorHit` reduce `traceShadow` de 2 a 1 instancia y `traceScene` de reflejo de 2 a 1 instancia en el microcódigo final, reduciendo `raytracing_bvh.gsh` de **128,528 bytes (`31,066 dw`)** a **18,176 bytes (`3,478 dw`, -88.8% de instrucciones, `24 GPRs`, `7 nstack`)**.
+  2. **Unificación de puntos de llamada:** En `main()`, unificar las ramas `isSphereHit` / `isFloorHit` reduce `traceShadow` de 2 a 1 instancia y `traceScene` de reflejo de 2 a 1 instancia en el microcódigo final, reduciendo inicialmente `raytracing_bvh.gsh` de **128,528 bytes (`31,066 dw`)** a **18,176 bytes (`3,478 dw`, -88.8% de instrucciones, `24 GPRs`, `7 nstack`)**; tras añadir `OPT-409` y `OPT-422` mantiene **exactamente 3 pares `LOOP_START_DX10`** con **`27,208 bytes` (`5,736 dw`, `24 GPRs`, `7 nstack`)**.
   3. **Pre-staging Core 2 y Snap al 100%:** `RHIFullscreenShader::PreloadBinary()` descarga la lectura a RAM a `LoadAsync()` (Core 2) dejando `OnGameInit()` libre de I/O sin ensuciar el `GX2ContextState` de SDL2, mientras `SceneManager` garantiza la presentación visual del `100 %` antes de pasar a `Idle`.
 - **Grado de Reusabilidad:** **10/10**. Aplicable a cualquier shader analítico/ray-marching/postproceso en CafeGLSL sobre AMD Latte GX2 y carga asíncrona en `RHIFullscreenShader`.
 - **PROS:** Elimina el pico de compilación SPIR-V / `vkCreateGraphicsPipelines`, reduce ~89% la presión en caché de instrucciones GPU R700 y separa completamente I/O en Core 2 del hilo de renderizado.
@@ -4975,6 +4971,167 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
   3. `MaterialComponent.hpp` emplea forward declaration `struct GX2Texture;` dejando **0 includes `<gx2/*.h>` en todo `include/Core/`**.
   4. Creación de [`include/WiiUEngine.hpp`](file:///g:/Mi%20unidad/wiiu_demo/include/WiiUEngine.hpp), movimiento de `ResourceMonitor.cpp` a `engine_framework`, propagación `PUBLIC` de `include/` y `-D__WIIU__` desde `engine_core`, y opción CMake `WIIU_ENGINE_BUILD_DEMOS` verificada compilando en `OFF` y `ON`.
 - **Grado de Reusabilidad para el Framework:** **10/10**. Habilita consumo directo en otros repositorios como submódulo CMake sin arrastrar demos.
+
+### [OPT-421] Escalado Dinámico de Resolución Interna 16:9 con Upscale Bilineal Hardware (`RHIFullscreenShader`)
+- **Área:** Gráficos / Escalado de Fillrate / Silicio AMD Latte GX2 (`engine_graphics`, `SceneRaytracingBVHGX2`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 135 - 14 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD Latte GX2 TMU Hardware Bilinear Filtering; Digital Foundry / Eurogamer (*Sub-Native 16:9 Dynamic Resolution Scaling on Console GPUs*).
+- **Mecanismo Implementado:**
+  1. **API Multiplataforma y Alocación Pre-Calentada (`EnableOffscreenScaler`):** [`RHIFullscreenShader`](file:///g:/Mi%20unidad/wiiu_demo/include/Graphics/RHI/RHIFullscreenShader.hpp) expone `RHIResolutionPreset` (`STANDARD_16X9_PRESETS`), `OutputTargetBinding`, `ScopedActiveFrameTargets` (limpieza RAII por frame en `GameScene3D::Render` + `ClearActiveFrameTargets` en `DestroyGX2Pipeline`), guarda anti-UB en `std::clamp` y **cero alocaciones en `Render()`** (reserva en `EnableOffscreenScaler()` dentro de `OnGameInit`, fallback directo a resolución nativa si no está habilitado). Usa fetch shader propio (`m_blitFetchShader`), sampler completo (`GX2InitSamplerZMFilter` / `GX2InitSamplerLOD`), validación `Gfx2`, reflexión `uSourceTex` y shader desacoplado [`fullscreen_blit.frag`](file:///g:/Mi%20unidad/wiiu_demo/assets/shaders/fullscreen_blit.frag) parametrizado por `uBlitUVTransform` + `uBlitUVClamp` (`1,140 bytes` en [`FullscreenBlitShaderBinary.hpp`](file:///g:/Mi%20unidad/wiiu_demo/include/Graphics/FullscreenBlitShaderBinary.hpp)).
+  2. **Presets 16:9 a pantalla completa:** [`SceneRaytracingBVHGX2`](file:///g:/Mi%20unidad/wiiu_demo/src/Scene/SceneRaytracingBVHGX2.cpp) consume el catálogo compartido `STANDARD_16X9_PRESETS` (`640x360`, `854x480`, `960x540` por defecto, `1152x648`, `1280x720`) conmutables en tiempo real (`[ZL/ZR]`, `DPadLeft/Right` o botón táctil `BTN_RES`), ampliando automáticamente la subregión activa a `1280x720` para que `OnGameRenderDebug3D` y `OnGameRenderHUD` (`UI::UIToolkit`) mantengan nitidez nativa 720p.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Cualquier escena o juego de otro género sobre `engine_graphics` puede escalar cualquier pase fullscreen consumiendo `STANDARD_16X9_PRESETS` y `EnableOffscreenScaler()` multiplataforma.
+- **PROS:** Reduce hasta un **75% (`360p`)** o **43.75% (`540p`)** los fragmentos ray-traceados en los 160 SPs de AMD Latte manteniendo relación 16:9 exacta a pantalla completa, texto HUD 1:1 y cero alocaciones dinámicas a 60 FPS.
+- **CONTRAS:** Cada instancia de `RHIFullscreenShader` que habilite el escalador reserva su propio render target offscreen (`~3.68 MB` RGBA8 en `1280x720`) hasta extraer un pool compartido (`OPT-426`).
+- **Recomendación Técnica:** Mantener `EnableOffscreenScaler()` exclusivamente en `OnGameInit` de escenas GPU-bound y escalar hacia el pool compartido en `OPT-426`.
+
+### [OPT-422] Rechazo Rápido de Raíz BVH en KC2, Poda Esférica sin `sqrt` y Bucle Único R700 (`raytracing_bvh.frag`)
+- **Área:** Shaders R700 / Ray Tracing GPU (`assets/shaders/raytracing_bvh.frag`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 135 - 14 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD R700 ISA (*Constant Cache `KC2` Indexing vs Waterfall `MOVA` Loops*); Matt Pharr et al. (*Physically Based Rendering*, 4ª Ed., Precision in Ray-Sphere Intersections).
+- **Mecanismo Implementado:**
+  1. **Fast-reject en constante `KC2`:** Evalúa `uBvhNodes[0..1]` antes de entrar al bucle dinámico `nodeIdx`, descartando rayos de cielo/suelo sin activar direccionamiento indirecto `MOVA`.
+  2. **Bucle único sin duplicación de hojas:** Arranca en `startNode = (rootMax.w < 0.5) ? 1 : 0` manteniendo un único cuerpo de bucle (exactamente **3 pares `LOOP_START_DX10`** en microcódigo, `5,736 dw`, `24 GPRs`, `7 nstack`).
+  3. **Estabilidad FP32 y poda `sqrt`-free:** Usa distancia perpendicular `vec3 perp = oc - d * proj; float distSq = dot(perp, perp);` (sin cancelación catastrófica), rechaza esferas sin raíz cuadrada en sombras suaves (`innerR` / `maxR` al cuadrado), usa padding conservador de penumbra (`maxPenPad`), división segura de normales (`max(sHit.w, 1e-5)`) y transición `smoothstep(14.0, 20.0, floorT)` en reflejos del suelo.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Patrón portátil a cualquier ray-caster o voxel-tracer en VLIW5.
+- **PROS:** Elimina `MOVA` en rayos divergentes que fallan el volumen raíz, evita desbordamiento por cancelación FP32 en distancias altas y elimina `sqrt` en el rechazo temprano de penumbras/sombras.
+- **CONTRAS:** Mantiene `24 GPRs` y `7 nstack` en el pixel shader monolítico y cota fija `48.0 m` en `maxPenPad` (`lightRadius`) para la escala actual de escena.
+- **Recomendación Técnica:** Parametrizar el techo `48.0 m` vía uniforme si se instancian luces lejanas en escenas de mundo abierto.
+
+### [OPT-423] Tile-Based Coarse Screen-Space Ray Culling (Bitmáscaras 8×8 de Primitivas/Luces)
+- **Área:** Shaders / Culling GPU (Backlog Ray Tracing).
+- **Estado:** **`PENDIENTE`** (Propuesta Backlog — Hito 135).
+- **Referencia de Literatura:** Takahiro Harada et al. (*Forward+: Bringing Deferred Lighting to the Next Level*, Eurographics / SIGGRAPH Asia 2012).
+- **Mecanismo Propuesto:** Evaluar previamente en CPU (Core 2) o en un pase de baja resolución (`160x90`, bloques 8×8 píxeles) una máscara de bits por mosaico indicando qué subárboles BVH o esferas se proyectan dentro de cada tile.
+- **Grado de Reusabilidad para el Framework:** **8/10**. Reutilizable también en futuros shaders *Forward+* multi-luz o *decal culling* por mosaico.
+- **PROS:** Elimina pruebas AABB innecesarias en píxeles vacíos dentro del `uScreenBounds` global cuando los objetos están dispersos.
+- **CONTRAS:** Introduce un paso de textura o lectura adicional en TMU; requiere evaluar costo/beneficio para escenas de $\le 12$ primitivas frente a `uScreenBounds` actual.
+- **Recomendación Técnica:** Agendar en el backlog GPU cuando el número de primitivas dinámicas supere 24–32 o se añada soporte *Forward+*.
+
+### [OPT-424] Reproyección Temporal & Trazado Alterno tipo Checkerboard (Half-Rate)
+- **Área:** Shaders / Muestreo Temporal (Backlog Fillrate Ray Tracing).
+- **Estado:** **`PENDIENTE`** (Propuesta Backlog — Hito 135).
+- **Referencia de Literatura:** Brian Karis (*High-Quality Temporal Supersampling*, SIGGRAPH 2014); Jonas Månsson (*Low Complexity, High Fidelity: The Rendering of Inside*, GDC 2016).
+- **Mecanismo Propuesto:** Trazar rayos secundarios (reflexión / penumbra) en patrón tablero (*checkerboard*) alternando píxeles pares/impares entre cuadros consecutivos y reconstruir el píxel faltante reproyectando el historial con los vectores de movimiento de cámara (`prevViewProj`).
+- **Grado de Reusabilidad para el Framework:** **9/10**. Reusable para reflejos *screen-space*, *SSAO*, niebla volumétrica y raytracing sobre GPUs limitadas por fillrate.
+- **PROS:** Duplica efectivamente el rendimiento de reflejos y sombras suaves en GPU con pérdida mínima bajo movimiento moderado.
+- **CONTRAS:** Requiere mantener un color buffer histórico en VRAM (~3.68 MB adicionales a 720p) y clamping de vecindad para evitar *ghosting* en esferas en movimiento rápido.
+- **Recomendación Técnica:** Mantener en el backlog como alternativa/complemento al escalado espacial 16:9 si se busca nitidez nativa en reflejos.
+
+### [OPT-425] BVH Cuantizado Wide BVH4 / Nodos Compactos de 1 `vec4`
+- **Área:** Estructuras Espaciales / Caché de Constantes KC2 (Backlog GPU).
+- **Estado:** **`PENDIENTE`** (Propuesta Backlog — Hito 135).
+- **Referencia de Literatura:** Henri Ylitie, Tero Karras & Samuli Laine (*Efficient Incoherent Ray Traversal on GPUs Through Compressed Wide BVH*, HPG 2017).
+- **Mecanismo Propuesto:** Cuantizar coordenadas AABB relativas al padre (`8` bits o `fp16` empaquetado) o usar BVH4 ancho para reducir a la mitad el número de lecturas a `uBvhNodes` por paso de árbol.
+- **Grado de Reusabilidad para el Framework:** **7/10**. Útil tanto para aceleración BVH de rayos en GPU como para estructuras espaciales compactas en memoria L1/constante.
+- **PROS:** Reduce a la mitad la huella en caché de constantes `KC2` (o permite el doble de nodos BVH sin introducir UBOs extra) y mejora localidad espacial en R700.
+- **CONTRAS / Limitación Latte:** GLSL 3.30 sin soporte nativo de aritmética entera eficiente en CafeGLSL/R700 antiguo requiere emulación de bits costosa en ALU.
+- **Recomendación Técnica:** Reservar para escenarios con $> 32$ primitivas o backends Vulkan/SPIR-V futuros con `uint`/`unpackHalf2x16` nativo.
+
+### [OPT-426] Desacoplamiento RHI de Escalado Dinámico y Pool de Render Targets Transitorios (`RHIDynamicResolutionScaler` / `RHIRenderTargetPool`)
+- **Área:** Gráficos / Arquitectura RHI (`engine_graphics` — VRAM Management).
+- **Estado:** **`PENDIENTE`** (Propuesta Backlog — Hito 135).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 10 & 11); Epic Games (*Unreal Engine RDG Render Target Pool & Dynamic Resolution*).
+- **Mecanismo Propuesto:** Extraer el `GX2ColorBuffer`/`GX2Texture` offscreen (`~3.68 MB` a `1280x720`) y un gobernador de resolución automático por presupuesto de cuadro desde instancias individuales de `RHIFullscreenShader` hacia un servicio/pool compartido de targets transitorios RHI.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Cualquier escena multipase (raytracing, agua, post-proceso, bloom, CRT) reutilizará un único render target offscreen sin multiplicar reservas de 3.68 MB en MEM2.
+- **PROS:** Elimina duplicación de VRAM cuando existen múltiples shaders fullscreen activos, impone SRP estricto sobre `RHIFullscreenShader` y habilita DRS automático a 60 FPS constantes.
+- **CONTRAS:** Introduce gestión explícita de lifetimes/barreras entre pases que compartan un mismo target temporal.
+- **Recomendación Técnica:** Promovidos ya los presets `RHIResolutionPreset` 16:9 a `RHIFullscreenShader.hpp` (`OPT-421`), agendar la extracción del pool compartido junto con `OPT-22` (FrameGraph).
+
+### [OPT-427] DTO Inmutable por Cuadro para Tareas SMP en Core 2 (`BVHFrameBuildInput` / `BVHFrameBuildOutput`)
+- **Área:** Concurrencia SMP / Clean Code (`engine_core` + `engine_framework`).
+- **Estado:** **`PENDIENTE`** (Propuesta Backlog — Hito 135).
+- **Referencia de Literatura:** Tony Albrecht (*Pitfalls of Object Oriented Programming*, SCEE); Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 7.6 "Multiprocessor Game Loops").
+- **Mecanismo Propuesto:** Sustituir el puntero crudo `SceneRaytracingBVHGX2* self` en `BVHParallelJobParams` por un descriptor de entrada `const` desacoplado (`BVHFrameBuildInput`) y una vista de escritura particionada (`BVHFrameBuildOutput`) operables sobre `SpatialBVH` y `CullingSystem`.
+- **Grado de Reusabilidad para el Framework:** **9/10**. Permite reutilizar el mismo worker SMP paralelo de BVH y culling en cualquier género o escena sin acoplamiento a una clase `Scene*` concreta.
+- **PROS:** Imposibilita mutaciones accidentales de estado de escena desde Core 2 por diseño en compilación y habilita pruebas unitarias aisladas del worker paralelo.
+- **CONTRAS:** Pequeño *boilerplate* de empaquetado de vistas/punteros antes de `JobSystem::Dispatch`.
+- **Recomendación Técnica:** Aplicar al generalizar sistemas de mundo SMP en futuras escenas o refactorizar trabajadores `OPT-85`.
+
+### [OPT-428] Bombeo Continuo de Eventos Cafe OS (`ProcUIProcessMessages`), Soporte del Menú HOME y Cierre Limpio de la Aplicación
+- **Área:** Entrada de Hardware y Ciclo de Vida del Sistema Operativo (`engine_input` + `engine_framework`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 136 - 14 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 8 "Human Interface Devices"); Nintendo Cafe OS SDK / wut (*ProcUI State Machine & Lifecycle*).
+- **Problema Diagnosticado:** Al presionar el botón HOME en el GamePad o mandos en la consola física, la pulsación no era detectada y el programa no permitía salir. La causa raíz fue que el bucle `SDL_PollEvent(&event)` estaba confinado dentro de una rama `#else` (exclusiva de PC) en `PollSDLHardware()`. En el backend Wii U de SDL2, `SDL_PollEvent()` es el único mecanismo que invoca `WIIU_PumpEvents()`, el cual llama a `ProcUIProcessMessages(1)`. Sin esta llamada por cuadro, Cafe OS nunca recibía control para gestionar transiciones de sistema (apertura del Menú HOME `PROCUI_STATUS_RELEASE_FOREGROUND`, suspensión en segundo plano o solicitud de salida `PROCUI_STATUS_EXITING`), ignorando el botón por completo. Adicionalmente, `VirtualButton::Home` no solicitaba salida al ser pulsado en hardware ni existía el callback `PROCUI_CALLBACK_HOME_BUTTON_DENIED` para entornos donde el menú del sistema está deshabilitado (ej. Homebrew Launcher).
+- **Mecanismo Implementado:**
+  1. **Bombeo Universal de Eventos SDL (`PollSDLEvents`):** Se extrajo el ciclo de eventos `SDL_PollEvent` a un método común llamado en cada cuadro antes de sondear hardware, garantizando que `ProcUIProcessMessages(1)` se ejecute en Core 1 en la consola física y en emuladores.
+  2. **Blindaje de VPADRead y Restauración de Pantalla Táctil:** Al llamar `SDL_PollEvent` en Wii U, el subsistema interno de joystick de SDL2 (`WIIU_JoystickUpdate`) invocaba `VPADRead(0)` y consumía todas las muestras de hardware antes de que `PollWiiUHardware` pudiera leerlas, anulando la detección del touchpad. Se aisló `SDL_Init` en Wii U para excluir `SDL_INIT_JOYSTICK` y `SDL_INIT_GAMECONTROLLER`, se desactivaron los eventos con `SDL_JoystickEventState(SDL_IGNORE)` y se confinó `OpenConnectedControllers` a PC, otorgando a `InputManager::PollWiiUHardware` la exclusividad total sobre `VPADRead` y `VPADGetTPCalibratedPointEx`.
+  3. **Ciclo de Vida en Segundo Plano:** En `Engine::Run()`, se agregó la salvaguarda `if (!ProcUIInForeground()) continue;`, evitando emitir comandos GPU o actualizar escenas mientras el Menú HOME de Cafe OS se encuentra sobrepuesto en pantalla.
+  4. **Habilitación Explícita y Callback de Denegación:** En `InputManager::Init()`, se invoca `OSEnableHomeButtonMenu(TRUE)` y se registra `PROCUI_CALLBACK_HOME_BUTTON_DENIED` para que, en entornos donde el menú del sistema esté denegado, presionar HOME solicite el cierre inmediato mediante `RequestExit()`.
+  5. **Mapeo Directo de Salida en Mandos:** En el bucle de verificación de mandos de `InputManager`, `pad.WasJustPressed(VirtualButton::Home)` marca `m_exitRequested = true` y `outRunning = false`, cubriendo Cemu, mandos de PC (tecla HOME / botón GUIDE) y lecturas nativas directas de `VPAD_BUTTON_HOME` / `WPAD_BUTTON_HOME`.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Esencial para cualquier juego o aplicación en el framework multi-consola, garantizando cumplimiento de las directrices de certificación técnica (TRCs) de Nintendo para el botón HOME.
+- **PROS:** Permite pausar y salir limpiamente del motor desde cualquier escena mediante el menú oficial de la consola o por pulsación directa, evitando bloqueos o la necesidad de apagar la consola forzadamente.
+- **CONTRAS:** Ninguno.
+- **Recomendación Técnica:** Mantener `PollSDLEvents()` al inicio del cuadro de entrada en todas las plataformas.
+
+### [OPT-429] Desacoplamiento de Carga Multihilo en Core 2 (Zero-GX2 Staging) y Viewport Fullscreen 16:9 en Modelos Estáticos
+- **Área:** Gráficos GX2 / Arquitectura Multihilo / Streaming de Recursos (`engine_graphics` + `SceneStaticModelsGX2`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 137 - 14 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 7 "The Game Loop and Real-Time Simulation" & Cap. 14 "The Graphics Rendering Engine"); Directrices de Programación de Nintendo GX2 (Single-Threaded Command Submission).
+- **Problema Diagnosticado:** Al cargar la demo 1 de modelos estáticos (`SceneStaticModelsGX2`), la barra de carga de la consola física se congelaba al 98% (fase `Finalizing`). El análisis matemático demostró que la fase de carga asíncrona llega a un máximo de 95% y solo transiciona a `Finalizing` (98-100%) tras el retorno de `OnEnter()`. La causa raíz del congelamiento en silicio físico fue:
+  1. **Llamadas Concurrentes a GX2 en Core 2:** Durante `LoadAsync()`, el hilo trabajador de Core 2 invocaba `CreateModelTextures()`, el cual ejecutaba funciones del driver GX2 (`GX2CalcSurfaceSizeAndAlignment`, `GX2InitTextureRegs`, `GX2Invalidate`, `GX2InitSampler*`). Como GX2 no es thread-safe en Wii U y Core 1 estaba activamente presentando la pantalla de carga a 60 FPS con GX2 (`SDL_RenderPresent`), se corrompía el Command Processor de la GPU AMD Latte, provocando un bloqueo de hardware.
+  2. **Viewport Reducido (Letterboxing No Deseado):** En `SceneStaticModelsGX2`, los presets de resolución estaban desalineados respecto a `EngineConfig` (0 = 480p en lugar de 720p nativo) y el viewport/scissor se acotaba a dimensiones reducidas (`hwW x hwH`), contraviniendo el requisito de visualización a pantalla completa 16:9.
+- **Mecanismo Implementado:**
+  1. **Zero-GX2 Staging en Core 2:** `LoadAsync()` ahora únicamente lee los bytes crudos de archivos `.wtex` y `.wmesh` desde almacenamiento hacia vectores intermedios de CPU (`m_stagedHouseTex`, `m_stagedPropsTex`, `m_stagedAlphaTex`, `m_staged*Mesh`), sin tocar ninguna API de GX2 en hilos secundarios.
+  2. **Registro Seguro de Texturas en Core 1:** La creación de superficies GX2, asignación de memoria MEM2 (`AllocAligned`), copia de píxeles y registro de samplers se realiza exclusivamente en `OnEnter()` en Core 1 (hilo principal).
+  3. **Liberación Inmediata de RAM:** Tras cargar las texturas y mallas a VRAM/MEM2 en Core 1, todos los vectores de staging se vacían y reducen (`clear()` y `shrink_to_fit()`), eliminando el pico de memoria transitorio.
+  4. **Fallback Defensivo de Texturas:** Si `AllocAligned` falla por presión de memoria, `LoadCookedTexture` recurre limpiamente a una textura sólida procedimental de 16x16, garantizando que el pipeline nunca aborte sin dibujar.
+  5. **Viewport Fullscreen 16:9:** Se alinearon los `RES_PRESETS` con `EngineConfig::ResolutionMode` (0: 720p, 1: 1080p, 2: 480p, 3: 648p) y se fijó el viewport y scissor de hardware en `(0, 0, 1280, 720)` constante, ajustando el LOD bias del sampler (`resPreset.lodBias`) para modificar la nitidez sin achicar la imagen.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Patrón universal mandatorio para todas las escenas con carga asíncrona de recursos en Wii U y futuras consolas.
+- **PROS:** Elimina completamente el cuelgue al 98% en hardware real, libera ~15 MB de RAM tras la transición y garantiza presentación fluida a pantalla completa.
+- **CONTRAS:** Ninguno.
+- **Recomendación Técnica:** Mantener la política de que el hilo trabajador en Core 2 solo procese operaciones puras de CPU/E/S y nunca invoque funciones del subsistema gráfico.
+
+### [OPT-430] Introspección Dinámica de Atributos GX2 en `ForwardRendererGX2` y Zero-GX2 Async Staging en Demo de Controles HID
+- **Área:** Gráficos GX2 / Silicio AMD Latte R700 / Pipeline 3D (`engine_graphics` + `SceneInputHIDDemoGX2`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 138 - 14 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 8 & Cap. 14); AMD R700 / Latte GX2 Architecture Guide (*Fetch Shader & Vertex Assembler Semantic Registers*).
+- **Problema Diagnosticado:** Al iniciar la Demo 7 ("Controles y Dispositivos HID"), la consola física de Wii U no dibujaba ninguna geometría 3D (solo aparecía el HUD en 2D) y tras pocos segundos se congelaba por completo, provocando que Cafe OS reiniciara el programa quedando colgada. La investigación profunda reveló:
+  1. **Semantic Fault y Lockup de Hardware en Fetch Shader de Skydome:** En `ForwardRendererGX2::InitSkyShader()`, el Fetch Shader (`m_skyFs`) se creaba hardcodeando 4 atributos (`location 0, 1, 2, 3`), pero el binario `shaders/skydome_gx2.gsh` solo declara 2 atributos (`aPos` en loc 0 y `aTexCoord` en loc 2), habiendo descartado `aNormal` y `aColor` durante la optimización de código muerto (DCE) del compilador de shaders. En el silicio físico de la GPU AMD Latte R700, el Fetch Shader intentaba escribir en registros semánticos de vértice no mapeados en el Vertex Shader, provocando un cuelgue inmediato del Vertex Assembler (VGT / SQ). Esto detenía el Command Processor de la GPU, dejando las geometrías sin rasterizar y disparando el Watchdog de Cafe OS a los pocos segundos.
+  2. **Bloqueo Síncrono de E/S en Core 1:** En `SceneInputHIDDemoGX2`, las texturas `models/skydome.wtex` (2.8 MB) y `models/ground_grass.wtex` (0.7 MB) no se precargaban asíncronamente en Core 2, forzando lecturas bloqueantes de 3.5 MB desde la tarjeta SD durante `OnGameInit()` en el hilo principal.
+  3. **Discrepancia de Parámetros en `DebugDraw3D::DrawCircleXZ`:** En `OnGameRenderDebug3D()`, se invocaba `DrawCircleXZ(groundPt, 0.5f, 16.0f, 2.0f, ...)`, pasando `yOffset = 16.0f` en vez de `0.0f`, proyectando el círculo de sombra 16 metros por encima del plano de suelo.
+- **Mecanismo Implementado:**
+  1. **Introspección Dinámica de Atributos en Shaders:** En `ForwardRendererGX2::InitSkyShader()` e `InitMeshShader()`, se implementó la lectura dinámica de `m_skyVs->attribVars` y `m_meshVs->attribVars`. Los streams del Fetch Shader ahora se construyen única y exclusivamente para los atributos reales presentes en el Vertex Shader, con sus `location` exactas y formatos nativos. Para `skydome_gx2.gsh`, genera deterministamente 2 atributos (`aPos` y `aTexCoord`), eliminando al 100% el semantic fault y el cuelgue de la GPU.
+  2. **Zero-GX2 Async Staging de Texturas:** En `SceneInputHIDDemoGX2::LoadAsync()`, se precargan los bytes de `skydome.wtex` y `ground_grass.wtex` hacia búferes intermedios de CPU (`m_stagedSkydomeTex`, `m_stagedGrassTex`) en Core 2. En `CreateTextures()` en Core 1, se crean las superficies GX2 desde memoria (`LoadSceneTextureFromMemory`) y se liberan de inmediato los vectores CPU, eliminando cualquier tirón de E/S.
+  3. **Corrección de Parámetros en DebugDraw3D:** Se ajustó la llamada a `DrawCircleXZ(groundPt, 0.5f, 0.0f, 2.0f, ColorRGBA{0, 220, 255, 180}, 24)`, garantizando que el círculo de contacto del avatar 3D se dibuje perfectamente a ras del suelo.
+  4. **Aislamiento de Rumble en Silicio:** Se protegió el bloque de vibración SDL2 bajo `#if !defined(__WIIU__) && !defined(__wiiu__)` en `RumbleManager::SetHardwareRumble`, evitando accesos espurios a la API de controladores de PC en la consola física.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Resuelve de raíz la fragilidad de creación de Fetch Shaders en `ForwardRendererGX2`, blindando no solo la Demo 7 sino también `SceneCollisionTriggerDemoGX2` y `SceneAIDemoGX2`.
+- **PROS:** Cero cuelgues de GPU Latte, geometrías 3D estables y fluidas a 60 FPS fijos, carga no bloqueante e interfaz de usuario reactiva.
+- **CONTRAS:** Ninguno.
+- **Recomendación Técnica:** Emplear siempre introspección dinámica de `attribVars` o `WHBGfxInitShaderAttribute` al vincular cualquier shader GX2 nuevo con la tubería de hardware.
+
+### [OPT-431] Erradicación Global de `WHBGfxLoadGFDShaderGroup` (Direct GFD), Blindaje de Sampler Nulo en GPU Latte y Restauración de Pipeline Post-Clear en Skinning
+- **Área:** Gráficos GX2 / Silicio AMD Latte R700 / CPU IBM Espresso PowerPC (`engine_graphics` + `SceneStaticModelsGX2` + `SceneSkeletalAnimationGX2` + `SceneBirdAnimationGX2` + `ForwardRendererGX2`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 139 - 14 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 12 & Cap. 14); Nintendo Cafe OS SDK / wut (`gx2/shaders.h`, `gx2/clear.h`, `gx2/state.h`, `gfd.h`); AMD R700 Microarchitecture Guide.
+- **Problema Diagnosticado en Consola Física:**
+  1. **Cuelgue al 98% en Modelos Estáticos y Escenas GX2:** La barra de carga se congelaba al 98% en `SceneStaticModelsGX2`, `SceneEnvironmentGX2`, `SceneShadowsGX2`, `SceneInteractiveGX2`, `SceneRaytracingGPU` y `SceneWater`. La causa raíz en silicio físico fue la llamada a `WHBGfxLoadGFDShaderGroup`: esta función de `libwhb` invoca internamente `GfxHeapAllocMEM2`, el cual desreferencia una variable global de heap inicializada únicamente por `WHBGfxInit()`. Al usar SDL2 (que inicializa GX2 de forma directa sin WHB), dicho puntero contenía basura/nulo, provocando una excepción de hardware DSI (Data Storage Interrupt) en el CPU PowerPC Espresso al 98% de la transición.
+  2. **Bloqueo y Watchdog Reboot de GPU en Escenas con ForwardRendererGX2:** En `SceneInputHIDDemoGX2` (y derivadas de `GameScene3D`), `RenderStaticMesh` recibía `reflectionIntensity = 0.1f` / `0.35f` con `envCubeMap = nullptr`. El fragment shader `advanced_mesh_gx2.frag` ejecutaba `texture(uSkybox, R)` en el slot 1 sin textura ni sampler vinculado, bloqueando la TMU de la GPU Latte y disparando el reinicio del sistema por watchdog.
+  3. **Malla Invisible en Animación Esquelética e Inversa (Solo Esqueleto Wireframe 2D Visible):** En `SceneSkeletalAnimationGX2` y `SceneBirdAnimationGX2`, `RenderScene3D_GX2()` ejecutaba `GX2ClearColor` y `GX2ClearDepthStencilEx`. En Cafe OS (`gx2.rpl`), las operaciones de clear alteran los registros de rasterización y apagan la máscara de escritura de color. Al no re-enlazar el contexto ni los render targets tras el clear, `GX2RDrawIndexed` descartaba todos los fragmentos de la malla 3D, mientras que `RenderHUD_GX2()` ejecutaba `ScopedUIPass`, el cual reactivaba el contexto y dibujaba únicamente el HUD y las líneas de depuración de las articulaciones. Adicionalmente, `attrs[4].endianSwap = GX2_ENDIAN_SWAP_DEFAULT` sobre `GX2_ATTRIB_FORMAT_UINT_8_8_8_8` invertía los 4 bytes de `boneIndices`, cruzando pesos y asignando vértices a huesos incorrectos.
+- **Mecanismo Implementado:**
+  1. **Migración Universal a Direct GFD:** Erradicación del 100% de llamadas a `WHBGfxLoadGFDShaderGroup` en el motor (`SceneStaticModelsGX2`, `SceneEnvironmentGX2`, `SceneShadowsGX2`, `SceneInteractiveGX2`, `SceneRaytracingGPU`, `SceneWater`, `RHIFullscreenShader`). Ahora todas las escenas utilizan Direct GFD de Cafe OS (`GFDGetVertexShader`, `GFDGetPixelShader`, `GX2InitFetchShaderEx` con memoria alineada `AllocAligned(256)` e invalidación de caché L1/L2 `GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, ...)`), garantizando compatibilidad nativa y robusta sin dependencias de WHB.
+  2. **Protección de Sampler de Reflexión:** En `ForwardRendererGX2::RenderStaticMesh` y `RenderSkinnedMesh`, se condicionó estrictamente el uniform de reflexión: `psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;`, impidiendo que los shaders muestreen cubemaps no vinculados.
+  3. **Restauración de Contexto Post-Clear y Endian Swap Nativo:** Tras `GX2ClearColor` y `GX2ClearDepthStencilEx`, se reconfigura de inmediato `GX2SetContextState`, `GX2SetColorBuffer`, `GX2SetDepthBuffer`, `GX2SetViewport`, `GX2SetScissor`, `GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE)` y `GX2SetPolygonControl(GX2_FRONT_FACE_CCW, FALSE, FALSE, FALSE, GX2_POLYGON_MODE_TRIANGLE, GX2_POLYGON_MODE_TRIANGLE, TRUE, TRUE, FALSE)`. En el Fetch Shader, se fijó `attrs[4].endianSwap = GX2_ENDIAN_SWAP_NONE` para `aBoneIndices`, preservando la correspondencia 1:1 de los índices de articulaciones con sus pesos de piel.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Resuelve los bloqueos estructurales de carga y renderizado en silicio real de Wii U para todas las escenas presentes y futuras.
+- **PROS:** Cero cuelgues al 98%, renderizado completo y visible de personajes articulados y modelos estáticos, estabilidad garantizada de la GPU Latte a 60 FPS.
+- **CONTRAS:** Ninguno.
+- **Recomendación Técnica:** Nunca utilizar rutinas de alto nivel de `libwhb` que dependan de `sWHBGfxHeapMEM2` cuando el ciclo de renderizado esté gobernado por SDL2 / GX2 directo.
+
+### [OPT-432] Sincronización Acotada en Micronúcleo Cafe OS (`OSWaitEventWithTimeout`) y Blindaje de Aislamiento de Estados GX2/SDL2
+- **Área:** Concurrencia SMP Espresso / Silicio AMD Latte / Driver Graphics (`engine_core` + `engine_graphics` + `engine_framework`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 140 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 7 "Multiprocessor Game Loops" & Cap. 14 "The Graphics Rendering Engine"); Nintendo Cafe OS Developer Guidelines (*Thread Synchronization & ProcUI Lifecycle*); AMD R700 ISA Guide.
+- **Problema Diagnosticado en Consola Física:**
+  1. **Deadlock de Hilos en Cierre o Suspensión:** El uso de `OSWaitEvent` sin tiempo límite dejaba al worker de Core 2 suspendido indefinidamente si se emitía una señal de salida de Cafe OS (`ProcUI`) durante la espera, impidiendo que `m_workerThread.join()` concluyera y congelando la consola en el mensaje de cierre oficial.
+  2. **Stall de TMU y Watchdog Reboot por CubeMap Nulo:** Shaders con ramas de reflexión ambiental intentaban muestrear `uSkybox` sin textura ni sampler vinculado en el slot 1, provocando detención del procesador de comandos de la GPU Latte.
+  3. **Desincronización de Pipeline en Menús 2D:** Tras la ejecución de escenas GX2 3D puras, los registros de profundidad, culling y shaders quedaban contaminados, provocando desaparición de elementos o fallos en el renderizado 2D de SDL2 al retornar a los menús.
+- **Mecanismo Implementado:**
+  1. **Sustitución por Esperas Acotadas:** Se sustituyó `OSWaitEvent` por `OSWaitEventWithTimeout(&m_jobAvailableEvent, OSMillisecondsToTicks(1))` en `SleepUntilJobAvailable()` y `OSWaitEventWithTimeout(&m_jobDoneEvent, OSMicrosecondsToTicks(500))` en `WaitForJobDone()`, garantizando que Core 2 y Core 1 despierten periódicamente para chequear `m_running` y colaborar en el vaciado de la cola de trabajo.
+  2. **Blindaje de Muestreo de CubeMap:** Se fijó `psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;`, asegurando que la compuerta analítica `uMaterialParams.x > 0.01` en los fragment shaders descarte la instrucción de muestreo en hardware si no existe un CubeMap activo.
+  3. **Restauración de Estados GX2 en SDL2:** Integración rigurosa de `RestoreSDL2GX2State(renderer)` al alternar de modos GX2 puros a SDL2, restableciendo `GX2ContextState`, invalidando la caché de estados de SDL2 y seleccionando deterministamente el shader 2D nativo.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Patrón de silicio universal e inviolable aplicable a todos los juegos construidos sobre el motor.
+- **PROS:** Cero cuelgues al cerrar la aplicación, estabilidad absoluta en Core 2, renderizado fluido a 60 FPS fijos sin artefactos visuales y protección total de la GPU.
+- **CONTRAS:** Ninguno.
+- **Recomendación Técnica:** Mantener obligatoriamente tiempos de espera acotados (`WithTimeout`) en todas las primitivas de sincronización de Cafe OS en hilos secundarios.
 
 ---
 

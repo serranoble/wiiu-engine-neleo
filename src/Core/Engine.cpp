@@ -29,9 +29,18 @@ Engine::~Engine() {
 }
 
 bool Engine::Init(std::unique_ptr<IScene> initialScene) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    // En Wii U nativo, VPAD y KPAD son manejados de forma exclusiva y directa por InputManager.
+    // Omitir SDL_INIT_JOYSTICK y SDL_INIT_GAMECONTROLLER para evitar que WIIU_JoystickUpdate
+    // intercepte y vacíe las muestras de la pantalla táctil y botones del GamePad en cada cuadro.
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+        return false;
+    }
+#else
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) < 0) {
         return false;
     }
+#endif
 
     if (!m_window.Init()) {
         return false;
@@ -105,7 +114,7 @@ void Engine::Run() {
 
         InputManager::Instance().Update(m_running, smoothedDt);
 #if defined(__WIIU__) || defined(__wiiu__)
-        if (ProcUIInShutdown() || !ProcUIIsRunning()) {
+        if (ProcUIInShutdown() || !ProcUIIsRunning() || InputManager::Instance().IsExitRequested()) {
             m_running = false;
         }
 #endif
@@ -113,6 +122,13 @@ void Engine::Run() {
             // No actualices ni presentes otro frame después de que SDL/Cafe OS solicite salir.
             break;
         }
+
+#if defined(__WIIU__) || defined(__wiiu__)
+        if (!ProcUIInForeground()) {
+            // Cuando la aplicación está en segundo plano (Menú HOME activo), no interactuar con GPU
+            continue;
+        }
+#endif
 
         ResourceMonitor::Instance().BeginFrame();
 

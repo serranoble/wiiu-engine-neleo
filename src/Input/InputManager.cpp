@@ -6,6 +6,14 @@
 
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <proc_ui/procui.h>
+#include <coreinit/systeminfo.h>
+
+static uint32_t HomeButtonDeniedCallback(void*) {
+    // Cuando Cafe OS deniega el Menú HOME (ej. ejecutando desde Homebrew Launcher),
+    // presionar el botón HOME debe solicitar la salida limpia de la aplicación.
+    WiiU::InputManager::Instance().RequestExit();
+    return 0;
+}
 #endif
 
 namespace WiiU {
@@ -16,12 +24,25 @@ void InputManager::Init() {
     KPADInit();
     WPADEnableMotor(TRUE);
     WPADEnableURCC(TRUE);
+
+    // Habilitar explícitamente el Menú del Botón HOME de Cafe OS (Aroma / Menú Wii U)
+    OSEnableHomeButtonMenu(TRUE);
+
+    // Registrar callback de respaldo si el Menú HOME está deshabilitado/denegado por el entorno
+    ProcUIRegisterCallback(PROCUI_CALLBACK_HOME_BUTTON_DENIED, HomeButtonDeniedCallback, nullptr, 100);
+
+    // Deshabilitar eventos de joystick en SDL2 para garantizar que WIIU_JoystickUpdate
+    // no drene el búfer de VPADRead ni anule la pantalla táctil del GamePad
+    SDL_JoystickEventState(SDL_IGNORE);
 #endif
     RumbleManager::Instance().Init();
+#if !defined(__WIIU__) && !defined(__wiiu__)
     OpenConnectedControllers();
+#endif
 }
 
 void InputManager::OpenConnectedControllers() {
+#if !defined(__WIIU__) && !defined(__wiiu__)
     int numJoysticks = SDL_NumJoysticks();
     for (int i = 0; i < numJoysticks; ++i) {
         if (SDL_IsGameController(i)) {
@@ -30,6 +51,7 @@ void InputManager::OpenConnectedControllers() {
             SDL_JoystickOpen(i);
         }
     }
+#endif
 }
 
 size_t InputManager::GetConnectedGamepadCount() const noexcept {
@@ -56,6 +78,15 @@ void InputManager::TriggerAction(const std::string& sourceName) {
 }
 
 void InputManager::Update(bool& outRunning, float dt) {
+    // 1. Bombear eventos SDL en todas las plataformas.
+    // En Wii U, SDL_PollEvent invoca internamente WIIU_PumpEvents(), el cual llama a
+    // ProcUIProcessMessages() para gestionar transiciones de Cafe OS (Menú HOME y salida).
+    PollSDLEvents(outRunning);
+
+    if (m_exitRequested) {
+        outRunning = false;
+    }
+
 #if defined(__WIIU__) || defined(__wiiu__)
     if (ProcUIInShutdown() || !ProcUIIsRunning() || !ProcUIInForeground()) {
         RumbleManager::Instance().StopAll();
@@ -87,21 +118,20 @@ void InputManager::Update(bool& outRunning, float dt) {
         if (m_touchDebounceTimer < 0.0f) m_touchDebounceTimer = 0.0f;
     }
 
-    // 1. Actualizar subsistema de hápticos y temporizadores de vibración
+    // 2. Actualizar subsistema de hápticos y temporizadores de vibración
     RumbleManager::Instance().Update(dt);
 
-    // 2. Limpiar estados por cuadro de los gamepads virtuales
+    // 3. Limpiar estados por cuadro de los gamepads virtuales
     for (size_t i = 0; i < MAX_PLAYERS; ++i) {
         m_gamepads[i].buttonsTrigger = 0;
         m_gamepads[i].buttonsRelease = 0;
         m_gamepads[i].touch = TouchState{};
     }
 
-    // 3. Muestrear hardware nativo Wii U (VPAD y KPAD)
+    // 4. Muestrear hardware nativo Wii U (VPAD y KPAD) o periféricos PC (SDL2)
 #if defined(__WIIU__) || defined(__wiiu__)
     PollWiiUHardware(dt);
 #else
-    // 4. Muestrear hardware de desarrollo PC (SDL2)
     PollSDLHardware(outRunning);
 #endif
 
@@ -128,6 +158,10 @@ void InputManager::Update(bool& outRunning, float dt) {
         }
         if (pad.WasJustPressed(VirtualButton::Minus)) {
             m_resourceMonitorRequested = true;
+        }
+        if (pad.WasJustPressed(VirtualButton::Home)) {
+            m_exitRequested = true;
+            outRunning = false;
         }
     }
 }
@@ -366,7 +400,89 @@ void InputManager::PollWiiUHardware(float dt) {
 #endif
 }
 
+void InputManager::PollSDLEvents(bool& outRunning) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        if (event.type == SDL_QUIT) {
+            m_exitRequested = true;
+            outRunning = false;
+        }
+#if !defined(__WIIU__) && !defined(__wiiu__)
+        if (event.type == SDL_CONTROLLERDEVICEADDED || event.type == SDL_JOYDEVICEADDED) {
+            OpenConnectedControllers();
+        }
+        auto& pad0 = m_gamepads[0];
+        if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
+            SDL_Keycode k = event.key.keysym.sym;
+            if (k == SDLK_p || k == SDLK_PAUSE || k == SDLK_ESCAPE) {
+                m_pauseRequested = true;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Plus);
+            } else if (k == SDLK_MINUS || k == SDLK_KP_MINUS || k == SDLK_TAB) {
+                m_resourceMonitorRequested = true;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Minus);
+            } else if (k == SDLK_b || k == SDLK_BACKSPACE) {
+                m_backRequested = true;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::B);
+            } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::A);
+            } else if (k == SDLK_HOME) {
+                m_exitRequested = true;
+                outRunning = false;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Home);
+            }
+            if (k != SDLK_UP && k != SDLK_DOWN && k != SDLK_LEFT && k != SDLK_RIGHT &&
+                k != SDLK_i && k != SDLK_j && k != SDLK_k && k != SDLK_l) {
+                TriggerAction("TECLADO");
+            }
+        }
+        if (event.type == SDL_CONTROLLERBUTTONDOWN) {
+            TriggerAction("MANDO BOTON");
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_B) {
+                m_backRequested = true;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::B);
+            }
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::A);
+            }
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
+                m_pauseRequested = true;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Plus);
+            }
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
+                m_resourceMonitorRequested = true;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Minus);
+            }
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+                m_exitRequested = true;
+                outRunning = false;
+                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Home);
+            }
+        }
+        if (event.type == SDL_JOYBUTTONDOWN) {
+            TriggerAction("JOYSTICK BOTON");
+        }
+        if (event.type == SDL_JOYHATMOTION && event.jhat.value != SDL_HAT_CENTERED) {
+            TriggerAction("CRUZETA DPAD");
+        }
+        if (event.type == SDL_JOYAXISMOTION) {
+            const float deadzone = EngineConfig::Instance().GetControls().deadzoneRadius;
+            float val = static_cast<float>(event.jaxis.value) / 32767.0f;
+            float lx = pad0.leftStick.x, ly = pad0.leftStick.y;
+            float rx = pad0.rightStick.x, ry = pad0.rightStick.y;
+            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_LEFTX || event.jaxis.axis == 0)  lx = val;
+            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_LEFTY || event.jaxis.axis == 1)  ly = -val;
+            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_RIGHTX || event.jaxis.axis == 2) rx = val;
+            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_RIGHTY || event.jaxis.axis == 3) ry = -val;
+
+            pad0.leftStick = ApplyRadialDeadzone(lx, ly, deadzone);
+            pad0.rightStick = ApplyRadialDeadzone(rx, ry, deadzone);
+        }
+#endif
+    }
+}
+
 void InputManager::PollSDLHardware(bool& outRunning) {
+    (void)outRunning;
 #if !defined(__WIIU__) && !defined(__wiiu__)
     auto& pad0 = m_gamepads[0];
 
@@ -426,77 +542,6 @@ void InputManager::PollSDLHardware(bool& outRunning) {
         }
         if (keyState[SDL_SCANCODE_R]) pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::StickR);
     }
-
-    // =========================================================================
-    // EVENTOS SDL (QUIT, KEYDOWN, MANDO USB)
-    // =========================================================================
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_QUIT) {
-            outRunning = false;
-        }
-        if (event.type == SDL_CONTROLLERDEVICEADDED || event.type == SDL_JOYDEVICEADDED) {
-            OpenConnectedControllers();
-        }
-        if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
-            SDL_Keycode k = event.key.keysym.sym;
-            if (k == SDLK_p || k == SDLK_PAUSE || k == SDLK_ESCAPE) {
-                m_pauseRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Plus);
-            } else if (k == SDLK_MINUS || k == SDLK_KP_MINUS || k == SDLK_TAB) {
-                m_resourceMonitorRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Minus);
-            } else if (k == SDLK_b || k == SDLK_BACKSPACE) {
-                m_backRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::B);
-            } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::A);
-            }
-            if (k != SDLK_UP && k != SDLK_DOWN && k != SDLK_LEFT && k != SDLK_RIGHT &&
-                k != SDLK_i && k != SDLK_j && k != SDLK_k && k != SDLK_l) {
-                TriggerAction("TECLADO");
-            }
-        }
-        if (event.type == SDL_CONTROLLERBUTTONDOWN) {
-            TriggerAction("MANDO BOTON");
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_B) {
-                m_backRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::B);
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::A);
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
-                m_pauseRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Plus);
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
-                m_resourceMonitorRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Minus);
-            }
-        }
-        if (event.type == SDL_JOYBUTTONDOWN) {
-            TriggerAction("JOYSTICK BOTON");
-        }
-        if (event.type == SDL_JOYHATMOTION && event.jhat.value != SDL_HAT_CENTERED) {
-            TriggerAction("CRUZETA DPAD");
-        }
-        if (event.type == SDL_JOYAXISMOTION) {
-            const float deadzone = EngineConfig::Instance().GetControls().deadzoneRadius;
-            float val = static_cast<float>(event.jaxis.value) / 32767.0f;
-            float lx = pad0.leftStick.x, ly = pad0.leftStick.y;
-            float rx = pad0.rightStick.x, ry = pad0.rightStick.y;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_LEFTX || event.jaxis.axis == 0)  lx = val;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_LEFTY || event.jaxis.axis == 1)  ly = -val;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_RIGHTX || event.jaxis.axis == 2) rx = val;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_RIGHTY || event.jaxis.axis == 3) ry = -val;
-
-            pad0.leftStick = ApplyRadialDeadzone(lx, ly, deadzone);
-            pad0.rightStick = ApplyRadialDeadzone(rx, ry, deadzone);
-        }
-    }
-#else
-    (void)outRunning;
 #endif
 }
 

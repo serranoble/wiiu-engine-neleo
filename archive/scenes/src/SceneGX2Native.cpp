@@ -119,30 +119,11 @@ bool SceneGX2Native::InitGX2Pipeline() {
         m_diagLoadOk = loaded && (!shaderData.empty());
 
         if (m_diagLoadOk) {
-            // Método 1: Intentar mediante WHBGfxLoadGFDShaderGroup
-            if (WHBGfxLoadGFDShaderGroup(&m_shaderGroup, 0, shaderData.data())) {
-                bool a1 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aPos", 0,
-                                                    offsetof(NativeGX2Vertex, pos),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a2 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aNormal", 0,
-                                                    offsetof(NativeGX2Vertex, normal),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32);
-                bool a3 = WHBGfxInitShaderAttribute(&m_shaderGroup, "aColor", 0,
-                                                    offsetof(NativeGX2Vertex, color),
-                                                    GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32);
-                if (a1 && a2 && a3 && WHBGfxInitFetchShader(&m_shaderGroup)) {
-                    m_shaderLoaded = true;
-                    m_useDirectGFD = false;
-                    m_diagWhbOk = true;
-                }
-            }
-
-            // Método 2: Fallback Robusto Directo GFD (100% independiente de WHB y allocators globales)
-            if (!m_shaderLoaded) {
-                uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, shaderData.data());
-                uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
-                uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
-                uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+            // Direct GFD (100% independiente de WHB y allocators globales)
+            uint32_t vsHeaderSize = GFDGetVertexShaderHeaderSize(0, shaderData.data());
+            uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
+            uint32_t psHeaderSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
+            uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
 
                 if (vsHeaderSize > 0 && vsProgSize > 0 && psHeaderSize > 0 && psProgSize > 0) {
                     m_directVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHeaderSize, MemoryTag::ShaderProgram, "GX2Native_VS_Hdr"));
@@ -203,7 +184,6 @@ bool SceneGX2Native::InitGX2Pipeline() {
                 }
             }
         }
-    }
 
     // 2. Crear Búferes de Vértices e Índices en VRAM (GX2R)
     if (m_shaderLoaded && !m_buffersCreated) {

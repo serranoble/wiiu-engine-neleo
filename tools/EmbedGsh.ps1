@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("native_gx2", "raytracing", "water", "shadows_gx2", "environment_gx2", "skinning_gx2")]
+    [ValidateSet("native_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2")]
     [string] $Shader
 )
 
@@ -15,11 +15,23 @@ $shaderFiles = @{
         SizeSymbol = "NATIVE_GX2_GSH_SIZE"
         DataSymbol = "NATIVE_GX2_GSH_DATA"
     }
+    fullscreen_blit = @{
+        Binary = "assets/shaders/fullscreen_blit.gsh"
+        Header = "include/Graphics/FullscreenBlitShaderBinary.hpp"
+        SizeSymbol = "FULLSCREEN_BLIT_GSH_SIZE"
+        DataSymbol = "FULLSCREEN_BLIT_GSH_DATA"
+    }
     raytracing = @{
         Binary = "assets/shaders/raytracing.gsh"
         Header = "include/Graphics/RaytracingShaderBinary.hpp"
         SizeSymbol = "RAYTRACING_GSH_SIZE"
         DataSymbol = "RAYTRACING_GSH_DATA"
+    }
+    raytracing_bvh = @{
+        Binary = "assets/shaders/raytracing_bvh.gsh"
+        Header = "include/Graphics/RaytracingBVHShaderBinary.hpp"
+        SizeSymbol = "RAYTRACING_BVH_GSH_SIZE"
+        DataSymbol = "RAYTRACING_BVH_GSH_DATA"
     }
     water = @{
         Binary = "assets/shaders/water.gsh"
@@ -93,12 +105,6 @@ try {
 } finally {
     if (Test-Path -LiteralPath $temporaryPath -PathType Leaf) {
         Remove-Item -LiteralPath $temporaryPath
-    }
-    skinning_gx2 = @{
-        Binary = "assets/shaders/skinning_gx2.gsh"
-        Header = "include/Graphics/SkinningShaderBinary.hpp"
-        SizeSymbol = "SKINNING_GX2_GSH_SIZE"
-        DataSymbol = "SKINNING_GX2_GSH_DATA"
     }
 }
 Write-Output "Embedded $($bytes.Length) bytes from $($shaderInfo.Binary) into $headerPath"

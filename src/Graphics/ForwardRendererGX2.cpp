@@ -184,7 +184,7 @@ void ForwardRendererGX2::RenderStaticMesh(const StaticMesh& mesh,
     psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f; // uCamPosTime
     psParams[4] = 0.60f; psParams[5] = 0.55f; psParams[6] = 0.58f; psParams[7] = 1.0f;              // uLightDir
     psParams[8] = 1.0f; psParams[9] = 0.96f; psParams[10] = 0.88f; psParams[11] = 32.0f;           // uLightColor + shininess
-    psParams[12] = reflectionIntensity;                                                              // uMaterialParams.x
+    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;                                                              // uMaterialParams.x
     psParams[13] = normalMapEnabled ? 1.0f : 0.0f;                                                   // uMaterialParams.y
     psParams[14] = bumpScale;                                                                        // uMaterialParams.z
     psParams[15] = ambientIntensity;                                                                 // uMaterialParams.w
@@ -244,7 +244,7 @@ void ForwardRendererGX2::RenderMeshBuffers(GX2RBuffer& vbo,
     psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
     psParams[4] = 0.60f; psParams[5] = 0.55f; psParams[6] = 0.58f; psParams[7] = 1.0f;
     psParams[8] = 1.0f; psParams[9] = 0.96f; psParams[10] = 0.88f; psParams[11] = 32.0f;
-    psParams[12] = reflectionIntensity;
+    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;
     psParams[13] = normalMapEnabled ? 1.0f : 0.0f;
     psParams[14] = bumpScale;
     psParams[15] = ambientIntensity;
@@ -343,7 +343,7 @@ void ForwardRendererGX2::RenderSkinnedMesh(GX2RBuffer& vbo,
     psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
     psParams[4] = 0.60f; psParams[5] = 0.55f; psParams[6] = 0.58f; psParams[7] = 1.0f;
     psParams[8] = 1.0f; psParams[9] = 0.96f; psParams[10] = 0.88f; psParams[11] = 32.0f;
-    psParams[12] = reflectionIntensity;
+    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;
     psParams[13] = clayMode ? 1.0f : 0.0f;
     psParams[14] = 2.0f;
     psParams[15] = 0.38f;
@@ -410,30 +410,73 @@ bool ForwardRendererGX2::InitSkyShader() {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skyPsProgram, psProgSize);
 
             GX2AttribStream attrs[4];
-            attrs[0].location = 0; attrs[0].buffer = 0; attrs[0].offset = 0;
-            attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[0].aluDivisor = 0; attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
-            attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+            uint32_t numAttrs = 0;
 
-            attrs[1].location = 1; attrs[1].buffer = 0; attrs[1].offset = 12;
-            attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[1].aluDivisor = 0; attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
-            attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+            if (m_skyVs->attribVarCount > 0 && m_skyVs->attribVars != nullptr) {
+                for (uint32_t i = 0; i < m_skyVs->attribVarCount && numAttrs < 4; ++i) {
+                    const auto& var = m_skyVs->attribVars[i];
+                    if (var.name && std::strcmp(var.name, "aPos") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, pos);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    } else if (var.name && std::strcmp(var.name, "aNormal") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, normal);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    } else if (var.name && std::strcmp(var.name, "aTexCoord") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, texCoord);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    } else if (var.name && std::strcmp(var.name, "aColor") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, color);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    }
+                }
+            }
 
-            attrs[2].location = 2; attrs[2].buffer = 0; attrs[2].offset = 24;
-            attrs[2].format = GX2_ATTRIB_FORMAT_FLOAT_32_32; attrs[2].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[2].aluDivisor = 0; attrs[2].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
-            attrs[2].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+            if (numAttrs == 0) {
+                // skydome_gx2.gsh contiene aPos (loc 0) y aTexCoord (loc 2)
+                attrs[0].location = 0; attrs[0].buffer = 0; attrs[0].offset = offsetof(MeshVertex, pos);
+                attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                attrs[0].aluDivisor = 0; attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-            attrs[3].location = 3; attrs[3].buffer = 0; attrs[3].offset = 32;
-            attrs[3].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32; attrs[3].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[3].aluDivisor = 0; attrs[3].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
-            attrs[3].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                attrs[1].location = 2; attrs[1].buffer = 0; attrs[1].offset = offsetof(MeshVertex, texCoord);
+                attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32; attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                attrs[1].aluDivisor = 0; attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
+                attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                numAttrs = 2;
+            }
 
-            uint32_t fsSize = GX2CalcFetchShaderSizeEx(4, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+            uint32_t fsSize = GX2CalcFetchShaderSizeEx(numAttrs, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
             m_skyFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "Sky_FS_Prog");
             if (m_skyFsProgram) {
-                GX2InitFetchShaderEx(&m_skyFs, static_cast<uint8_t*>(m_skyFsProgram), 4, attrs,
+                GX2InitFetchShaderEx(&m_skyFs, static_cast<uint8_t*>(m_skyFsProgram), numAttrs, attrs,
                                      GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
                 GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skyFsProgram, fsSize);
                 m_skyShaderLoaded = true;
@@ -471,30 +514,82 @@ bool ForwardRendererGX2::InitMeshShader() {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_meshPsProgram, psProgSize);
 
             GX2AttribStream attrs[4];
-            attrs[0].location = 0; attrs[0].buffer = 0; attrs[0].offset = 0;
-            attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[0].aluDivisor = 0; attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
-            attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+            uint32_t numAttrs = 0;
 
-            attrs[1].location = 1; attrs[1].buffer = 0; attrs[1].offset = 12;
-            attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[1].aluDivisor = 0; attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
-            attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+            if (m_meshVs->attribVarCount > 0 && m_meshVs->attribVars != nullptr) {
+                for (uint32_t i = 0; i < m_meshVs->attribVarCount && numAttrs < 4; ++i) {
+                    const auto& var = m_meshVs->attribVars[i];
+                    if (var.name && std::strcmp(var.name, "aPos") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, pos);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    } else if (var.name && std::strcmp(var.name, "aNormal") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, normal);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    } else if (var.name && std::strcmp(var.name, "aTexCoord") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, texCoord);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    } else if (var.name && std::strcmp(var.name, "aColor") == 0) {
+                        attrs[numAttrs].location = var.location;
+                        attrs[numAttrs].buffer = 0;
+                        attrs[numAttrs].offset = offsetof(MeshVertex, color);
+                        attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32;
+                        attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                        attrs[numAttrs].aluDivisor = 0;
+                        attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
+                        attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                        numAttrs++;
+                    }
+                }
+            }
 
-            attrs[2].location = 2; attrs[2].buffer = 0; attrs[2].offset = 24;
-            attrs[2].format = GX2_ATTRIB_FORMAT_FLOAT_32_32; attrs[2].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[2].aluDivisor = 0; attrs[2].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
-            attrs[2].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+            if (numAttrs == 0) {
+                attrs[0].location = 0; attrs[0].buffer = 0; attrs[0].offset = offsetof(MeshVertex, pos);
+                attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                attrs[0].aluDivisor = 0; attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                attrs[0].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-            attrs[3].location = 3; attrs[3].buffer = 0; attrs[3].offset = 32;
-            attrs[3].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32; attrs[3].type = GX2_ATTRIB_INDEX_PER_VERTEX;
-            attrs[3].aluDivisor = 0; attrs[3].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
-            attrs[3].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                attrs[1].location = 1; attrs[1].buffer = 0; attrs[1].offset = offsetof(MeshVertex, normal);
+                attrs[1].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[1].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                attrs[1].aluDivisor = 0; attrs[1].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                attrs[1].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
 
-            uint32_t fsSize = GX2CalcFetchShaderSizeEx(4, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+                attrs[2].location = 2; attrs[2].buffer = 0; attrs[2].offset = offsetof(MeshVertex, texCoord);
+                attrs[2].format = GX2_ATTRIB_FORMAT_FLOAT_32_32; attrs[2].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                attrs[2].aluDivisor = 0; attrs[2].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
+                attrs[2].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+
+                attrs[3].location = 3; attrs[3].buffer = 0; attrs[3].offset = offsetof(MeshVertex, color);
+                attrs[3].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32; attrs[3].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                attrs[3].aluDivisor = 0; attrs[3].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
+                attrs[3].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                numAttrs = 4;
+            }
+
+            uint32_t fsSize = GX2CalcFetchShaderSizeEx(numAttrs, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
             m_meshFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "Mesh_FS_Prog");
             if (m_meshFsProgram) {
-                GX2InitFetchShaderEx(&m_meshFs, static_cast<uint8_t*>(m_meshFsProgram), 4, attrs,
+                GX2InitFetchShaderEx(&m_meshFs, static_cast<uint8_t*>(m_meshFsProgram), numAttrs, attrs,
                                      GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
                 GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_meshFsProgram, fsSize);
                 m_meshShaderLoaded = true;

@@ -141,34 +141,9 @@ target_link_libraries(engine_framework PUBLIC
 # ==============================================================================
 set(DEMO_SOURCES
     src/main.cpp
-    src/Scene/Cube3DObject.cpp
-    src/Scene/DraggableSquare.cpp
-    src/Scene/RingEffect.cpp
     src/Scene/Starfield3D.cpp
     src/Scene/SceneMenu.cpp
-    src/Scene/SceneMenuSDL.cpp
-    src/Scene/SceneMenuGX2.cpp
-    src/Scene/SceneMenuModels.cpp
     src/Scene/SceneOptions.cpp
-    src/Scene/SceneLighting.cpp
-    src/Scene/SceneParticles.cpp
-    src/Scene/SceneInteractive.cpp
-    src/Scene/SceneRaytracing.cpp
-    src/Scene/SceneRaytracingGPU.cpp
-    src/Scene/SceneGX2Native.cpp
-    src/Scene/SceneWater.cpp
-    src/Scene/SceneInteractiveGX2.cpp
-    src/Scene/SceneShadowsGX2.cpp
-    src/Scene/SceneEnvironmentGX2.cpp
-    src/Scene/SceneStaticModelsGX2.cpp
-    src/Scene/SceneSkeletalAnimationGX2.cpp
-    src/Scene/SceneBirdAnimationGX2.cpp
-    src/Scene/SceneShowcaseGX2.cpp
-    src/Scene/SceneCollisionTriggerDemoGX2.cpp
-    src/Scene/SceneAIDemoGX2.cpp
-    src/Scene/SceneInputHIDDemoGX2.cpp
-    src/Scene/SceneRaytracingBVHGX2.cpp
-    src/Scene/SceneRigidBodyPhysicsGX2.cpp
 )
 
 if(WUT AND WIIU_ENGINE_BUILD_DEMOS)

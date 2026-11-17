@@ -15,14 +15,17 @@ uniform vec4 uSpheres[12];      // xyz = center, w = radius
 uniform vec4 uSphereColors[12]; // rgb = albedo, a = reflectivity
 uniform vec4 uBvhNodes[48];     // 24 nodos Pre-Order Stackless: [2*i]=(min, payload/skip), [2*i+1]=(max, primCount)
 
-float sphereIntersect(vec3 ro, vec3 rd, vec3 center, float radius) {
-    vec3 oc = ro - center;
+float sphereIntersect(vec3 ro, vec3 rd, vec4 s, float maxT) {
+    if (s.w <= 1e-4) return -1.0;
+    vec3 oc = s.xyz - ro;
     float b = dot(oc, rd);
-    float c = dot(oc, oc) - radius * radius;
-    float disc = b * b - c;
-    if (disc < 0.0) return -1.0;
-    float t = -b - sqrt(disc);
-    return (t > 0.001) ? t : -1.0;
+    if (b <= 0.0 || b - s.w >= maxT) return -1.0;
+    float rSq = s.w * s.w;
+    vec3 perp = oc - rd * b;
+    float distSq = dot(perp, perp);
+    if (distSq >= rSq) return -1.0;
+    float t = b - sqrt(rSq - distSq);
+    return (t > 0.001 && t < maxT) ? t : -1.0;
 }
 
 bool aabbIntersect(vec3 ro, vec3 invDir, vec3 bMin, vec3 bMax, float maxT) {
@@ -33,6 +36,28 @@ bool aabbIntersect(vec3 ro, vec3 invDir, vec3 bMin, vec3 bMax, float maxT) {
     float tNear = max(max(tMin.x, tMin.y), tMin.z);
     float tFar  = min(min(tMax.x, tMax.y), tMax.z);
     return (tFar >= max(0.0, tNear)) && (tNear < maxT);
+}
+
+float evalSphereShadow(vec3 ro, vec3 lightDir, float lightDist, vec4 s, int shadowMode, float lightRadius) {
+    if (s.w <= 1e-4) return 1.0;
+    vec3 oc = s.xyz - ro;
+    float tProj = dot(oc, lightDir);
+    if (tProj <= 0.001 || tProj - s.w >= lightDist) return 1.0;
+
+    vec3 perp = oc - lightDir * tProj;
+    float distSq = dot(perp, perp);
+    float kPen = (shadowMode == 2) ? (tProj * (0.12 * lightRadius) + 0.01) : 0.0;
+    float maxR = s.w + kPen;
+    if (distSq >= maxR * maxR) return 1.0;
+
+    float innerR = s.w - kPen;
+    if (shadowMode == 1 || (innerR > 0.0 && distSq <= innerR * innerR)) {
+        return 0.0;
+    }
+
+    float distToSurf = sqrt(distSq) - s.w;
+    float penumbra = clamp(0.5 + 0.5 * (distToSurf / max(kPen, 0.0001)), 0.0, 1.0);
+    return penumbra * penumbra * (3.0 - 2.0 * penumbra);
 }
 
 // Trazado primario o de reflejo usando BVH Stackless Pre-Order (0 arreglos en GPR) o fuerza bruta
@@ -46,31 +71,43 @@ void traceScene(vec3 ro, vec3 rd, int ignoreObj, float maxT,
     int primCountTotal = clamp(int(uRenderFlags.w + 0.5), 0, 12);
 
     if (uRenderFlags.x > 0.5) {
+        int nodeCount = clamp(int(uSunDirAndNodes.w + 0.5), 0, 24);
+        if (nodeCount <= 0) return;
+
         vec3 rdSign = step(vec3(0.0), rd) * 2.0 - 1.0;
         vec3 invDir = 1.0 / (rdSign * max(abs(rd), vec3(1e-6)));
-        int nodeCount = clamp(int(uSunDirAndNodes.w + 0.5), 0, 24);
-        int nodeIdx = 0;
 
-        for (int iter = 0; iter < nodeCount; ++iter) {
+        // Fast-reject contra AABB raíz con índices constantes (evita waterfall loop MOVA en cielo/suelo)
+        vec4 rootMin = uBvhNodes[0];
+        vec4 rootMax = uBvhNodes[1];
+        outTests++;
+        if (!aabbIntersect(ro, invDir, rootMin.xyz, rootMax.xyz, outT)) {
+            return;
+        }
+
+        int startNode = (rootMax.w < 0.5) ? 1 : 0;
+        int nodeIdx = startNode;
+        for (int iter = startNode; iter < nodeCount; ++iter) {
             if (nodeIdx >= nodeCount) break;
             vec4 nMin = uBvhNodes[nodeIdx * 2];
             vec4 nMax = uBvhNodes[nodeIdx * 2 + 1];
             int payload = int(nMin.w + 0.5);
             int pCount = int(nMax.w + 0.5);
-            outTests++;
 
-            if (!aabbIntersect(ro, invDir, nMin.xyz, nMax.xyz, outT)) {
-                nodeIdx = (pCount > 0) ? (nodeIdx + 1) : payload;
-                continue;
+            if (nodeIdx > 0) {
+                outTests++;
+                if (!aabbIntersect(ro, invDir, nMin.xyz, nMax.xyz, outT)) {
+                    nodeIdx = (pCount > 0) ? (nodeIdx + 1) : payload;
+                    continue;
+                }
             }
 
             for (int i = 0; i < pCount; ++i) {
                 int idx = payload + i;
                 outTests++;
                 if (idx == ignoreObj) continue;
-                vec4 s = uSpheres[idx];
-                float t = sphereIntersect(ro, rd, s.xyz, s.w);
-                if (t > 0.001 && t < outT) {
+                float t = sphereIntersect(ro, rd, uSpheres[idx], outT);
+                if (t > 0.0) {
                     outT = t;
                     outObj = idx;
                 }
@@ -81,9 +118,8 @@ void traceScene(vec3 ro, vec3 rd, int ignoreObj, float maxT,
         for (int i = 0; i < primCountTotal; ++i) {
             outTests++;
             if (i == ignoreObj) continue;
-            vec4 s = uSpheres[i];
-            float t = sphereIntersect(ro, rd, s.xyz, s.w);
-            if (t > 0.001 && t < outT) {
+            float t = sphereIntersect(ro, rd, uSpheres[i], outT);
+            if (t > 0.0) {
                 outT = t;
                 outObj = i;
             }
@@ -91,7 +127,8 @@ void traceScene(vec3 ro, vec3 rd, int ignoreObj, float maxT,
     }
 
     if (outObj >= 0) {
-        outNormal = normalize((ro + rd * outT) - uSpheres[outObj].xyz);
+        vec4 sHit = uSpheres[outObj];
+        outNormal = ((ro + rd * outT) - sHit.xyz) / max(sHit.w, 1e-5);
     }
 }
 
@@ -103,43 +140,42 @@ float traceShadow(vec3 ro, vec3 lightDir, float lightDist, int ignoreObj, int sh
     int primCountTotal = clamp(int(uRenderFlags.w + 0.5), 0, 12);
 
     if (uRenderFlags.x > 0.5) {
+        int nodeCount = clamp(int(uSunDirAndNodes.w + 0.5), 0, 24);
+        if (nodeCount <= 0) return 1.0;
+
         vec3 ldSign = step(vec3(0.0), lightDir) * 2.0 - 1.0;
         vec3 invDir = 1.0 / (ldSign * max(abs(lightDir), vec3(1e-6)));
-        int nodeCount = clamp(int(uSunDirAndNodes.w + 0.5), 0, 24);
-        int nodeIdx = 0;
-        vec3 pad = vec3(shadowMode == 2 ? (1.25 * lightRadius + 0.25) : 0.01);
+        float maxPenPad = (shadowMode == 2) ? (min(lightDist, 48.0) * (0.12 * lightRadius) + 0.01) : 0.01;
+        vec3 pad = vec3(maxPenPad);
 
-        for (int iter = 0; iter < nodeCount; ++iter) {
+        // Fast-reject constante contra AABB raíz antes del loop BVH dinámico
+        vec4 rootMin = uBvhNodes[0];
+        vec4 rootMax = uBvhNodes[1];
+        if (!aabbIntersect(ro, invDir, rootMin.xyz - pad, rootMax.xyz + pad, lightDist)) {
+            return 1.0;
+        }
+
+        int startNode = (rootMax.w < 0.5) ? 1 : 0;
+        int nodeIdx = startNode;
+        for (int iter = startNode; iter < nodeCount; ++iter) {
             if (nodeIdx >= nodeCount || shadow <= 0.001) break;
             vec4 nMin = uBvhNodes[nodeIdx * 2];
             vec4 nMax = uBvhNodes[nodeIdx * 2 + 1];
             int payload = int(nMin.w + 0.5);
             int pCount = int(nMax.w + 0.5);
 
-            if (!aabbIntersect(ro, invDir, nMin.xyz - pad, nMax.xyz + pad, lightDist)) {
-                nodeIdx = (pCount > 0) ? (nodeIdx + 1) : payload;
-                continue;
+            if (nodeIdx > 0) {
+                if (!aabbIntersect(ro, invDir, nMin.xyz - pad, nMax.xyz + pad, lightDist)) {
+                    nodeIdx = (pCount > 0) ? (nodeIdx + 1) : payload;
+                    continue;
+                }
             }
 
             for (int i = 0; i < pCount; ++i) {
                 int idx = payload + i;
                 if (idx == ignoreObj) continue;
-                vec4 s = uSpheres[idx];
-                vec3 oc = s.xyz - ro;
-                float tProj = dot(oc, lightDir);
-                if (tProj > 0.001 && tProj < lightDist) {
-                    float distSq = max(0.0, dot(oc, oc) - tProj * tProj);
-                    float distToSurf = sqrt(distSq) - s.w;
-                    if (shadowMode == 1) {
-                        if (distToSurf <= 0.0) {
-                            shadow = 0.0;
-                            break;
-                        }
-                    } else {
-                        float penumbra = clamp(0.5 + 0.5 * distToSurf / (tProj * 0.12 * lightRadius + 0.01), 0.0, 1.0);
-                        shadow = min(shadow, penumbra * penumbra * (3.0 - 2.0 * penumbra));
-                    }
-                }
+                shadow = min(shadow, evalSphereShadow(ro, lightDir, lightDist, uSpheres[idx], shadowMode, lightRadius));
+                if (shadow <= 0.001) break;
             }
             nodeIdx++;
         }
@@ -147,22 +183,7 @@ float traceShadow(vec3 ro, vec3 lightDir, float lightDist, int ignoreObj, int sh
         for (int i = 0; i < primCountTotal; ++i) {
             if (shadow <= 0.001) break;
             if (i == ignoreObj) continue;
-            vec4 s = uSpheres[i];
-            vec3 oc = s.xyz - ro;
-            float tProj = dot(oc, lightDir);
-            if (tProj > 0.001 && tProj < lightDist) {
-                float distSq = max(0.0, dot(oc, oc) - tProj * tProj);
-                float distToSurf = sqrt(distSq) - s.w;
-                if (shadowMode == 1) {
-                    if (distToSurf <= 0.0) {
-                        shadow = 0.0;
-                        break;
-                    }
-                } else {
-                    float penumbra = clamp(0.5 + 0.5 * distToSurf / (tProj * 0.12 * lightRadius + 0.01), 0.0, 1.0);
-                    shadow = min(shadow, penumbra * penumbra * (3.0 - 2.0 * penumbra));
-                }
-            }
+            shadow = min(shadow, evalSphereShadow(ro, lightDir, lightDist, uSpheres[i], shadowMode, lightRadius));
         }
     }
     return shadow;
@@ -258,10 +279,10 @@ void main() {
         shadow = traceShadow(surfPos + surfNormal * 0.01, L, lightDist, ignoreId, shadowMode, lightRadius);
     }
 
-    // 2. Reflexión unificada (1 sola instancia secundaria de traceScene en microcódigo R700)
+    // 2. Reflexión unificada (poda en suelo hacia el cielo / horizonte + fast-reject AABB raíz)
     vec3 reflDir = reflect(rd, surfNormal);
     vec3 reflCol = evalSky(reflDir, sunDir);
-    if (isSphereHit || floorT < 22.0) {
+    if (isSphereHit || (floorT < 20.0 && reflDir.y > 0.01)) {
         float rT;
         int rObj;
         vec3 rNorm;
@@ -301,7 +322,8 @@ void main() {
         float check = mod(floor(surfPos.x * 0.9) + floor(surfPos.z * 0.9), 2.0);
         vec3 floorAlbedo = (check > 0.5) ? vec3(0.22, 0.26, 0.36) : vec3(0.08, 0.11, 0.18);
         vec3 litFloor = floorAlbedo * (0.22 + 0.78 * shadow);
-        vec3 shadedFloor = mix(litFloor, reflCol, 0.26);
+        float floorReflFade = isFloorHit ? (1.0 - smoothstep(14.0, 20.0, floorT)) : 1.0;
+        vec3 shadedFloor = mix(litFloor, reflCol, 0.26 * floorReflFade);
         vec3 fogged = mix(shadedFloor, skyCol, clamp(floorT * 0.025, 0.0, 1.0));
         FragColor = vec4(fogged, 1.0);
     }

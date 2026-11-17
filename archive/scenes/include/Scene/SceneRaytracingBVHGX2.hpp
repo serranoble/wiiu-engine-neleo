@@ -3,7 +3,6 @@
 #include "Scene/GameScene3D.hpp"
 #include "Core/Spatial/SpatialBVH.hpp"
 #include "Core/ECS/Systems/CullingSystem.hpp"
-#include "Graphics/ShadowSystem.hpp"
 #include "Graphics/RHI/RHIFullscreenShader.hpp"
 #include <array>
 #include <cstdint>
@@ -13,19 +12,20 @@
 namespace WiiU {
 
 /**
- * @brief Escena interactiva de Ray Tracing GPU con BVH Stackless, Pre-Culling CPU Paralelo y Sombras CSM (Cap. 11).
+ * @brief Escena interactiva de Ray Tracing GPU con BVH Stackless, Pre-Culling CPU Paralelo y Sombras Suaves (Cap. 11).
  *
  * Optimizaciones de silicio Espresso + AMD Latte:
  * 1. Recorrido BVH Pre-Order Stackless (`OPT-70`): 0 arreglos en GPRs del Pixel Shader.
  * 2. Paralelismo asimétrico Core 1 + Core 2 vía `JobSystem` (`OPT-01`, `OPT-106`):
  *    - Core 2: cinemática, construcción SAH, empaquetado Stackless y Culling BVH.
- *    - Core 1: cálculo de cascadas CSM, dirección solar y rectángulos de descarte GPU.
- * 3. Early Screen-Space Reject (`uScreenBounds`) y Early Floor Shadow Culling (`uShadowFloorBounds`).
+ *    - Core 1: cálculo de base ortonormal de cámara, dirección solar y rectángulos de descarte GPU.
+ * 3. Early Screen-Space Reject (`uScreenBounds`), Early Floor Shadow Culling (`uShadowFloorBounds`) y Escalador 16:9 (`OPT-421`).
  */
 class SceneRaytracingBVHGX2 final : public GameScene3D {
 public:
     static constexpr size_t SPHERE_COUNT = 12;
     static constexpr size_t MAX_GPU_BVH_NODES = 24; // 2*12 - 1 = 23 <= 24
+    static constexpr float CAMERA_FOV_DEG = 60.0f;
 
     SceneRaytracingBVHGX2() = default;
     ~SceneRaytracingBVHGX2() override { m_fullscreenShader.Shutdown(); }
@@ -42,7 +42,7 @@ public:
     }
 
     [[nodiscard]] std::string GetSceneName() const override {
-        return "Demo 7: Ray Tracing BVH & Sombras CSM (Cap. 11)";
+        return "Demo 7: Ray Tracing BVH & Sombras Suaves (Cap. 11)";
     }
 
 protected:
@@ -93,13 +93,21 @@ private:
     void InitSpheres();
     void AdvanceSpheres() noexcept;
     void RebuildBVHAndUniforms();
+    void UpdateCameraBasis() noexcept;
     void ComputeAccelerationBounds() noexcept;
     void HandleControls(float dt);
     void CycleShadowMode() noexcept;
+    void CycleResolution(int delta) noexcept;
 
     std::array<SphereInstance, SPHERE_COUNT> m_spheres{};
     std::array<Entity, SPHERE_COUNT> m_sphereEntities{};
     SpatialBVH m_bvh;
+
+    // Base ortonormal de cámara cacheada por cuadro
+    Point3D m_camPos{0.0f, 3.0f, 9.0f};
+    Point3D m_camForward{0.0f, 0.0f, -1.0f};
+    Point3D m_camRight{1.0f, 0.0f, 0.0f};
+    Point3D m_camUp{0.0f, 1.0f, 0.0f};
 
     // Búferes alineados listos para transmisión a RHI
     std::array<float, SPHERE_COUNT * 4> m_gpuSpheres{};
@@ -109,10 +117,6 @@ private:
     std::array<float, 4> m_gpuShadowFloorBounds{-25.0f, -25.0f, 25.0f, 25.0f};
     Point3D m_sunDir{0.4f, 0.8f, 0.45f};
     size_t m_packedNodeCount{0};
-
-    // Subsistema de Sombras en Cascada (Cap. 11.3)
-    ShadowConfig m_shadowConfig{};
-    std::array<ShadowCascade, ShadowSystem::MAX_CASCADES> m_cascades{};
 
     // Pase Fullscreen desacoplado en engine_graphics (RHI)
     RHIFullscreenShader m_fullscreenShader;
@@ -129,6 +133,7 @@ private:
     bool m_paused{false};
     bool m_smpActive{false};
     int m_shadowMode{2}; // 0 = OFF, 1 = HARD, 2 = SOFT PENUMBRA
+    int m_resIndex{2};   // 0=360p, 1=480p, 2=540p (default), 3=648p, 4=720p
     size_t m_visibleEntities{0};
     bool m_prevTouchDown{false};
     bool m_exitRequested{false};

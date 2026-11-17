@@ -8,6 +8,7 @@
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <coreinit/event.h>
 #include <coreinit/thread.h>
+#include <coreinit/time.h>
 #else
 #include <mutex>
 #include <condition_variable>
