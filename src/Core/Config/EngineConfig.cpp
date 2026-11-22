@@ -59,6 +59,7 @@ void EngineConfig::ResetToDefaults() noexcept {
     controls.rumbleEnabled = true;
     controls.rumbleIntensity = 1.0f;
     controls.deadzoneRadius = 0.18f;
+    network = NetConfig{};
 }
 
 static inline void TrimWhitespace(char* str) noexcept {
@@ -162,6 +163,17 @@ bool EngineConfig::LoadFromFile(const char* filepath) {
                 float v = static_cast<float>(std::atof(val));
                 if (std::isfinite(v)) controls.deadzoneRadius = std::clamp(v, 0.05f, 0.50f);
             }
+        } else if (std::strcmp(currentSection, "Network") == 0) {
+            if (std::strcmp(key, "server_ip") == 0 && val[0] != '\0') {
+                std::strncpy(network.serverIp, val, sizeof(network.serverIp) - 1);
+                network.serverIp[sizeof(network.serverIp) - 1] = '\0';
+            } else if (std::strcmp(key, "tcp_port") == 0) {
+                int v = std::atoi(val);
+                if (v > 0 && v <= 65535) network.tcpPort = static_cast<uint16_t>(v);
+            } else if (std::strcmp(key, "udp_port") == 0) {
+                int v = std::atoi(val);
+                if (v > 0 && v <= 65535) network.udpPort = static_cast<uint16_t>(v);
+            }
         }
     }
 
@@ -170,7 +182,7 @@ bool EngineConfig::LoadFromFile(const char* filepath) {
 }
 
 bool EngineConfig::SaveToFile(const char* filepath) {
-    char iniBuffer[1024];
+    char iniBuffer[1280];
     int len = std::snprintf(iniBuffer, sizeof(iniBuffer),
         "; =============================================================================\n"
         "; Global Engine Configuration (StorageManager SAL)\n"
@@ -189,7 +201,11 @@ bool EngineConfig::SaveToFile(const char* filepath) {
         "[Controls]\n"
         "rumble_enabled=%d\n"
         "rumble_intensity=%.2f\n"
-        "deadzone_radius=%.2f\n",
+        "deadzone_radius=%.2f\n\n"
+        "[Network]\n"
+        "server_ip=%s\n"
+        "tcp_port=%u\n"
+        "udp_port=%u\n",
         static_cast<int>(graphics.resolution),
         static_cast<int>(graphics.textureFilter),
         graphics.vsyncEnabled ? 1 : 0,
@@ -201,7 +217,10 @@ bool EngineConfig::SaveToFile(const char* filepath) {
         audio.sfxVolume,
         controls.rumbleEnabled ? 1 : 0,
         controls.rumbleIntensity,
-        controls.deadzoneRadius
+        controls.deadzoneRadius,
+        network.serverIp,
+        static_cast<unsigned>(network.tcpPort),
+        static_cast<unsigned>(network.udpPort)
     );
 
     if (len <= 0 || static_cast<size_t>(len) >= sizeof(iniBuffer)) {

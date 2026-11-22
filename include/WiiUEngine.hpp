@@ -8,6 +8,7 @@
  * - engine_core: Memoria determinista, JobSystem, VFS, CVars, ALSM, ECS, AssetManager, Eventos, Reloj, BVH, Storage/HMAC.
  * - engine_physics: SpatialHashGrid, Colisiones, Física de Cuerpos Rígidos/XPBD, KCC-FSM y CameraRelativeMovement.
  * - engine_ai: Navegación NavGraph, A* determinista, Steering, Behavior Trees y AIPerceptionSystem.
+ * - engine_net: Sockets HAL no bloqueantes UDP/TCP (nsysnet/Winsock2), NetBitStream Big-Endian, NetSession y NetReplication.
  * - engine_audio: AudioManager (Streaming BGM <= 256 KB) y AudioEngine3D (128 voces virtuales / 32 físicas, Doppler, Reverb).
  * - engine_input: InputManager, InputContextStack, HID Auto-Pause, ActionMapping y Hápticos.
  * - engine_graphics: ForwardRendererGX2 (Instancing + Early-Z), ShadowMapRendererGX2 (PCF 2x2), RenderQueue, MaterialSystem, SkyboxRenderPass, RHI y UIToolkit.
@@ -59,6 +60,7 @@
 #include "Core/ECS/Components/IKRigComponent.hpp"
 #include "Core/ECS/Components/AudioEmitterComponent.hpp"
 #include "Core/ECS/Components/StudioTurntableComponent.hpp"
+#include "Core/ECS/Components/NetIdentityComponent.hpp"
 
 #include "Core/ECS/Systems/TransformSystem.hpp"
 #include "Core/ECS/Systems/CameraSystem.hpp"
@@ -99,6 +101,7 @@
 #include "Input/InputContextStack.hpp"
 #include "Input/InputManager.hpp"
 #include "Input/RumbleManager.hpp"
+#include "Input/SoftwareKeyboard.hpp"
 
 // 5. Graficos, Mallas, Texturas, Animacion, RHI y UI
 #include "Graphics/Color.hpp"
@@ -127,7 +130,14 @@
 #include "Graphics/UIComponents.hpp"
 #include "Graphics/UI/UIToolkit.hpp"
 
-// 6. Framework de Escenas y Juegos
+// 6. Redes y Multijugador (Cap. 20 Jason Gregory)
+#include "Net/NetTypes.hpp"
+#include "Net/NetBitStream.hpp"
+#include "Net/NetSocket.hpp"
+#include "Net/NetSession.hpp"
+#include "Net/NetReplication.hpp"
+
+// 7. Framework de Escenas y Juegos
 #include "Scene/IScene.hpp"
 #include "Scene/ModalStack.hpp"
 #include "Scene/SceneManager.hpp"

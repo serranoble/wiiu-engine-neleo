@@ -62,6 +62,15 @@ struct ControlsConfig {
 };
 
 /**
+ * @brief Parámetros de red y servidor local/LAN (Jason Gregory Cap. 20).
+ */
+struct NetConfig {
+    char serverIp[48]{"127.0.0.1"};
+    uint16_t tcpPort{7777u};
+    uint16_t udpPort{7778u};
+};
+
+/**
  * @brief Callback de notificación de cambios sin asignación dinámica en heap.
  */
 using ConfigChangeCallback = void(*)(const class EngineConfig&, void* userData);
@@ -93,9 +102,12 @@ public:
     GraphicsConfig graphics;
     AudioConfig audio;
     ControlsConfig controls;
+    NetConfig network;
 
     [[nodiscard]] const ControlsConfig& GetControls() const noexcept { return controls; }
     [[nodiscard]] ControlsConfig& GetControls() noexcept { return controls; }
+    [[nodiscard]] const NetConfig& GetNetwork() const noexcept { return network; }
+    [[nodiscard]] NetConfig& GetNetwork() noexcept { return network; }
 
     bool LoadFromFile(const char* filepath = nullptr);
     bool SaveToFile(const char* filepath = nullptr);

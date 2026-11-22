@@ -1,6 +1,6 @@
 # 📄 Documento de Traspaso y Contexto del Proyecto: Wii U 3D Graphics Engine C++20
 
-**Última Actualización:** 19 de Noviembre de 2026 (Hito 144: Migración Completa a Wii U 100% Nativo sin SDL2 [Fases 1, 2 y 3 + Validación Hardware Real] — Swapchain GX2 Nativo + Heaps MEM1/FG + `ProcUIInitEx` y TV/DRC activos en Menú HOME [`Window`/`InputManager`] + `SYSLaunchMenu()`/`OSSleepTicks(16)` + Guardas `Window::HasForeground() && !Window::IsExitingProcUI()` en `GX2DrawDone()`, `Render2DGX2` Triple-Buffer + `IScene::ClearsFramebuffer()`, `sndcore2`/AX Estéreo 48 kHz Ping-Pong MEM2 16384B sin cruce de banco 512 MB + `DCStoreRange` + Hilo Mix Dedicado [`prio - 1`] + Arranque L/R Sincronizado [`m_axVoicesStarted`, `endOffset = AX_BUFFER_SAMPLES - 1u`], `AssetManager` puro `std::FILE`, `CMakeLists.txt` sin SDL2 en WUT, SDL2 encapsulado bajo `#if !defined(__WIIU__)`; `OPT-442`; `build/` + `build_lib/` exit 0 con `0` warnings, `0` símbolos `SDL_` en `wiiu_demos.elf` [`wiiu_demos.rpx` = `349,655` B, `wiiu_demos.wuhb` = `51,204,672` B], Ciclo 2 Fase 1 y Fase 2 `APROBACIÓN FINAL`, `0 CRLF`)
+**Última Actualización:** 21 de Noviembre de 2026 (Hito 145: Subsistema de Redes Multi-Consola `engine_net` [8ª librería estática, Cap. 20 Jason Gregory] + Servidor Local Dual TCP/UDP en Windows [`OPT-443`]: `NetSocket` HAL no bloqueante `nsysnet`/`Winsock2`, `NetBitStream` endian-safe, `NetSession` UDP `WUN1` + ACK sliding window + TCP framing 2048B, `NetReplication` snapshots 50B + LERP/SLERP, `tools/net_test_server.py`, `build/` + `build_lib/` exit 0 con 0 warnings, 0 errores, 0 símbolos `SDL_` en `wiiu_demos.elf` [`357,512` B `.rpx` / `51,212,524` B `.wuhb`], Fases 1 y 2 `APROBACIÓN FINAL`, 0 CRLF)
 **Plataforma Target:** Nintendo Wii U (Espresso PowerPC 750 Tri-Core @ 1.24GHz / AMD Latte GX2 GPU @ 550MHz)
 **Toolchain & SDK:** devkitPro / devkitPPC, `wut` (`gx2`, `gx2r`, `proc_ui`, `coreinit`, `vpad`, `padscore`, `sndcore2`), C++20 Nativo (PC/multiplataforma aislado vía SDL2 en `#if !defined(__WIIU__)`)
 
@@ -3785,6 +3785,30 @@ código R700 (`m_skyVs`, `m_skyPs`, `m_skyFs`) con asignaciones alineadas a 256 
   - **Aislamiento Nativo:** `powerpc-eabi-g++ -std=c++20 -Wall -Wextra -Werror` en `include/WiiUEngine.hpp` sin rutas SDL2 (`SYNTAX_OK`), `0` símbolos `SDL_` en `build/wiiu_demos.elf`, `0` fugas `<gx2/` ni `<SDL2/` en `include/Core/`, `0 CRLF`.
   - **Fase 1 (`graphics_code_reviewer`, `dc13b2f1-0b39-42f8-a0a6-aec3b4102895`):** **APROBACIÓN FINAL (FASE 1 - GRÁFICA & REUSABILIDAD)** en Ciclo 2 de revisión post-hardware (4/4 hallazgos P0–P2 cerrados).
   - **Fase 2 (`engine_clean_code_reviewer`, `e29db081-74da-4c45-a3d6-370be43f42ff`):** **APROBACIÓN FINAL (FASE 2 - ARQUITECTURA & REUSABILIDAD)** en Ciclo 2 de revisión post-hardware (3/3 hallazgos P0–P2 cerrados).
+
+---
+
+## 🌐 Hito 145: Subsistema de Redes Multi-Consola `engine_net` (8ª Librería Estática, Cap. 20 Jason Gregory) + Servidor Local Dual TCP/UDP (`OPT-443`, 21 de Noviembre de 2026)
+
+- **Objetivo:** Diseñar e integrar un subsistema de redes robusto y modular como la **8ª librería estática del motor (`engine_net`)**, cumpliendo con la arquitectura del Capítulo 20 de *Game Engine Architecture* (Jason Gregory), provisto de sockets no bloqueantes HAL para Wii U (`nsysnet`/POSIX) y Windows (`Winsock2`), serialización bitstream endian-safe, transporte UDP con fiabilidad ligera (ACK sliding window de 32-bit y métricas RTT/jitter/loss), replicación de entidades ECS con snapshots de 50 bytes y interpolación LERP/SLERP, más un servidor local de diagnóstico dual en Python (`tools/net_test_server.py`).
+- **Alcance Cerrado (`OPT-443`):**
+  1. **8ª Librería Estática (`engine_net` en DAG):**
+     - [`NetTypes.hpp`](file:///g:/Mi%20unidad/wiiu_demo/include/Net/NetTypes.hpp): tipos, constantes y estructuras base de red.
+     - [`NetBitStream.hpp/.cpp`](file:///g:/Mi%20unidad/wiiu_demo/include/Net/NetBitStream.hpp): serialización bit a bit endian-safe para compresión y empaquetado de datos.
+     - [`NetSocket.hpp/.cpp`](file:///g:/Mi%20unidad/wiiu_demo/include/Net/NetSocket.hpp): capa de abstracción HAL no bloqueante para Wii U (`nsysnet`/POSIX) y Windows (`Winsock2`), con guarda estricta `FD_SETSIZE`.
+     - [`NetSession.hpp/.cpp`](file:///g:/Mi%20unidad/wiiu_demo/include/Net/NetSession.hpp): transporte UDP con cabecera `WUN1` de 16 bytes Big-Endian, ACK sliding window de 32 bits, métricas de RTT, jitter y pérdida de paquetes, y transporte TCP con length-prefixed framing y búfer TX estático de 2048 bytes (`0` alocaciones en el heap).
+     - [`NetReplication.hpp/.cpp`](file:///g:/Mi%20unidad/wiiu_demo/include/Net/NetReplication.hpp): `NetTransformSnapshot` de 50 bytes y `SnapshotInterpolator` con LERP/SLERP temporal y extrapolación acotada a 150 ms.
+     - [`NetIdentityComponent.hpp`](file:///g:/Mi%20unidad/wiiu_demo/include/Core/ECS/Components/NetIdentityComponent.hpp): componente ECS de identidad de red.
+  2. **Integración en Motor y Configuración:**
+     - Añadido `NetConfig` en `EngineConfig` (`[Network]`), inicialización y verificación de integridad en [`Engine.cpp`](file:///g:/Mi%20unidad/wiiu_demo/src/Core/Engine.cpp) (`NetPlatform::Initialize`/`VerifyNetIntegrity`/`Shutdown`), actualización de [`CMakeLists.txt`](file:///g:/Mi%20unidad/wiiu_demo/CMakeLists.txt) y exposición en [`WiiUEngine.hpp`](file:///g:/Mi%20unidad/wiiu_demo/include/WiiUEngine.hpp).
+  3. **Servidor Local Dual de Pruebas (`tools/net_test_server.py`):**
+     - Servidor Python autónomo para Windows que levanta TCP en puerto 7777 y UDP en puerto 7778, detecta IP LAN para Wii U y `127.0.0.1` para Cemu, simula una entidad remota en órbita y permite simular latencia o pérdida de paquetes opcional (`--latency-ms`, `--loss-pct`).
+- **Verificación y Auditorías Formales (Regla 2):**
+  - **Compilación Dual (`build/` + `build_lib/`):** Exit Code `0`, `0` errores, `0` warnings (`build/wiiu_demos.rpx` = `357,512` B / `0.34 MB`, `build/wiiu_demos.wuhb` = `51,212,524` B / `48.84 MB`).
+  - **Auditorías Formales en Cascada:**
+    - Fase 1 (`graphics_code_reviewer`): **APROBACIÓN FINAL (FASE 1 - SILICIO, CONCURRENCIA, MATEMÁTICA & REUSABILIDAD)**.
+    - Fase 2 (`engine_clean_code_reviewer`): **APROBACIÓN FINAL (FASE 2 - ARQUITECTURA & REUSABILIDAD)**.
+  - **Integridad:** `0` fugas en `include/Core/`, `0` símbolos `SDL_` en Wii U ELF, `0 CRLF`.
 
 ---
 
