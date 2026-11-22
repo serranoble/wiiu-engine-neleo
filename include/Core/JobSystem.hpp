@@ -44,7 +44,7 @@ public:
     void Init();
     void Shutdown();
 
-    [[nodiscard]] bool IsInitialized() const noexcept { return m_initialized; }
+    [[nodiscard]] bool IsInitialized() const noexcept { return m_initialized.load(std::memory_order_acquire); }
 
     // Encola un trabajo individual con función y parámetro
     void Dispatch(JobFunction func, void* param = nullptr, std::atomic<uint32_t>* counter = nullptr);
@@ -85,13 +85,17 @@ private:
     static constexpr size_t QUEUE_CAPACITY = 128;
     static constexpr size_t QUEUE_MASK = QUEUE_CAPACITY - 1;
 
-    alignas(32) JobDeclaration m_queue[QUEUE_CAPACITY]{};
-    alignas(32) std::atomic<uint32_t> m_head{0};
-    alignas(32) std::atomic<uint32_t> m_tail{0};
-    alignas(32) std::atomic_flag m_pushLock = ATOMIC_FLAG_INIT;
+    struct alignas(32) JobSlot {
+        std::atomic<uint32_t> sequence{0};
+        JobDeclaration job{};
+    };
+
+    alignas(32) JobSlot m_queue[QUEUE_CAPACITY]{};
+    alignas(32) std::atomic<uint32_t> m_dequeuePos{0};
+    alignas(32) std::atomic<uint32_t> m_enqueuePos{0};
 
     std::atomic<bool> m_running{false};
-    bool m_initialized{false};
+    std::atomic<bool> m_initialized{false};
     std::thread m_workerThread;
 
     std::atomic<uint32_t> m_completedJobs{0};

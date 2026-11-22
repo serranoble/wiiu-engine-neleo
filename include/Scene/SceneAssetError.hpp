@@ -18,7 +18,7 @@ public:
 
     void OnEnter() override;
     void Update(float dt) override;
-    void Render(SDL_Renderer* renderer) override;
+    void Render() override;
 
     [[nodiscard]] std::string GetSceneName() const override {
         return "Error: Recursos No Encontrados";

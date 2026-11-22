@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/Math3D.hpp"
-#include <cstdint>
 
 namespace WiiU {
 

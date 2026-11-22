@@ -100,3 +100,42 @@ Diseñado para permitir que cualquier juego homebrew o proyecto de terceros enla
 ### 3. Umbrella Header Público y CMake Reutilizable (`OPT-420`)
 - **`include/WiiUEngine.hpp`:** Punto de entrada único (`#include "WiiUEngine.hpp"`) que agrupa Core, ECS, Física, IA, Audio 3D, HID, Gráficos GX2/RHI y Framework de Escenas.
 - **`CMakeLists.txt`:** Exposición pública automática de cabeceras (`target_include_directories(engine_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)`) y bandera `option(WIIU_ENGINE_BUILD_DEMOS "Build the Wii U Demo Showcase executable (wiiu_demos)" ON)` para integrar el motor vía `add_subdirectory(...)` con `-DWIIU_ENGINE_BUILD_DEMOS=OFF`.
+
+---
+
+## Optimizaciones de Prioridad Alta a Nivel de Motor (Hito 142 — 20 Subsistemas Core/RHI/AI/Physics/Audio)
+
+Implementadas directamente sobre las 7 librerías estáticas (`engine_core`, `engine_input`, `engine_audio`, `engine_physics`, `engine_ai`, `engine_graphics`, `engine_framework`) con **0 alocaciones dinámicas a 60 FPS** y **`0` cabeceras `<gx2/*.h>` en `include/Core/`**.
+
+### 1. Almacenamiento, VFS, CVars y Seguridad (`engine_core`)
+- **`VirtualFileSystem` (`include/Core/Storage/VirtualFileSystem.hpp`):** Rutas virtuales `content:/` y `save:/`, lecturas síncronas/asíncronas en Core 2 con alineación potencia-de-2 (defecto 256B) + `DCFlushRange` e invariante `jobCounter == 0` libre de carreras.
+- **`CVarRegistry` (`include/Core/Config/CVarRegistry.hpp`):** 64 CVars tipadas (`Bool`, `Int`, `Float`, `String`) con búsqueda FNV-1a sin heap y consola textual `ExecuteCommand("get/set/toggle/reset/list ...")`.
+- **`CryptoHMAC` & `StorageManager` (`CryptoHMAC.hpp`, `StorageManager.hpp`):** Firma/verificación `HMAC-SHA256` endian-agnostic (`SaveFileVerifiedAtomic`, `LoadSaveFileVerified`) y guardado asíncrono doble-búfer en Core 2 (`SaveFileAsync`, `WaitForAsyncSaves`) drenado antes de `JobSystem::Shutdown()`.
+- **`ApplicationLifecycle` (`include/Core/ApplicationLifecycle.hpp`):** Máquina de estados agnóstica de ciclo de vida y observador `ProcUI` / señal de aborto preventivo de frame.
+
+### 2. Entrada Contextual y Blindaje HID (`engine_input`)
+- **`InputContextStack` (`include/Input/InputContextStack.hpp`):** Pila de contextos (`Gameplay`, `Vehicle`, `Menu`, `UIModal`, `DebugConsole`) por prioridad con bloqueo opcional de propagación.
+- **`InputManager` (`include/Input/InputManager.hpp`):** Detección automática de desconexión HID, invalidación de botones/ejes, detención de motores hápticos (`StopRumble`), auto-pausa configurable y callback de notificación.
+
+### 3. Streaming BGM y Virtualización de Voces (`engine_audio`)
+- **`AudioManager` (`include/Audio/AudioManager.hpp`):** Streaming ping-pong de doble búfer ($\le 256$ KB RAM) recargado en Core 2 con semántica `acquire/release` segura para PowerPC y liberación de heap fuera de `SDL_LockAudio()`.
+- **`AudioEngine3D` (`include/Audio/AudioEngine3D.hpp`):** 128 voces virtuales mapeadas sobre 32 canales físicos de mezcla con *priority culling* por distancia y *Acoustic LOD sleep* con avance de fase $\mathcal{O}(1)$.
+
+### 4. Broadphase Espacial Thread-Safe y Locomoción (`engine_physics`)
+- **`SpatialHashGrid` (`include/Core/Physics/SpatialHashGrid.hpp`):** Rejilla hash 3D con limpieza $\mathcal{O}(1)$ por generación y bitset local en pila de 32 bytes (1 línea L1D) que hace `QueryAABB`/`QuerySphere` 100% reentrantes y thread-safe, integrado en `CollisionSystem` y `RigidBodyPhysicsSystem`.
+- **`KinematicCharacterComponent/System` & `CameraRelativeMovementSystem`:** Máquina de estados `KCCLocomotionState` con *coyote time* y transformación de entrada relativa a la cámara desacoplada.
+
+### 5. Inteligencia Artificial Data-Driven (`engine_ai`)
+- **`BehaviorTree` (`BehaviorTree.hpp`, `BehaviorTreeComponent.hpp`, `BehaviorTreeSystem.hpp`):** Árboles de comportamiento en arreglos planos (`Sequence`, `Selector`, `Inverter`, `Repeater`, `Cooldown`, `Condition`, `Action`) sin heap ni punteros polimórficos.
+- **`SensoryBlackboard` & `AIPerceptionSystem` (`SensoryBlackboard.hpp`, `AIPerceptionComponent.hpp`, `AIPerceptionSystem.hpp`):** Percepción multi-estímulo (visión por cono/distancia, oído acústico, memoria de última posición conocida y decaimiento temporal).
+
+### 6. Pipeline Gráfico Latte GX2 (`engine_graphics`)
+- **`MaterialSystem` (`include/Graphics/MaterialSystem.hpp`):** `MaterialUBOData` (256B), `LightBlockUBO` (múltiplo 256B) y `MaterialRegistry` lock-free generacional con punteros RHI opacos `RHITexturePtr = void*`.
+- **`RenderQueue` & `MeshRenderSystem` (`RenderQueue.hpp`, `MeshRenderSystem.hpp`):** Claves de ordenamiento de 64 bits (capa, blend, material/textura, profundidad lineal sin `sqrt` en espacio mundial) con secuencia Early-Z Depth Pre-Pass (Null PS) $\to$ Opacos (`RHI_COMPARE_EQUAL`) $\to$ `SkyboxRenderPass` $\to$ Transparentes Back-to-Front.
+- **Hardware Geometry Instancing (`ForwardRendererGX2`, `instanced_mesh_gx2.gsh`):** Ring buffer persistente de 3 frames × 1024 matrices (3072 matrices) con shader 100% branchless (`6 GPRs`, `0 nstack`) e invalidación por rango (`GX2R_RESOURCE_DISABLE_CPU_INVALIDATE`).
+- **`ShadowMapRendererGX2` (`include/Graphics/ShadowMapRendererGX2.hpp`):** Shadow Map `D32_FLOAT` con Null PS, `GX2SetPolygonOffset`, orden canónico Hi-Z y sampler hardware PCF 2×2.
+- **`RHIRenderPass` & `GameScene3D`:** Activación hardware Hi-Z (`GX2InitDepthBufferHiZEnable`), Fast-Clear seguro con restauración de `GX2ContextState` y pool RAII de texturas.
+
+### 7. Overlays Modales y Grafo de Build (`engine_framework`, `CMakeLists.txt`)
+- **`ModalStack` (`include/Scene/ModalStack.hpp`):** Pila de hasta 8 `ISceneOverlay` compositados sobre la escena activa (seguro ante auto-cierre en `Update()`).
+- **CMake Asset Graph (`OPT-141`):** `file(GLOB_RECURSE CONFIGURE_DEPENDS)` + target `sync_assets` con sello de tiempo para regeneración automática de `wiiu_demos.wuhb` al modificar cualquier asset.

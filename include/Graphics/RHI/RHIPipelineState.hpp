@@ -12,10 +12,12 @@
 namespace WiiU {
 
 #if defined(__WIIU__) || defined(__wiiu__)
+inline constexpr uint8_t RHI_COMPARE_EQUAL  = static_cast<uint8_t>(GX2_COMPARE_FUNC_EQUAL);  // 2
 inline constexpr uint8_t RHI_COMPARE_LEQUAL = static_cast<uint8_t>(GX2_COMPARE_FUNC_LEQUAL); // 3
 inline constexpr uint8_t RHI_COMPARE_ALWAYS = static_cast<uint8_t>(GX2_COMPARE_FUNC_ALWAYS); // 7
 inline constexpr uint8_t RHI_FRONT_FACE_CCW = static_cast<uint8_t>(GX2_FRONT_FACE_CCW);     // 1
 #else
+inline constexpr uint8_t RHI_COMPARE_EQUAL  = 2;
 inline constexpr uint8_t RHI_COMPARE_LEQUAL = 3;
 inline constexpr uint8_t RHI_COMPARE_ALWAYS = 7;
 inline constexpr uint8_t RHI_FRONT_FACE_CCW = 1;
@@ -25,6 +27,8 @@ inline constexpr uint8_t RHI_FRONT_FACE_CCW = 1;
 // [OPT-262] Verificación en Tiempo de Compilación de Silicio Latte (Static Assertions)
 // =============================================================================
 #if defined(__WIIU__) || defined(__wiiu__)
+static_assert(RHI_COMPARE_EQUAL == static_cast<uint8_t>(GX2_COMPARE_FUNC_EQUAL),
+              "RHI_COMPARE_EQUAL must match GX2_COMPARE_FUNC_EQUAL in Cafe OS SDK");
 static_assert(RHI_COMPARE_LEQUAL == static_cast<uint8_t>(GX2_COMPARE_FUNC_LEQUAL),
               "RHI_COMPARE_LEQUAL must match GX2_COMPARE_FUNC_LEQUAL in Cafe OS SDK");
 static_assert(RHI_COMPARE_ALWAYS == static_cast<uint8_t>(GX2_COMPARE_FUNC_ALWAYS),

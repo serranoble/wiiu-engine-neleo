@@ -2,8 +2,6 @@
 
 #include "Audio/Audio3DTypes.hpp"
 #include <array>
-#include <vector>
-#include <string>
 #include <cstdint>
 
 namespace WiiU {
@@ -21,7 +19,9 @@ namespace WiiU {
  */
 class AudioEngine3D {
 public:
-    static constexpr size_t MAX_VOICES = 32;
+    static constexpr size_t MAX_PHYSICAL_VOICES = 32;
+    static constexpr size_t MAX_VIRTUAL_VOICES  = 128;
+    static constexpr size_t MAX_VOICES          = MAX_VIRTUAL_VOICES;
 
     static AudioEngine3D& Instance() {
         static AudioEngine3D instance;
@@ -84,6 +84,7 @@ private:
     void GenerateProceduralClips();
     size_t AllocateVoice(uint8_t priority, float perceivedLoudness);
     void CalculateVoiceGains(AudioVoice& voice, const AudioListener3D& listener);
+    void RebalanceVirtualVoices() noexcept;
 
     std::array<AudioVoice, MAX_VOICES> m_voices{};
     AudioListener3D m_listener{};

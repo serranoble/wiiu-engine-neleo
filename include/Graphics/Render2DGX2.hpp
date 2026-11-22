@@ -2,7 +2,6 @@
 
 #include "Graphics/Color.hpp"
 #include "Graphics/Math3D.hpp"
-#include <string>
 #include <string_view>
 #include <vector>
 #include <cstdint>
@@ -92,12 +91,15 @@ public:
     // Emite el lote completo de vértices acumulados a la GPU Latte
     void End();
 
+    // Avanza el anillo de búferes VRAM al finalizar el fotograma completo
+    void NextFrame() noexcept;
+
     [[nodiscard]] bool IsInitialized() const noexcept { return m_initialized; }
     [[nodiscard]] size_t GetQueuedVertices() const noexcept { return m_vertexBatch.size(); }
 
 private:
     Render2DGX2() = default;
-    ~Render2DGX2() { Shutdown(); }
+    ~Render2DGX2() = default;
 
     Render2DGX2(const Render2DGX2&) = delete;
     Render2DGX2& operator=(const Render2DGX2&) = delete;
@@ -105,13 +107,15 @@ private:
     Render2DGX2& operator=(Render2DGX2&&) = delete;
 
     static constexpr size_t MAX_VERTICES = 48000;
-    static constexpr size_t BUFFER_SLOTS = 2;
+    static constexpr size_t BUFFER_SLOTS = 3;
     std::vector<Render2DVertexGX2> m_vertexBatch;
     bool m_initialized{false};
 
 #if defined(__WIIU__) || defined(__wiiu__)
     GX2RBuffer m_vertexBuffers[BUFFER_SLOTS]{};
+    bool m_bufferSlotCreated[BUFFER_SLOTS]{};
     uint32_t m_currentBufferSlot{0};
+    uint32_t m_bufferVertexOffset{0};
     bool m_shaderLoaded{false};
     bool m_bufferCreated{false};
     bool m_useDirectGFD{false};

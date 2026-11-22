@@ -10,7 +10,6 @@
 #include "Graphics/Texture/TextureLoaderGX2.hpp"
 #include "Graphics/DebugDraw3D.hpp"
 #include "Graphics/UI/UIToolkit.hpp"
-#include <SDL2/SDL.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -19,6 +18,9 @@
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/surface.h>
 #include <gx2/context.h>
+#else
+struct GX2Texture;
+struct GX2ContextState;
 #endif
 
 namespace WiiU {
@@ -91,15 +93,25 @@ public:
      * 
      * Orquesta la configuración de render targets, limpia color y profundidad, prepara `DebugDraw3D`,
      * ejecuta el pase 3D (`OnGameRender3D`) y posteriormente el pase de UI/Debug (`OnGameRenderDebug3D` + `OnGameRenderHUD`).
-     * @param renderer Puntero al contexto SDL_Renderer suministrado por el framework de ventana.
      */
-    void Render(SDL_Renderer* renderer) override;
+    void Render() override;
 
     /**
-     * @brief Indica si la escena opera en modo GX2 de silicio puro (evita que SDL2 limpie o interfiera).
+     * @brief Indica si la escena opera en modo GX2 de silicio puro sobre hardware Wii U.
      * @return true en compilaciones para Nintendo Wii U; false en fallback software.
      */
     [[nodiscard]] bool IsPureGX2() const noexcept override {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    /**
+     * @brief GameScene3D ejecuta GX2ClearColor y GX2ClearDepthStencilEx directamente en __WIIU__.
+     */
+    [[nodiscard]] bool ClearsFramebuffer() const noexcept override {
 #if defined(__WIIU__) || defined(__wiiu__)
         return true;
 #else
@@ -231,7 +243,7 @@ public:
     [[nodiscard]] GX2ContextState* GetContextState() noexcept { return m_nativeContextState; }
 
     /**
-     * @brief Retorna el búfer de color activo enlazado desde SDL2.
+     * @brief Retorna el búfer de color principal activo gestionado por Window::GetActiveNativeColorBuffer().
      */
     [[nodiscard]] GX2ColorBuffer* GetColorBuffer() noexcept { return m_pColorBuffer; }
 
@@ -279,6 +291,7 @@ protected:
 
 #if defined(__WIIU__) || defined(__wiiu__)
     GX2DepthBuffer m_depthBuffer{};
+    void* m_hiZBuffer{nullptr};
     bool m_depthBufferCreated{false};
     GX2ContextState* m_nativeContextState{nullptr};
     GX2ColorBuffer* m_pColorBuffer{nullptr};

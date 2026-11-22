@@ -3,7 +3,6 @@
 #include "Graphics/Color.hpp"
 #include <cstdint>
 #include <cstddef>
-#include <SDL2/SDL.h>
 
 namespace WiiU {
 
@@ -53,9 +52,9 @@ public:
         return instance;
     }
 
-    // Alterna la visibilidad del monitor OSD
-    void Toggle() noexcept { m_visible = !m_visible; }
-    void SetVisible(bool visible) noexcept { m_visible = visible; }
+    // Alterna la visibilidad del monitor OSD (muestrea de inmediato al hacerse visible)
+    void Toggle() noexcept { SetVisible(!m_visible); }
+    void SetVisible(bool visible) noexcept;
     [[nodiscard]] bool IsVisible() const noexcept { return m_visible; }
 
     // Puntos de muestreo de tiempo por frame
@@ -65,7 +64,7 @@ public:
     void Update(float dt);
 
     // Renderizado OSD en pantalla sobre cualquier escena
-    void Render(SDL_Renderer* renderer, bool isPureGX2);
+    void Render();
 
     [[nodiscard]] const ResourceMetrics& GetMetrics() const noexcept { return m_metrics; }
 
@@ -83,10 +82,10 @@ private:
     bool m_visible{false};
     ResourceMetrics m_metrics{};
 
-    Uint64 m_frameStartCounter{0};
-    Uint64 m_cpuEndCounter{0};
-    Uint64 m_gpuEndCounter{0};
-    Uint64 m_perfFreq{1};
+    uint64_t m_frameStartCounter{0};
+    uint64_t m_cpuEndCounter{0};
+    uint64_t m_gpuEndCounter{0};
+    uint64_t m_perfFreq{1};
 
     float m_smoothedCpuMs{0.0f};
     float m_smoothedGpuMs{0.0f};

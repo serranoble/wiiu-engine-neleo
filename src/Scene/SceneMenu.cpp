@@ -50,36 +50,47 @@ void SceneMenu::Update(float dt) {
     }
 
     // Entrada física por mando: Botón A o START/PLUS entra directo a Opciones
-    if (InputManager::Instance().IsButtonTriggered(VPAD_BUTTON_A) ||
-        InputManager::Instance().IsButtonTriggered(WPAD_PRO_BUTTON_A) ||
-        InputManager::Instance().IsButtonTriggered(VPAD_BUTTON_PLUS) ||
-        InputManager::Instance().IsButtonTriggered(WPAD_PRO_BUTTON_PLUS)) {
+    bool btnAOrPlus = false;
+    for (size_t p = 0; p < InputManager::MAX_PLAYERS; ++p) {
+        const auto& pad = InputManager::Instance().GetGamepad(p);
+        if (!pad.isConnected) continue;
+        if (pad.WasJustPressed(VirtualButton::A) || pad.WasJustPressed(VirtualButton::Plus)) {
+            btnAOrPlus = true;
+            break;
+        }
+    }
+
+    if (btnAOrPlus) {
         AudioManager::Instance().PlayClick();
         SceneManager::Instance().ChangeScene(std::make_unique<SceneOptions>());
     }
 }
 
-void SceneMenu::Render(SDL_Renderer* renderer) {
+void SceneMenu::Render() {
+    Render2D::Begin();
+
     // 1. Fondo Estelar Animado
-    m_starfield.Render(renderer, 1280, 720);
+    m_starfield.Render(1280, 720);
 
     // 2. Título y Subtítulo Centrales
-    Render2D::drawPixelString(renderer, "WIIU Demos by Neleo", 412, 100, 4, ColorRGBA::Cyan());
-    Render2D::drawPixelString(renderer, "FRAMEWORK Y MOTOR GRAFICO C++20", 446, 160, 2, ColorRGBA::Yellow());
-    Render2D::drawPixelString(renderer, "FASE DE ARQUITECTURA & BASE TECNICA LIMPIA", 380, 200, 2, ColorRGBA{160, 210, 255, 255});
+    Render2D::DrawPixelString("WIIU Demos by Neleo", 412, 100, 4, ColorRGBA::Cyan());
+    Render2D::DrawPixelString("FRAMEWORK Y MOTOR GRAFICO C++20", 446, 160, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString("FASE DE ARQUITECTURA & BASE TECNICA LIMPIA", 380, 200, 2, ColorRGBA{160, 210, 255, 255});
 
     // 3. Botón de Opciones y Subtítulo
     for (const auto& item : m_menuItems) {
-        item.button.Render(renderer);
+        item.button.Render();
         const int descY = item.button.GetRect().y + item.button.GetRect().h + 12;
-        Render2D::drawPixelString(renderer, item.subtitle, 310, descY, 2, ColorRGBA{180, 210, 240, 255});
+        Render2D::DrawPixelString(item.subtitle, 310, descY, 2, ColorRGBA{180, 210, 240, 255});
     }
 
     // 4. Panel de Estado Informativo en la parte inferior
-    Render2D::drawBox(renderer, 240, 460, 800, 130, ColorRGBA{10, 20, 35, 200}, ColorRGBA::Cyan());
-    Render2D::drawPixelString(renderer, "ESTADO: ESCENAS ANTERIORES ARCHIVADAS COMO REFERENCIA", 270, 485, 2, ColorRGBA{120, 255, 160, 255});
-    Render2D::drawPixelString(renderer, "LISTO PARA REPLANIFICAR Y CONSTRUIR NUEVOS HITOS PASO A PASO", 270, 515, 2, ColorRGBA{200, 225, 255, 255});
-    Render2D::drawPixelString(renderer, "PULSA (A) EN GAMEPAD O TOCA LA PANTALLA PARA ENTRAR A OPCIONES", 270, 545, 2, ColorRGBA::Yellow());
+    Render2D::DrawBox(240, 460, 800, 130, ColorRGBA{10, 20, 35, 200}, ColorRGBA::Cyan());
+    Render2D::DrawPixelString("ESTADO: PIPELINE 100% NATIVO GX2 + SNDCORE2 ACTIVADO", 270, 485, 2, ColorRGBA{120, 255, 160, 255});
+    Render2D::DrawPixelString("LISTO PARA REPLANIFICAR Y CONSTRUIR NUEVOS HITOS PASO A PASO", 270, 515, 2, ColorRGBA{200, 225, 255, 255});
+    Render2D::DrawPixelString("PULSA (A) EN GAMEPAD O TOCA LA PANTALLA PARA ENTRAR A OPCIONES", 270, 545, 2, ColorRGBA::Yellow());
+
+    Render2D::End();
 }
 
 } // namespace WiiU

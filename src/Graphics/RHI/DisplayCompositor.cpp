@@ -1,4 +1,5 @@
 #include "Graphics/RHI/DisplayCompositor.hpp"
+#include <algorithm>
 
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/state.h>
@@ -42,9 +43,17 @@ const char* DisplayCompositor::GetModeName() const noexcept {
 
 void DisplayCompositor::SetExplicitViewport(float x, float y, float w, float h, float minZ, float maxZ) {
 #if defined(__WIIU__) || defined(__wiiu__)
-    GX2SetViewport(x, y, w, h, minZ, maxZ);
-    GX2SetScissor(static_cast<uint32_t>(x), static_cast<uint32_t>(y),
-                  static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+    const float sx = std::max(0.0f, x);
+    const float sy = std::max(0.0f, y);
+    const float sw = std::max(1.0f, w);
+    const float sh = std::max(1.0f, h);
+    const float z0 = std::clamp(minZ, 0.0f, 1.0f);
+    const float z1 = std::clamp(maxZ, 0.0f, 1.0f);
+    GX2SetViewport(sx, sy, sw, sh, z0, z1);
+    GX2SetScissor(static_cast<uint32_t>(sx), static_cast<uint32_t>(sy),
+                  static_cast<uint32_t>(sw), static_cast<uint32_t>(sh));
+#else
+    (void)x; (void)y; (void)w; (void)h; (void)minZ; (void)maxZ;
 #endif
 }
 

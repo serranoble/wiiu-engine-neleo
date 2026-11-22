@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <new>
 #include <utility>
 #include <type_traits>
 
@@ -19,6 +20,9 @@ namespace WiiU {
 template <typename T>
 class ArenaVector {
 public:
+    static_assert(std::is_trivially_destructible_v<T>,
+                  "ArenaVector requiere tipos trivialmente destructibles para reset O(1) en arenas.");
+
     constexpr ArenaVector() noexcept = default;
 
     constexpr ArenaVector(T* memory, size_t capacity) noexcept
@@ -28,18 +32,25 @@ public:
 
     void push_back(const T& item) noexcept {
         if (m_data && m_count < m_capacity) {
-            m_data[m_count++] = item;
+            new (&m_data[m_count++]) T(item);
         }
+    }
+
+    // Precondicion: m_data != nullptr && m_count < m_capacity (o utilizar try_emplace_back)
+    template <typename... Args>
+    T* try_emplace_back(Args&&... args) noexcept {
+        if (m_data && m_count < m_capacity) {
+            return new (&m_data[m_count++]) T(std::forward<Args>(args)...);
+        }
+        return nullptr;
     }
 
     template <typename... Args>
     T& emplace_back(Args&&... args) noexcept {
         if (m_data && m_count < m_capacity) {
-            T* ptr = &m_data[m_count++];
-            new (ptr) T(std::forward<Args>(args)...);
-            return *ptr;
+            return *new (&m_data[m_count++]) T(std::forward<Args>(args)...);
         }
-        return m_data[0];
+        return m_data[m_count > 0 ? m_count - 1 : 0];
     }
 
     [[nodiscard]] constexpr size_t size() const noexcept { return m_count; }

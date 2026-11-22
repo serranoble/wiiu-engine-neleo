@@ -3,6 +3,7 @@
 #include "Graphics/Math3D.hpp"
 #include "Graphics/Color.hpp"
 #include <algorithm>
+#include <cstdint>
 
 namespace WiiU {
 
@@ -34,9 +35,9 @@ inline ColorRGBA CalculateLighting(const ColorRGBA& baseColor, const Point3D& no
     const float ambient = light.ambientIntensity;
     const float totalLight = std::min(1.0f, ambient + diff * light.intensity);
 
-    const Uint8 r = static_cast<Uint8>(std::min(255.0f, baseColor.r * totalLight));
-    const Uint8 g = static_cast<Uint8>(std::min(255.0f, baseColor.g * totalLight));
-    const Uint8 b = static_cast<Uint8>(std::min(255.0f, baseColor.b * totalLight));
+    const uint8_t r = static_cast<uint8_t>(std::min(255.0f, baseColor.r * totalLight));
+    const uint8_t g = static_cast<uint8_t>(std::min(255.0f, baseColor.g * totalLight));
+    const uint8_t b = static_cast<uint8_t>(std::min(255.0f, baseColor.b * totalLight));
 
     return ColorRGBA{r, g, b, baseColor.a};
 }

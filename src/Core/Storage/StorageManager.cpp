@@ -1,4 +1,9 @@
 #include "Core/Storage/StorageManager.hpp"
+#include "Core/Storage/CryptoHMAC.hpp"
+#include "Core/JobSystem.hpp"
+#include "Core/StackString.hpp"
+#include <array>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -18,6 +23,18 @@ namespace WiiU {
 
 bool StorageManager::s_initialized = false;
 char StorageManager::s_saveRoot[256] = "./";
+
+namespace {
+char g_appFolderName[64] = "wiiu_demos";
+}
+
+void StorageManager::SetAppFolderName(std::string_view folderName) noexcept {
+    if (folderName.empty() || folderName.size() >= sizeof(g_appFolderName)) {
+        return;
+    }
+    std::memcpy(g_appFolderName, folderName.data(), folderName.size());
+    g_appFolderName[folderName.size()] = '\0';
+}
 
 static inline bool DirectoryExists(const char* path) noexcept {
     if (!path || path[0] == '\0') return false;
@@ -54,11 +71,13 @@ void StorageManager::Initialize() {
 #if defined(__WIIU__) || defined(__wiiu__)
     // 2. Si "./" no es escribible (ej. paquete instalable .wuhb de Aroma en content:/ de solo lectura en Wii U real):
     // Probar primero la ruta nativa de Cafe OS para la tarjeta SD (/vol/external01):
-    const char* candidatePaths[] = {
-        "fs:/vol/external01/wiiu/apps/wiiu_demos/",
-        "wiiu/apps/wiiu_demos/",
-        "sd:/wiiu/apps/wiiu_demos/"
-    };
+    char cand0[160]{};
+    char cand1[160]{};
+    char cand2[160]{};
+    std::snprintf(cand0, sizeof(cand0), "fs:/vol/external01/wiiu/apps/%s/", g_appFolderName);
+    std::snprintf(cand1, sizeof(cand1), "wiiu/apps/%s/", g_appFolderName);
+    std::snprintf(cand2, sizeof(cand2), "sd:/wiiu/apps/%s/", g_appFolderName);
+    const char* candidatePaths[] = { cand0, cand1, cand2 };
 
     bool mounted = false;
     for (const char* path : candidatePaths) {
@@ -88,7 +107,13 @@ void StorageManager::Initialize() {
     s_initialized = true;
 }
 
+namespace {
+void ReleaseAsyncSaveStagingBuffers() noexcept;
+}
+
 void StorageManager::Shutdown() {
+    WaitForAsyncSaves();
+    ReleaseAsyncSaveStagingBuffers();
     s_initialized = false;
 }
 
@@ -264,11 +289,13 @@ bool StorageManager::SaveFileAtomic(std::string_view relativePath, const void* d
         return false;
     }
 
-    // [OPT-396] Reemplazo atómico de Shadow Copying (Jason Gregory Cap. 5.3.3)
-    std::remove(finalPath);
+    // [OPT-396] Reemplazo atómico de Shadow Copying (TRC-safe: intentar rename directo primero)
     if (std::rename(tempPath, finalPath) != 0) {
-        std::remove(tempPath);
-        return false;
+        std::remove(finalPath);
+        if (std::rename(tempPath, finalPath) != 0) {
+            // Preservar tempPath para permitir recuperacion TRC en LoadSaveFile()
+            return false;
+        }
     }
 
     return true;
@@ -310,6 +337,187 @@ bool StorageManager::LoadSaveFile(std::string_view relativePath, std::vector<uin
     std::fclose(f);
 
     return (read == static_cast<size_t>(size));
+}
+
+namespace {
+
+constexpr uint8_t VERIFIED_MAGIC[4] = {'W', 'U', 'S', 'V'};
+constexpr uint32_t VERIFIED_VERSION = 1u;
+constexpr size_t VERIFIED_HEADER_SIZE = 4 + 4 + 4 + CryptoHMAC::SHA256_DIGEST_SIZE; // 44 bytes
+
+inline void WriteU32BE(uint8_t* dst, uint32_t v) noexcept {
+    dst[0] = static_cast<uint8_t>((v >> 24u) & 0xFFu);
+    dst[1] = static_cast<uint8_t>((v >> 16u) & 0xFFu);
+    dst[2] = static_cast<uint8_t>((v >>  8u) & 0xFFu);
+    dst[3] = static_cast<uint8_t>((v       ) & 0xFFu);
+}
+
+inline uint32_t ReadU32BE(const uint8_t* src) noexcept {
+    return (static_cast<uint32_t>(src[0]) << 24u) |
+           (static_cast<uint32_t>(src[1]) << 16u) |
+           (static_cast<uint32_t>(src[2]) <<  8u) |
+           (static_cast<uint32_t>(src[3]));
+}
+
+struct alignas(32) AsyncSaveSlot {
+    StackString<256> relativePath{};
+    StackString<128> hmacKey{};
+    std::vector<uint8_t> stagingData{};
+    bool signWithHmac{false};
+    std::atomic<bool> inUse{false};
+    std::atomic<uint32_t> jobCounter{0};
+};
+
+std::array<AsyncSaveSlot, 2> g_asyncSaveSlots{};
+std::atomic<bool> g_lastAsyncSaveSuccess{true};
+
+void ReleaseAsyncSaveStagingBuffers() noexcept {
+    for (auto& slot : g_asyncSaveSlots) {
+        slot.stagingData.clear();
+        slot.stagingData.shrink_to_fit();
+        slot.inUse.store(false, std::memory_order_release);
+    }
+}
+
+void AsyncSaveJobWorker(void* userData) {
+    auto* slot = static_cast<AsyncSaveSlot*>(userData);
+    if (!slot) return;
+
+    bool ok = false;
+    if (slot->signWithHmac) {
+        ok = StorageManager::SaveFileVerifiedAtomic(
+            slot->relativePath.string_view(),
+            slot->stagingData.data(),
+            slot->stagingData.size(),
+            slot->hmacKey.string_view());
+    } else {
+        ok = StorageManager::SaveFileAtomic(
+            slot->relativePath.string_view(),
+            slot->stagingData.data(),
+            slot->stagingData.size());
+    }
+
+    g_lastAsyncSaveSuccess.store(ok, std::memory_order_release);
+    slot->inUse.store(false, std::memory_order_release);
+}
+
+} // namespace
+
+bool StorageManager::SaveFileVerifiedAtomic(std::string_view relativePath, const void* data, size_t size,
+                                            std::string_view hmacKey) {
+    if (size > 0 && data == nullptr) return false;
+
+    std::vector<uint8_t> packet(VERIFIED_HEADER_SIZE + size);
+    std::memcpy(packet.data(), VERIFIED_MAGIC, 4);
+    WriteU32BE(packet.data() + 4, VERIFIED_VERSION);
+    WriteU32BE(packet.data() + 8, static_cast<uint32_t>(size));
+
+    const CryptoHMAC::Digest mac = CryptoHMAC::ComputeHmacSha256(hmacKey, data, size);
+    std::memcpy(packet.data() + 12, mac.data(), CryptoHMAC::SHA256_DIGEST_SIZE);
+
+    if (size > 0) {
+        std::memcpy(packet.data() + VERIFIED_HEADER_SIZE, data, size);
+    }
+
+    return SaveFileAtomic(relativePath, packet.data(), packet.size());
+}
+
+bool StorageManager::LoadSaveFileVerified(std::string_view relativePath, std::vector<uint8_t>& outPayload,
+                                          std::string_view hmacKey) {
+    outPayload.clear();
+    std::vector<uint8_t> raw;
+    if (!LoadSaveFile(relativePath, raw)) {
+        return false;
+    }
+
+    if (raw.size() < VERIFIED_HEADER_SIZE) {
+        return false;
+    }
+    if (std::memcmp(raw.data(), VERIFIED_MAGIC, 4) != 0) {
+        return false;
+    }
+
+    const uint32_t version = ReadU32BE(raw.data() + 4);
+    const uint32_t payloadSize = ReadU32BE(raw.data() + 8);
+    if (version != VERIFIED_VERSION || raw.size() != VERIFIED_HEADER_SIZE + static_cast<size_t>(payloadSize)) {
+        return false;
+    }
+
+    CryptoHMAC::Digest storedMac{};
+    std::memcpy(storedMac.data(), raw.data() + 12, CryptoHMAC::SHA256_DIGEST_SIZE);
+
+    const uint8_t* payloadPtr = raw.data() + VERIFIED_HEADER_SIZE;
+    const CryptoHMAC::Digest computedMac = CryptoHMAC::ComputeHmacSha256(hmacKey, payloadPtr, payloadSize);
+
+    if (!CryptoHMAC::ConstantTimeEqual(storedMac, computedMac)) {
+        return false;
+    }
+
+    outPayload.assign(payloadPtr, payloadPtr + payloadSize);
+    return true;
+}
+
+bool StorageManager::SaveFileAsync(std::string_view relativePath, const void* data, size_t size,
+                                   bool signWithHmac, std::string_view hmacKey) {
+    if (relativePath.empty() || (size > 0 && data == nullptr)) {
+        return false;
+    }
+    if (!s_initialized) {
+        Initialize();
+    }
+
+    for (auto& slot : g_asyncSaveSlots) {
+        // Exigir jobCounter == 0 antes de reclamar el slot para evitar carreras con fetch_sub(1) en WorkerLoop.
+        if (slot.jobCounter.load(std::memory_order_acquire) != 0u) {
+            continue;
+        }
+        bool expected = false;
+        if (slot.inUse.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+            if (slot.jobCounter.load(std::memory_order_acquire) != 0u) {
+                slot.inUse.store(false, std::memory_order_release);
+                continue;
+            }
+            slot.relativePath.Format("%.*s", static_cast<int>(relativePath.size()), relativePath.data());
+            slot.hmacKey.Format("%.*s", static_cast<int>(hmacKey.size()), hmacKey.data());
+            slot.signWithHmac = signWithHmac;
+            slot.stagingData.resize(size);
+            if (size > 0) {
+                std::memcpy(slot.stagingData.data(), data, size);
+            }
+            // Nota: JobSystem::Dispatch() ya realiza fetch_add(1) sobre jobCounter y WorkerLoop fetch_sub(1).
+            // Nunca pre-incrementar a 1 para evitar deadlock en WaitForAsyncSaves().
+            if (JobSystem::Instance().IsInitialized()) {
+                JobSystem::Instance().Dispatch(&AsyncSaveJobWorker, &slot, &slot.jobCounter);
+            } else {
+                AsyncSaveJobWorker(&slot);
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool StorageManager::IsAsyncSavePending() noexcept {
+    for (const auto& slot : g_asyncSaveSlots) {
+        if (slot.inUse.load(std::memory_order_acquire) ||
+            slot.jobCounter.load(std::memory_order_acquire) > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void StorageManager::WaitForAsyncSaves() noexcept {
+    for (auto& slot : g_asyncSaveSlots) {
+        if (slot.jobCounter.load(std::memory_order_acquire) > 0 && JobSystem::Instance().IsInitialized()) {
+            JobSystem::Instance().Wait(&slot.jobCounter);
+        }
+    }
+}
+
+bool StorageManager::GetLastAsyncSaveSuccess() noexcept {
+    return g_lastAsyncSaveSuccess.load(std::memory_order_acquire);
 }
 
 } // namespace WiiU

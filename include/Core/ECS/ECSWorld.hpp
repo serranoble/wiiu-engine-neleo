@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <array>
 #include <utility>
@@ -16,8 +17,8 @@ namespace WiiU {
 using ComponentTypeID = uint32_t;
 
 inline ComponentTypeID GetNextComponentTypeID() noexcept {
-    static ComponentTypeID s_counter = 0;
-    return s_counter++;
+    static std::atomic<ComponentTypeID> s_counter{0};
+    return s_counter.fetch_add(1, std::memory_order_relaxed);
 }
 
 template <typename T>

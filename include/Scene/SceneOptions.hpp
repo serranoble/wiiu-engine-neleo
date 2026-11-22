@@ -4,40 +4,34 @@
 #include "Scene/Starfield3D.hpp"
 #include "Graphics/UIComponents.hpp"
 #include "Core/Config/EngineConfig.hpp"
-#include <SDL2/SDL.h>
 #include <functional>
 #include <string>
 
 namespace WiiU {
 
 /**
- * @brief Categorías de configuración expuestas en la interfaz de opciones.
+ * @brief Categorías de configuración global expuestas en la interfaz de opciones.
  */
 enum class OptionsTab : uint8_t {
     Graphics = 0,
     Audio = 1,
-    Controls = 2,
-    Debug = 3
+    Controls = 2
 };
 
 /**
- * @brief [Hito 124 - Jason Gregory Cap. 5.3: "Engine Configuration"]
+ * @brief [Jason Gregory Cap. 5.3: "Engine Configuration"]
  * Menú Global de Configuración del Motor y Sincronización en Caliente.
  */
 class SceneOptions : public IScene {
 public:
-    /**
-     * @brief Constructor con callback opcional de retorno.
-     * @param onBackCallback Acción a ejecutar al pulsar "< VOLVER" (si es nullptr, regresa a SceneMenu).
-     */
     explicit SceneOptions(std::function<void()> onBackCallback = nullptr);
 
     void OnEnter() override;
     void Update(float dt) override;
-    void Render(SDL_Renderer* renderer) override;
+    void Render() override;
 
     [[nodiscard]] std::string GetSceneName() const override {
-        return "Configuración del Motor";
+        return "Configuracion del Motor";
     }
     [[nodiscard]] bool IsMenu() const override {
         return true;
@@ -48,18 +42,19 @@ private:
     void RefreshControls();
     void SaveConfig();
     void RestoreDefaults();
+    void TriggerActionForRow(int rowIndex);
 
     Starfield3D m_starfield;
     std::function<void()> m_onBackCallback{nullptr};
     UIBackButton m_backButton;
 
     OptionsTab m_activeTab{OptionsTab::Graphics};
+    int m_focusedRow{0};
 
-    // Botones de pestañas superiores
+    // Botones de pestañas superiores (3 pestañas globales)
     UIButton m_tabGraphics;
     UIButton m_tabAudio;
     UIButton m_tabControls;
-    UIButton m_tabDebug;
 
     // Botones de acciones inferiores
     UIButton m_btnSave;
@@ -67,11 +62,10 @@ private:
 
     // Filas interactivas de opciones (5 filas)
     UIButton m_rowButtons[5];
-    UISlider m_rowSlider;
-    bool m_useSliderForRow{false};
 
+    float m_stickRepeatTimer{0.0f};
     float m_statusTimer{0.0f};
-    std::string m_statusMessage;
+    const char* m_statusMessage{nullptr};
     ColorRGBA m_statusColor{ColorRGBA::Green()};
 };
 

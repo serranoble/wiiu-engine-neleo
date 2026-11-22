@@ -7,7 +7,7 @@ namespace WiiU {
 /**
  * @brief [OPT-242] Componente Emisor de Sonido Espacial 3D orientado a datos.
  * 
- * Vincula una fuente acústica tridimensional con el Voice Pool de 32 canales de AudioEngine3D.
+ * Vincula una fuente acústica tridimensional con el Voice Pool de 128 voces virtuales / 32 canales físicos de AudioEngine3D.
  * Almacena parámetros de atenuación física, rolloff, oclusión y handle generacional activo.
  */
 struct AudioEmitterComponent {

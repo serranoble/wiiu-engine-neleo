@@ -1,4 +1,6 @@
 #include "Core/ECS/Systems/CollisionSystem.hpp"
+#include "Core/Physics/SpatialHashGrid.hpp"
+#include <array>
 #include <cmath>
 #include <algorithm>
 
@@ -83,16 +85,24 @@ bool CollisionSystem::IntersectSphereAABB(const Point3D& sphereCenter, float sph
     // -------------------------------------------------------------------------
     float dLeft   = sphereCenter.x - boxMin.x; // Distancia a cara X-min
     float dRight  = boxMax.x - sphereCenter.x; // Distancia a cara X-max
+    float dBottom = sphereCenter.y - boxMin.y; // Distancia a cara Y-min
+    float dTop    = boxMax.y - sphereCenter.y; // Distancia a cara Y-max
     float dFront  = sphereCenter.z - boxMin.z; // Distancia a cara Z-min
     float dBack   = boxMax.z - sphereCenter.z; // Distancia a cara Z-max
 
-    float minDist = std::min({dLeft, dRight, dFront, dBack});
+    float minDist = std::min({dLeft, dRight, dBottom, dTop, dFront, dBack});
     if (minDist == dLeft) {
         outNormal = Point3D{-1.0f, 0.0f, 0.0f};
         outPenetration = dLeft + sphereRadius;
     } else if (minDist == dRight) {
         outNormal = Point3D{1.0f, 0.0f, 0.0f};
         outPenetration = dRight + sphereRadius;
+    } else if (minDist == dBottom) {
+        outNormal = Point3D{0.0f, -1.0f, 0.0f};
+        outPenetration = dBottom + sphereRadius;
+    } else if (minDist == dTop) {
+        outNormal = Point3D{0.0f, 1.0f, 0.0f};
+        outPenetration = dTop + sphereRadius;
     } else if (minDist == dFront) {
         outNormal = Point3D{0.0f, 0.0f, -1.0f};
         outPenetration = dFront + sphereRadius;
@@ -114,10 +124,43 @@ void CollisionSystem::Update(ECSWorld& world, float /*dt*/) noexcept {
     });
 
     // -------------------------------------------------------------------------
-    // ETAPA 2: Detección y Resolución Física entre Actores Móviles y Obstáculos
+    // ETAPA 2: [OPT-275] Indexacion Broadphase SpatialHashGrid + Resolucion Fisica
     // -------------------------------------------------------------------------
+    struct StaticColliderEntry {
+        Entity entity{Entity::Null};
+        const TransformComponent* trans{nullptr};
+        ColliderComponent* col{nullptr};
+    };
+
+    static constexpr size_t MAX_STATIC_COLLIDERS = 256;
+    std::array<StaticColliderEntry, MAX_STATIC_COLLIDERS> staticEntries{};
+    size_t staticCount = 0;
+    static SpatialHashGrid s_staticGrid{4.0f};
+    s_staticGrid.Clear();
+
     world.ForEach<TransformComponent, ColliderComponent>(
-        [&world](Entity dynEnt, TransformComponent& dynTrans, ColliderComponent& dynCol) {
+        [&](Entity statEnt, TransformComponent& statTrans, ColliderComponent& statCol) {
+            if (!statCol.isStatic || !statCol.isSolid || staticCount >= MAX_STATIC_COLLIDERS) {
+                return;
+            }
+            const uint32_t idx = static_cast<uint32_t>(staticCount++);
+            staticEntries[idx] = StaticColliderEntry{statEnt, &statTrans, &statCol};
+
+            const Point3D c = statTrans.position + statCol.localOffset;
+            if (statCol.shape == ColliderShape::Sphere) {
+                const Point3D minP{c.x - statCol.radius, statTrans.position.y - 0.5f, c.z - statCol.radius};
+                const Point3D maxP{c.x + statCol.radius, statTrans.position.y + 4.2f, c.z + statCol.radius};
+                s_staticGrid.Insert(idx, minP, maxP);
+            } else {
+                s_staticGrid.Insert(idx, c - statCol.halfExtents, c + statCol.halfExtents);
+            }
+        }
+    );
+
+    uint32_t queryIds[MAX_STATIC_COLLIDERS]{};
+
+    world.ForEach<TransformComponent, ColliderComponent>(
+        [&](Entity dynEnt, TransformComponent& dynTrans, ColliderComponent& dynCol) {
             // Solo procesar entidades móviles sólidas (ej. Personaje Jugador)
             if (dynCol.isStatic || !dynCol.isSolid) {
                 return;
@@ -126,87 +169,76 @@ void CollisionSystem::Update(ECSWorld& world, float /*dt*/) noexcept {
             Point3D dynCenter = dynTrans.position + dynCol.localOffset;
             float dynRadius = dynCol.radius;
 
-            world.ForEach<TransformComponent, ColliderComponent>(
-                [&](Entity statEnt, const TransformComponent& statTrans, ColliderComponent& statCol) {
-                    // Evitar auto-colisión y comprobar que el obstáculo sea estático y sólido
-                    if (dynEnt == statEnt || !statCol.isStatic || !statCol.isSolid) {
-                        return;
-                    }
-                    // Filtrado por máscara de capas de colisión (Bitmask Collision Filtering)
-                    if ((dynCol.collisionMask & statCol.layer) == 0) {
-                        return;
-                    }
+            const size_t candCount = s_staticGrid.QuerySphere(dynCenter, dynRadius + 0.5f,
+                                                              queryIds, MAX_STATIC_COLLIDERS);
 
-                    Point3D normal{0.0f, 0.0f, 0.0f};
-                    float penetration = 0.0f;
-                    bool hit = false;
+            for (size_t ci = 0; ci < candCount; ++ci) {
+                const StaticColliderEntry& entry = staticEntries[queryIds[ci]];
+                const Entity statEnt = entry.entity;
+                const TransformComponent& statTrans = *entry.trans;
+                ColliderComponent& statCol = *entry.col;
 
-                    // Colisión con Esfera / Cilindro Estático (ej. Pilares Clásicos)
-                    if (statCol.shape == ColliderShape::Sphere) {
-                        Point3D statCenter = statTrans.position + statCol.localOffset;
-                        // Acotar colisión en altura cilíndrica para simular fustes verticales
-                        if (dynCenter.y + dynRadius > statTrans.position.y - 0.5f &&
-                            dynCenter.y - dynRadius < statTrans.position.y + 4.2f) {
-                            Point3D flatA{dynCenter.x, 0.0f, dynCenter.z};
-                            Point3D flatB{statCenter.x, 0.0f, statCenter.z};
-                            hit = IntersectSphereSphere(flatA, dynRadius, flatB, statCol.radius, normal, penetration);
-                        }
-                    } 
-                    // Colisión con Caja AABB Estática (ej. Casa Holandesa)
-                    else if (statCol.shape == ColliderShape::AABB) {
-                        Point3D boxCenter = statTrans.position + statCol.localOffset;
-                        Point3D boxMin = boxCenter - statCol.halfExtents;
-                        Point3D boxMax = boxCenter + statCol.halfExtents;
-                        hit = IntersectSphereAABB(dynCenter, dynRadius, boxMin, boxMax, normal, penetration);
-                    }
-
-                    if (hit && penetration > 0.0f) {
-                        // -------------------------------------------------------------
-                        // ALGORITMO: Deslizamiento Tangencial Suave (Slide Response)
-                        // Fuente: Jason Gregory (Cap. 13.5 "Kinematic Character Controllers")
-                        // -------------------------------------------------------------
-                        // 1. Proyectar el vector normal en el plano horizontal XZ
-                        Point3D slideNormal{normal.x, 0.0f, normal.z};
-                        float lenSq = slideNormal.x * slideNormal.x + slideNormal.z * slideNormal.z;
-                        if (lenSq > 1e-5f) {
-                            float invLen = 1.0f / std::sqrt(lenSq);
-                            slideNormal.x *= invLen;
-                            slideNormal.z *= invLen;
-                        } else {
-                            slideNormal = normal;
-                        }
-
-                        // 2. Resolver penetración geométrica inmediata (MTV Positional Depenetration):
-                        //    p' = p + n_slide * penetration
-                        dynTrans.position.x += slideNormal.x * penetration;
-                        dynTrans.position.z += slideNormal.z * penetration;
-                        dynTrans.MarkDirty();
-                        dynCenter = dynTrans.position + dynCol.localOffset;
-
-                        // 3. Proyección de Velocidad Tangencial sobre el KCC:
-                        //    v' = v - (v . n) * n  (Elimina la componente hacia la pared)
-                        //    Garantiza que el personaje deslice fluidamente sin adherirse a muros.
-                        if (auto* kcc = world.GetComponent<KinematicCharacterComponent>(dynEnt)) {
-                            float vn = kcc->velocity.x * slideNormal.x + kcc->velocity.z * slideNormal.z;
-                            if (vn < 0.0f) {
-                                kcc->velocity.x -= vn * slideNormal.x;
-                                kcc->velocity.z -= vn * slideNormal.z;
-                            }
-                        }
-
-                        // 4. Registrar telemetría de contacto para visualización en HUD y DebugDraw3D
-                        dynCol.isColliding = true;
-                        dynCol.contactNormal = slideNormal;
-                        dynCol.penetrationDepth = penetration;
-                        dynCol.collidedEntity = statEnt;
-
-                        statCol.isColliding = true;
-                        statCol.contactNormal = slideNormal * -1.0f;
-                        statCol.penetrationDepth = penetration;
-                        statCol.collidedEntity = dynEnt;
-                    }
+                if (dynEnt == statEnt) {
+                    continue;
                 }
-            );
+                if ((dynCol.collisionMask & statCol.layer) == 0) {
+                    continue;
+                }
+
+                Point3D normal{0.0f, 0.0f, 0.0f};
+                float penetration = 0.0f;
+                bool hit = false;
+
+                if (statCol.shape == ColliderShape::Sphere) {
+                    Point3D statCenter = statTrans.position + statCol.localOffset;
+                    if (dynCenter.y + dynRadius > statTrans.position.y - 0.5f &&
+                        dynCenter.y - dynRadius < statTrans.position.y + 4.2f) {
+                        Point3D flatA{dynCenter.x, 0.0f, dynCenter.z};
+                        Point3D flatB{statCenter.x, 0.0f, statCenter.z};
+                        hit = IntersectSphereSphere(flatA, dynRadius, flatB, statCol.radius, normal, penetration);
+                    }
+                } else if (statCol.shape == ColliderShape::AABB) {
+                    Point3D boxCenter = statTrans.position + statCol.localOffset;
+                    Point3D boxMin = boxCenter - statCol.halfExtents;
+                    Point3D boxMax = boxCenter + statCol.halfExtents;
+                    hit = IntersectSphereAABB(dynCenter, dynRadius, boxMin, boxMax, normal, penetration);
+                }
+
+                if (hit && penetration > 0.0f) {
+                    Point3D slideNormal{normal.x, 0.0f, normal.z};
+                    float lenSq = slideNormal.x * slideNormal.x + slideNormal.z * slideNormal.z;
+                    if (lenSq > 1e-5f) {
+                        float invLen = 1.0f / std::sqrt(lenSq);
+                        slideNormal.x *= invLen;
+                        slideNormal.z *= invLen;
+                    } else {
+                        slideNormal = normal;
+                    }
+
+                    dynTrans.position.x += slideNormal.x * penetration;
+                    dynTrans.position.z += slideNormal.z * penetration;
+                    dynTrans.MarkDirty();
+                    dynCenter = dynTrans.position + dynCol.localOffset;
+
+                    if (auto* kcc = world.GetComponent<KinematicCharacterComponent>(dynEnt)) {
+                        float vn = kcc->velocity.x * slideNormal.x + kcc->velocity.z * slideNormal.z;
+                        if (vn < 0.0f) {
+                            kcc->velocity.x -= vn * slideNormal.x;
+                            kcc->velocity.z -= vn * slideNormal.z;
+                        }
+                    }
+
+                    dynCol.isColliding = true;
+                    dynCol.contactNormal = slideNormal;
+                    dynCol.penetrationDepth = penetration;
+                    dynCol.collidedEntity = statEnt;
+
+                    statCol.isColliding = true;
+                    statCol.contactNormal = slideNormal * -1.0f;
+                    statCol.penetrationDepth = penetration;
+                    statCol.collidedEntity = dynEnt;
+                }
+            }
         }
     );
 

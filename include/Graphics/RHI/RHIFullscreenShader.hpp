@@ -10,7 +10,6 @@
 #include <gx2/surface.h>
 #include <gx2/texture.h>
 #include <gx2r/buffer.h>
-#include <whb/gfx.h>
 #endif
 
 namespace WiiU {
@@ -27,7 +26,7 @@ struct RHIResolutionPreset {
 /**
  * @brief [Jason Gregory Cap. 10-11 / RHI] Pase Fullscreen reutilizable sobre GPU AMD Latte (GX2).
  *
- * Encapsula la carga de shaders `.gsh` (Direct GFD + fallback WHB), creación del VBO de quad,
+ * Encapsula la carga de shaders `.gsh` (Direct GFD), creación del VBO de quad,
  * reflexión de offsets de uniformes de píxel, escalado bilineal por hardware desde resoluciones
  * internas 16:9 hacia el framebuffer nativo 1280x720, enlace vía `RHIPipelineCache` y `GX2DrawEx`.
  */
@@ -125,7 +124,6 @@ private:
     [[nodiscard]] static int32_t FindPixelUniformOffset(const GX2PixelShader* ps, const char* uniformName) noexcept;
     [[nodiscard]] OutputTargetBinding ResolveOutputTarget(const OutputTargetBinding* explicitTarget) const noexcept;
 
-    [[nodiscard]] bool TryLoadWHB(const uint8_t* data);
     [[nodiscard]] bool TryLoadDirectGFD(const uint8_t* data);
     void FreeDirectGFD() noexcept;
     [[nodiscard]] bool InitOffscreenScaler(uint32_t maxWidth, uint32_t maxHeight);
@@ -137,9 +135,7 @@ private:
     OutputTargetBinding m_outputTarget{};
     OutputTargetBinding m_boundTarget{};
 
-    WHBGfxShaderGroup m_shaderGroup{};
     bool m_shaderLoaded{false};
-    bool m_useDirectGFD{false};
 
     DirectShaderPair m_mainShader{};
     GX2FetchShader m_directFetchShader{};

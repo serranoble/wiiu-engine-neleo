@@ -2,7 +2,9 @@
 #include "Scene/SceneMenu.hpp"
 #include "Scene/SceneManager.hpp"
 #include "Input/InputManager.hpp"
+#include "Input/RumbleManager.hpp"
 #include "Audio/AudioManager.hpp"
+#include "Core/ResourceMonitor.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
 #include <cstdio>
@@ -20,13 +22,11 @@ SceneOptions::SceneOptions(std::function<void()> onBackCallback)
               SceneManager::Instance().ChangeScene(std::make_unique<SceneMenu>());
           }
       }),
-      m_tabGraphics(180, 120, 220, 44, "1. GRAFICOS", 2),
-      m_tabAudio(410, 120, 220, 44, "2. AUDIO", 2),
-      m_tabControls(640, 120, 220, 44, "3. CONTROL", 2),
-      m_tabDebug(870, 120, 220, 44, "4. DEPURACION", 2),
-      m_btnSave(260, 575, 360, 48, "[GUARDAR CONFIGURACION]", 2),
-      m_btnDefaults(660, 575, 360, 48, "[RESTABLECER DEFECTOS]", 2),
-      m_rowSlider(200, 205, 880, 48, 0.0f, 1.0f, 0.8f, "VOLUMEN GENERAL") {
+      m_tabGraphics(190, 115, 280, 44, "1. GRAFICOS", 2),
+      m_tabAudio(500, 115, 280, 44, "2. AUDIO", 2),
+      m_tabControls(810, 115, 280, 44, "3. CONTROL & HW", 2),
+      m_btnSave(260, 580, 360, 48, "[GUARDAR AJUSTES (+)]", 2),
+      m_btnDefaults(660, 580, 360, 48, "[DEFECTOS FABRICA (X)]", 2) {
 
     InitLayout();
     RefreshControls();
@@ -34,12 +34,12 @@ SceneOptions::SceneOptions(std::function<void()> onBackCallback)
 
 void SceneOptions::InitLayout() {
     for (int i = 0; i < 5; ++i) {
-        int y = 205 + i * 70;
-        m_rowButtons[i].SetRect(200, y, 880, 52);
+        int y = 190 + i * 72;
+        m_rowButtons[i].SetRect(200, y, 880, 54);
         m_rowButtons[i].SetTextScale(2);
     }
 
-    // Colores para botones de acción
+    // Colores de botones de acción
     m_btnSave.SetColors(
         ColorRGBA{15, 45, 25, 235}, ColorRGBA{0, 200, 120, 245},
         ColorRGBA::Green(), ColorRGBA::Yellow(), ColorRGBA::White()
@@ -51,13 +51,13 @@ void SceneOptions::InitLayout() {
 }
 
 void SceneOptions::OnEnter() {
-    EngineConfig::Get().ApplyToSubsystems();
+    EngineConfig::Instance().ApplyToSubsystems();
     RefreshControls();
     AudioManager::Instance().PlayBGM();
 }
 
 void SceneOptions::RefreshControls() {
-    const auto& cfg = EngineConfig::Get();
+    const auto& cfg = EngineConfig::Instance();
 
     // 1. Estilo de Pestañas
     auto applyTabStyle = [](UIButton& btn, bool active, ColorRGBA activeColor) {
@@ -77,133 +77,227 @@ void SceneOptions::RefreshControls() {
     applyTabStyle(m_tabGraphics, m_activeTab == OptionsTab::Graphics, ColorRGBA::Cyan());
     applyTabStyle(m_tabAudio, m_activeTab == OptionsTab::Audio, ColorRGBA::Green());
     applyTabStyle(m_tabControls, m_activeTab == OptionsTab::Controls, ColorRGBA::Orange());
-    applyTabStyle(m_tabDebug, m_activeTab == OptionsTab::Debug, ColorRGBA::Magenta());
 
-    // 2. Contenido según pestaña activa
-    m_useSliderForRow = false;
-
-    char buf[128];
+    char buf[96];
     switch (m_activeTab) {
         case OptionsTab::Graphics: {
-            // Fila 0: Modo Shading
-            std::snprintf(buf, sizeof(buf), "MODO DE SOMBREADO: [%s]", cfg.graphics.GetRenderModeName());
+            // Fila 0: Resolución Scanbuffer
+            std::snprintf(buf, sizeof(buf), "RESOLUCION SCANBUFFER: [720P NATIVO (1280x720)]");
             m_rowButtons[0].SetLabel(buf);
 
-            // Fila 1: Filtro de Textura GX2
-            std::snprintf(buf, sizeof(buf), "FILTRADO DE TEXTURAS GX2: [%s]", cfg.graphics.GetFilterName());
+            // Fila 1: Sincronización VSync
+            std::snprintf(buf, sizeof(buf), "SINCRONIZACION VSYNC: [%s]",
+                          cfg.graphics.vsyncEnabled ? "60 FPS FIJOS (ACTIVADO)" : "SIN LIMITE (DESACTIVADO)");
             m_rowButtons[1].SetLabel(buf);
 
-            // Fila 2: VSync / FPS
-            std::snprintf(buf, sizeof(buf), "SINCRONIZACION VSYNC: [%s]", cfg.graphics.vsyncEnabled ? "60 FPS FIJOS (ACTIVADO)" : "SIN LIMITE (DESACTIVADO)");
+            // Fila 2: Filtrado de Texturas GX2
+            std::snprintf(buf, sizeof(buf), "FILTRADO DE TEXTURAS: [%s]", cfg.graphics.GetFilterName());
             m_rowButtons[2].SetLabel(buf);
 
-            // Fila 3: Sombras
-            const char* shadowNames[3] = { "DESACTIVADAS", "BAJA CALIDAD", "ALTA CALIDAD (PCF)" };
-            std::snprintf(buf, sizeof(buf), "SOMBRAS DINAMICAS: [%s]", shadowNames[static_cast<int>(cfg.graphics.shadowQuality)]);
+            // Fila 3: Telemetría OSD
+            std::snprintf(buf, sizeof(buf), "TELEMETRIA OSD (BOTON -): [%s]",
+                          cfg.graphics.showOSDTelemetry ? "ACTIVADA (VISIBLE)" : "DESACTIVADA (OCULTA)");
             m_rowButtons[3].SetLabel(buf);
 
-            // Fila 4: Pedestal en dioramas
-            std::snprintf(buf, sizeof(buf), "SUELO / PEDESTAL EN DIORAMAS: [%s]", cfg.graphics.showPedestal ? "ACTIVADO" : "OCULTO");
-            m_rowButtons[4].SetLabel(buf);
+            // Fila 4: Información de Silicio Gráfico
+            m_rowButtons[4].SetLabel("SILICIO GRAFICO: [GPU AMD LATTE R700 @ 550 MHz]");
             break;
         }
 
         case OptionsTab::Audio: {
-            // Fila 0: Slider de Volumen Maestro
-            m_useSliderForRow = true;
-            m_rowSlider.SetValue(cfg.audio.masterVolume);
+            // Fila 0: Volumen Maestro
+            std::snprintf(buf, sizeof(buf), "VOLUMEN MAESTRO GENERAL: [%d%%]",
+                          static_cast<int>(cfg.audio.masterVolume * 100.0f + 0.5f));
+            m_rowButtons[0].SetLabel(buf);
 
-            // Fila 1: Música BGM
-            std::snprintf(buf, sizeof(buf), "MUSICA DE FONDO (BGM): [%s]", cfg.audio.bgmEnabled ? "ACTIVADA (ON)" : "DESACTIVADA (OFF)");
+            // Fila 1: Música de Fondo (BGM)
+            std::snprintf(buf, sizeof(buf), "MUSICA DE FONDO (BGM): [%s]",
+                          cfg.audio.bgmEnabled ? "ACTIVADA (REPRODUCIENDO)" : "DESACTIVADA (SILENCIO)");
             m_rowButtons[1].SetLabel(buf);
 
             // Fila 2: Volumen BGM
-            std::snprintf(buf, sizeof(buf), "VOLUMEN MUSICA BGM: [%d%%]", static_cast<int>(cfg.audio.bgmVolume * 100.0f));
+            std::snprintf(buf, sizeof(buf), "VOLUMEN MUSICA BGM: [%d%%]",
+                          static_cast<int>(cfg.audio.bgmVolume * 100.0f + 0.5f));
             m_rowButtons[2].SetLabel(buf);
 
             // Fila 3: Efectos SFX
-            std::snprintf(buf, sizeof(buf), "EFECTOS DE SONIDO (SFX): [%s]", cfg.audio.sfxEnabled ? "ACTIVADOS (ON)" : "DESACTIVADOS (OFF)");
+            std::snprintf(buf, sizeof(buf), "EFECTOS DE SONIDO (SFX): [%s]",
+                          cfg.audio.sfxEnabled ? "ACTIVADOS" : "DESACTIVADOS");
             m_rowButtons[3].SetLabel(buf);
 
-            // Fila 4: Probar Sonido
-            m_rowButtons[4].SetLabel("PROBAR EFECTO DE SONIDO: [CLICK SFX]");
+            // Fila 4: Probar SFX
+            m_rowButtons[4].SetLabel("[PROBAR SFX DE INTERFAZ]");
             break;
         }
 
         case OptionsTab::Controls: {
-            // Fila 0: Sensibilidad Orbital
-            std::snprintf(buf, sizeof(buf), "SENSIBILIDAD CAMARA ORBITAL: [%.1fX]", cfg.camera.orbitSensitivity);
+            // Fila 0: Vibración DRC
+            std::snprintf(buf, sizeof(buf), "VIBRACION HAPTICA: [%s]",
+                          cfg.controls.rumbleEnabled ? "ACTIVADA" : "DESACTIVADA");
             m_rowButtons[0].SetLabel(buf);
 
-            // Fila 1: Invertir Eje Y
-            std::snprintf(buf, sizeof(buf), "INVERTIR EJE VERTICAL (EJE Y): [%s]", cfg.camera.invertY ? "SI (INVERTIDO)" : "NO (ESTANDAR)");
+            // Fila 1: Intensidad Vibración
+            const char* intStr = "FUERTE (100%)";
+            if (cfg.controls.rumbleIntensity <= 0.35f) {
+                intStr = "SUAVE (30%)";
+            } else if (cfg.controls.rumbleIntensity <= 0.75f) {
+                intStr = "MEDIA (70%)";
+            }
+            std::snprintf(buf, sizeof(buf), "INTENSIDAD DE VIBRACION: [%s]", intStr);
             m_rowButtons[1].SetLabel(buf);
 
-            // Fila 2: FOV
-            std::snprintf(buf, sizeof(buf), "CAMPO DE VISION VERTICAL (FOV): [%.0f GRADOS]", cfg.camera.fovDegrees);
+            // Fila 2: Deadzone Analógica
+            const char* dzStr = "ESTANDAR (18%)";
+            if (cfg.controls.deadzoneRadius <= 0.12f) {
+                dzStr = "PRECISA (10%)";
+            } else if (cfg.controls.deadzoneRadius >= 0.22f) {
+                dzStr = "AMPLIA (25%)";
+            }
+            std::snprintf(buf, sizeof(buf), "ZONA MUERTA ANALOGICA: [%s]", dzStr);
             m_rowButtons[2].SetLabel(buf);
 
-            // Fila 3: Control Analógico
-            m_rowButtons[3].SetLabel("DISTRIBUCION ANALOGICA: [STICK L = ZOOM | STICK R = ORBITA]");
+            // Fila 3: Probar Hápticos
+            m_rowButtons[3].SetLabel("[PROBAR PULSO HAPTICO (200 MS)]");
 
-            // Fila 4: Control Táctil
-            m_rowButtons[4].SetLabel("CONTROL TACTIL GAMEPAD DRC: [ARRASTRE EN PANTALLA]");
-            break;
-        }
-
-        case OptionsTab::Debug: {
-            // Fila 0: Colisionadores 3D
-            std::snprintf(buf, sizeof(buf), "VISUALIZAR COLISIONADORES 3D (AABB / ESFERA): [%s]", cfg.debug.showColliders ? "SI" : "NO");
-            m_rowButtons[0].SetLabel(buf);
-
-            // Fila 1: Triggers Espaciales
-            std::snprintf(buf, sizeof(buf), "VISUALIZAR TRIGGERS ESPACIALES: [%s]", cfg.debug.showTriggers ? "SI" : "NO");
-            m_rowButtons[1].SetLabel(buf);
-
-            // Fila 2: Grafo y Rutas A*
-            std::snprintf(buf, sizeof(buf), "VISUALIZAR NAVGRAPH & RUTAS A*: [%s]", cfg.debug.showNavGraph ? "SI" : "NO");
-            m_rowButtons[2].SetLabel(buf);
-
-            // Fila 3: Conos de Visión IA
-            std::snprintf(buf, sizeof(buf), "VISUALIZAR PERCEPCION SENSORIAL IA: [%s]", cfg.debug.showVisionCones ? "SI" : "NO");
-            m_rowButtons[3].SetLabel(buf);
-
-            // Fila 4: Telemetría OSD
-            std::snprintf(buf, sizeof(buf), "BARRA DE TELEMETRIA OSD (FPS / RECURSOS): [%s]", cfg.debug.showOSDTelemetry ? "SI" : "NO");
+            // Fila 4: Consulta Dinámica de Periférico Conectado
+            const auto& inputMgr = InputManager::Instance();
+            const auto& pad0 = inputMgr.GetGamepad(0);
+            const char* devName = "NINGUNO DETECTADO";
+            if (pad0.isConnected) {
+                switch (pad0.type) {
+                    case ControllerType::GamePadDRC:        devName = "WII U GAMEPAD DRC"; break;
+                    case ControllerType::ProController:     devName = "WII U PRO CONTROLLER"; break;
+                    case ControllerType::ClassicController: devName = "CLASSIC CONTROLLER"; break;
+                    case ControllerType::WiiRemote:         devName = "WII REMOTE"; break;
+                    case ControllerType::WiiRemoteNunchuk:  devName = "WII REMOTE + NUNCHUK"; break;
+                    case ControllerType::KeyboardMouse:     devName = "TECLADO / RATON PC"; break;
+                    case ControllerType::GenericSDL:        devName = "MANDO USB GENERICO"; break;
+                    default:                                devName = "MANDO CONECTADO"; break;
+                }
+            }
+            std::snprintf(buf, sizeof(buf), "MANDO PRINCIPAL (J1): [%s]", devName);
             m_rowButtons[4].SetLabel(buf);
             break;
         }
     }
+}
 
-    // Colores de las filas
-    for (int i = 0; i < 5; ++i) {
-        m_rowButtons[i].SetColors(
-            ColorRGBA{15, 25, 42, 230}, ColorRGBA{30, 60, 100, 245},
-            ColorRGBA{0, 180, 230, 220}, ColorRGBA::Yellow(), ColorRGBA::White()
-        );
+void SceneOptions::TriggerActionForRow(int i) {
+    auto& cfg = EngineConfig::Instance();
+
+    switch (m_activeTab) {
+        case OptionsTab::Graphics: {
+            if (i == 0) {
+                // Resolución scanbuffer nativa fija de la consola (1280x720)
+            } else if (i == 1) {
+                // Alternar VSync
+                cfg.graphics.vsyncEnabled = !cfg.graphics.vsyncEnabled;
+                cfg.ApplyToSubsystems();
+            } else if (i == 2) {
+                // Ciclar filtrado: Point -> Bilinear -> Aniso2x -> Aniso4x -> Aniso8x -> Aniso16x
+                uint8_t nextFilter = (static_cast<uint8_t>(cfg.graphics.textureFilter) + 1) % 6;
+                cfg.graphics.textureFilter = static_cast<TextureFilterMode>(nextFilter);
+                cfg.ApplyToSubsystems();
+            } else if (i == 3) {
+                // Alternar telemetría OSD
+                cfg.graphics.showOSDTelemetry = !cfg.graphics.showOSDTelemetry;
+                cfg.ApplyToSubsystems();
+            }
+            break;
+        }
+
+        case OptionsTab::Audio: {
+            if (i == 0) {
+                // Pasos discretos deterministas: 0%, 25%, 50%, 75%, 100%
+                static constexpr float VOL_STEPS[] = { 0.0f, 0.25f, 0.50f, 0.75f, 1.0f };
+                int curIdx = 0;
+                float minDiff = 999.0f;
+                for (int s = 0; s < 5; ++s) {
+                    float diff = std::abs(cfg.audio.masterVolume - VOL_STEPS[s]);
+                    if (diff < minDiff) { minDiff = diff; curIdx = s; }
+                }
+                cfg.audio.masterVolume = VOL_STEPS[(curIdx + 1) % 5];
+                cfg.ApplyToSubsystems();
+            } else if (i == 1) {
+                // Alternar BGM
+                cfg.audio.bgmEnabled = !cfg.audio.bgmEnabled;
+                cfg.ApplyToSubsystems();
+            } else if (i == 2) {
+                // Pasos discretos deterministas BGM: 0%, 25%, 50%, 75%, 100%
+                static constexpr float VOL_STEPS[] = { 0.0f, 0.25f, 0.50f, 0.75f, 1.0f };
+                int curIdx = 0;
+                float minDiff = 999.0f;
+                for (int s = 0; s < 5; ++s) {
+                    float diff = std::abs(cfg.audio.bgmVolume - VOL_STEPS[s]);
+                    if (diff < minDiff) { minDiff = diff; curIdx = s; }
+                }
+                cfg.audio.bgmVolume = VOL_STEPS[(curIdx + 1) % 5];
+                cfg.ApplyToSubsystems();
+            } else if (i == 3) {
+                // Alternar SFX
+                cfg.audio.sfxEnabled = !cfg.audio.sfxEnabled;
+                cfg.ApplyToSubsystems();
+            } else if (i == 4) {
+                // Probar SFX (el clic ya fue emitido al seleccionar)
+            }
+            break;
+        }
+
+        case OptionsTab::Controls: {
+            if (i == 0) {
+                // Alternar vibración háptica
+                cfg.controls.rumbleEnabled = !cfg.controls.rumbleEnabled;
+                cfg.ApplyToSubsystems();
+            } else if (i == 1) {
+                // Ciclar intensidad: 30% -> 70% -> 100% -> 30%
+                if (cfg.controls.rumbleIntensity <= 0.35f) {
+                    cfg.controls.rumbleIntensity = 0.70f;
+                } else if (cfg.controls.rumbleIntensity <= 0.75f) {
+                    cfg.controls.rumbleIntensity = 1.00f;
+                } else {
+                    cfg.controls.rumbleIntensity = 0.30f;
+                }
+                cfg.ApplyToSubsystems();
+            } else if (i == 2) {
+                // Ciclar zona muerta: 10% -> 18% -> 25% -> 10%
+                if (cfg.controls.deadzoneRadius <= 0.12f) {
+                    cfg.controls.deadzoneRadius = 0.18f;
+                } else if (cfg.controls.deadzoneRadius <= 0.20f) {
+                    cfg.controls.deadzoneRadius = 0.25f;
+                } else {
+                    cfg.controls.deadzoneRadius = 0.10f;
+                }
+                cfg.ApplyToSubsystems();
+            } else if (i == 3) {
+                // Probar pulso háptico DRC (base 1.0f para no aplicar doble atenuación)
+                RumbleManager::Instance().TriggerRumble(PlayerIndex::GamePad, 1.0f, 0.2f);
+            }
+            break;
+        }
     }
 }
 
 void SceneOptions::SaveConfig() {
-    if (EngineConfig::Get().SaveToFile()) {
-        m_statusMessage = "CONFIGURACION GUARDADA EN DISCO (engine_config.ini)";
+    AudioManager::Instance().PlayClick();
+    if (EngineConfig::Instance().SaveToFile()) {
+        m_statusMessage = "AJUSTES GUARDADOS CORRECTAMENTE EN DISCO";
         m_statusColor = ColorRGBA::Green();
     } else {
-        m_statusMessage = "AVISO: NO SE PUDO ESCRIBIR EN DISCO (USANDO VALORES EN MEMORIA)";
-        m_statusColor = ColorRGBA::Yellow();
+        m_statusMessage = "ERROR AL GUARDAR CONFIGURACION EN DISCO";
+        m_statusColor = ColorRGBA::Red();
     }
-    m_statusTimer = 3.5f;
-    AudioManager::Instance().PlayClick();
+    m_statusTimer = 2.5f;
 }
 
 void SceneOptions::RestoreDefaults() {
-    EngineConfig::Get().ResetToDefaults();
-    EngineConfig::Get().ApplyToSubsystems();
-    RefreshControls();
-    m_statusMessage = "CONFIGURACION RESTABLECIDA A VALORES DE FABRICA";
-    m_statusColor = ColorRGBA::Cyan();
-    m_statusTimer = 3.5f;
     AudioManager::Instance().PlayClick();
+    EngineConfig::Instance().ResetToDefaults();
+    EngineConfig::Instance().ApplyToSubsystems();
+    RefreshControls();
+
+    m_statusMessage = "AJUSTES RESTABLECIDOS A VALORES DE FABRICA";
+    m_statusColor = ColorRGBA::Yellow();
+    m_statusTimer = 2.5f;
 }
 
 void SceneOptions::Update(float dt) {
@@ -213,11 +307,55 @@ void SceneOptions::Update(float dt) {
         m_statusTimer -= dt;
     }
 
-    auto& input = InputManager::Instance();
-    const auto& touch = input.GetTouchState();
+    if (m_stickRepeatTimer > 0.0f) {
+        m_stickRepeatTimer -= dt;
+    }
 
-    // 1. Botón Volver
-    if (m_backButton.UpdateAndHandle(touch) || input.IsBackRequested()) {
+    const auto& inputMgr = InputManager::Instance();
+    const auto& touch = inputMgr.GetGamepad(0).touch;
+
+    // Retorno táctil con guarda de salida inmediata
+    if (m_backButton.UpdateAndHandle(touch)) {
+        return;
+    }
+
+    // Consulta de acciones sobre todos los mandos físicos conectados
+    bool navUp = false;
+    bool navDown = false;
+    bool navLeftTab = false;
+    bool navRightTab = false;
+    bool actionA = false;
+    bool actionB = false;
+    bool actionPlus = false;
+    bool actionX = false;
+
+    for (size_t p = 0; p < InputManager::MAX_PLAYERS; ++p) {
+        const auto& pad = inputMgr.GetGamepad(p);
+        if (!pad.isConnected) continue;
+
+        if (pad.WasJustPressed(VirtualButton::B)) actionB = true;
+        if (pad.WasJustPressed(VirtualButton::DPadUp)) navUp = true;
+        if (pad.WasJustPressed(VirtualButton::DPadDown)) navDown = true;
+        if (pad.WasJustPressed(VirtualButton::L) || pad.WasJustPressed(VirtualButton::ZL)) navLeftTab = true;
+        if (pad.WasJustPressed(VirtualButton::R) || pad.WasJustPressed(VirtualButton::ZR)) navRightTab = true;
+        if (pad.WasJustPressed(VirtualButton::A)) actionA = true;
+        if (pad.WasJustPressed(VirtualButton::Plus)) actionPlus = true;
+        if (pad.WasJustPressed(VirtualButton::X)) actionX = true;
+
+        // Navegación analógica por Stick Izquierdo Y con histéresis
+        if (m_stickRepeatTimer <= 0.0f) {
+            if (pad.leftStick.y > 0.55f) {
+                navUp = true;
+                m_stickRepeatTimer = 0.22f;
+            } else if (pad.leftStick.y < -0.55f) {
+                navDown = true;
+                m_stickRepeatTimer = 0.22f;
+            }
+        }
+    }
+
+    // Salida física por botón B
+    if (actionB) {
         AudioManager::Instance().PlayClick();
         if (m_onBackCallback) {
             m_onBackCallback();
@@ -227,171 +365,64 @@ void SceneOptions::Update(float dt) {
         return;
     }
 
-    // 2. Pestañas
-    if (m_tabGraphics.Update(touch, "TAB GRAFICOS")) {
-        m_activeTab = OptionsTab::Graphics;
+    // Navegación por Mando Físico (D-Pad / Sticks / Botones A, X, Plus, L, R)
+    if (navUp) {
         AudioManager::Instance().PlayClick();
-        RefreshControls();
-        return;
-    }
-    if (m_tabAudio.Update(touch, "TAB AUDIO")) {
-        m_activeTab = OptionsTab::Audio;
+        m_focusedRow = (m_focusedRow + 4) % 5;
+    } else if (navDown) {
         AudioManager::Instance().PlayClick();
-        RefreshControls();
-        return;
-    }
-    if (m_tabControls.Update(touch, "TAB CONTROL")) {
-        m_activeTab = OptionsTab::Controls;
+        m_focusedRow = (m_focusedRow + 1) % 5;
+    } else if (navLeftTab) {
         AudioManager::Instance().PlayClick();
+        m_activeTab = static_cast<OptionsTab>((static_cast<uint8_t>(m_activeTab) + 2) % 3);
         RefreshControls();
-        return;
-    }
-    if (m_tabDebug.Update(touch, "TAB DEPURACION")) {
-        m_activeTab = OptionsTab::Debug;
+    } else if (navRightTab) {
         AudioManager::Instance().PlayClick();
+        m_activeTab = static_cast<OptionsTab>((static_cast<uint8_t>(m_activeTab) + 1) % 3);
         RefreshControls();
-        return;
-    }
-
-    // 3. Botones de Acción (Guardar / Defectos)
-    if (m_btnSave.Update(touch, "GUARDAR")) {
+    } else if (actionA) {
+        bool isInformational = (m_activeTab == OptionsTab::Graphics && (m_focusedRow == 0 || m_focusedRow == 4)) ||
+                               (m_activeTab == OptionsTab::Controls && m_focusedRow == 4);
+        if (!isInformational) {
+            AudioManager::Instance().PlayClick();
+            TriggerActionForRow(m_focusedRow);
+            RefreshControls();
+        }
+    } else if (actionPlus) {
         SaveConfig();
-        return;
-    }
-    if (m_btnDefaults.Update(touch, "DEFECTOS")) {
+    } else if (actionX) {
         RestoreDefaults();
-        return;
     }
 
-    // 4. Filas de Opciones según Pestaña
-    auto& cfg = EngineConfig::Get();
+    // Interacción Táctil Simultánea
+    if (m_tabGraphics.Update(touch)) {
+        AudioManager::Instance().PlayClick();
+        m_activeTab = OptionsTab::Graphics;
+        RefreshControls();
+    } else if (m_tabAudio.Update(touch)) {
+        AudioManager::Instance().PlayClick();
+        m_activeTab = OptionsTab::Audio;
+        RefreshControls();
+    } else if (m_tabControls.Update(touch)) {
+        AudioManager::Instance().PlayClick();
+        m_activeTab = OptionsTab::Controls;
+        RefreshControls();
+    }
 
-    switch (m_activeTab) {
-        case OptionsTab::Graphics: {
-            if (m_rowButtons[0].Update(touch, "TOGGLE MODO")) {
-                uint8_t m = (static_cast<uint8_t>(cfg.graphics.renderMode) + 1) % 3;
-                cfg.graphics.renderMode = static_cast<ShadingRenderMode>(m);
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[1].Update(touch, "TOGGLE FILTRO")) {
-                uint8_t f = (static_cast<uint8_t>(cfg.graphics.textureFilter) + 1) % 7;
-                cfg.graphics.textureFilter = static_cast<TextureFilterMode>(f);
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[2].Update(touch, "TOGGLE VSYNC")) {
-                cfg.graphics.vsyncEnabled = !cfg.graphics.vsyncEnabled;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[3].Update(touch, "TOGGLE SOMBRAS")) {
-                uint8_t s = (static_cast<uint8_t>(cfg.graphics.shadowQuality) + 1) % 3;
-                cfg.graphics.shadowQuality = static_cast<ShadowQuality>(s);
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[4].Update(touch, "TOGGLE PEDESTAL")) {
-                cfg.graphics.showPedestal = !cfg.graphics.showPedestal;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            break;
-        }
+    if (m_btnSave.Update(touch)) {
+        SaveConfig();
+    } else if (m_btnDefaults.Update(touch)) {
+        RestoreDefaults();
+    }
 
-        case OptionsTab::Audio: {
-            if (m_useSliderForRow && m_rowSlider.Update(touch, "SLIDER VOLUMEN")) {
-                cfg.audio.masterVolume = m_rowSlider.GetValue();
-                cfg.ApplyToSubsystems();
-            }
-            if (m_rowButtons[1].Update(touch, "TOGGLE BGM")) {
-                cfg.audio.bgmEnabled = !cfg.audio.bgmEnabled;
-                cfg.ApplyToSubsystems();
+    for (int i = 0; i < 5; ++i) {
+        if (m_rowButtons[i].Update(touch)) {
+            bool isInformational = (m_activeTab == OptionsTab::Graphics && (i == 0 || i == 4)) ||
+                                   (m_activeTab == OptionsTab::Controls && i == 4);
+            if (!isInformational) {
                 AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[2].Update(touch, "CYCLE VOL BGM")) {
-                if (cfg.audio.bgmVolume < 0.35f) cfg.audio.bgmVolume = 0.50f;
-                else if (cfg.audio.bgmVolume < 0.60f) cfg.audio.bgmVolume = 0.75f;
-                else if (cfg.audio.bgmVolume < 0.85f) cfg.audio.bgmVolume = 1.00f;
-                else cfg.audio.bgmVolume = 0.25f;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[3].Update(touch, "TOGGLE SFX")) {
-                cfg.audio.sfxEnabled = !cfg.audio.sfxEnabled;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[4].Update(touch, "PROBAR SFX")) {
-                AudioManager::Instance().PlayClick();
-            }
-            break;
-        }
-
-        case OptionsTab::Controls: {
-            if (m_rowButtons[0].Update(touch, "CYCLE SENSIBILIDAD")) {
-                if (cfg.camera.orbitSensitivity < 0.75f) cfg.camera.orbitSensitivity = 1.0f;
-                else if (cfg.camera.orbitSensitivity < 1.25f) cfg.camera.orbitSensitivity = 1.5f;
-                else if (cfg.camera.orbitSensitivity < 1.75f) cfg.camera.orbitSensitivity = 2.0f;
-                else cfg.camera.orbitSensitivity = 0.5f;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[1].Update(touch, "TOGGLE INVERT Y")) {
-                cfg.camera.invertY = !cfg.camera.invertY;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[2].Update(touch, "CYCLE FOV")) {
-                if (cfg.camera.fovDegrees < 60.0f) cfg.camera.fovDegrees = 65.0f;
-                else if (cfg.camera.fovDegrees < 70.0f) cfg.camera.fovDegrees = 75.0f;
-                else cfg.camera.fovDegrees = 55.0f;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            break;
-        }
-
-        case OptionsTab::Debug: {
-            if (m_rowButtons[0].Update(touch, "TOGGLE COLLIDERS")) {
-                cfg.debug.showColliders = !cfg.debug.showColliders;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[1].Update(touch, "TOGGLE TRIGGERS")) {
-                cfg.debug.showTriggers = !cfg.debug.showTriggers;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[2].Update(touch, "TOGGLE NAVGRAPH")) {
-                cfg.debug.showNavGraph = !cfg.debug.showNavGraph;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[3].Update(touch, "TOGGLE VISION")) {
-                cfg.debug.showVisionCones = !cfg.debug.showVisionCones;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
-                RefreshControls();
-            }
-            if (m_rowButtons[4].Update(touch, "TOGGLE OSD")) {
-                cfg.debug.showOSDTelemetry = !cfg.debug.showOSDTelemetry;
-                cfg.ApplyToSubsystems();
-                AudioManager::Instance().PlayClick();
+                m_focusedRow = i;
+                TriggerActionForRow(i);
                 RefreshControls();
             }
             break;
@@ -399,51 +430,42 @@ void SceneOptions::Update(float dt) {
     }
 }
 
-void SceneOptions::Render(SDL_Renderer* renderer) {
-    // 1. Fondo Estelar
-    m_starfield.Render(renderer, 1280, 720);
+void SceneOptions::Render() {
+    Render2D::Begin();
 
-    // 2. Botón Volver
-    m_backButton.Render(renderer);
+    m_starfield.Render(1280, 720);
 
-    // 3. Título y Subtítulo
-    Render2D::drawPixelString(renderer, "CONFIGURACION GLOBAL DEL MOTOR", 345, 30, 4, ColorRGBA::Cyan());
-    Render2D::drawPixelString(renderer, "JASON GREGORY CAP. 5.3: OPCIONES PERSISTENTES Y SINCRONIZADAS", 270, 75, 2, ColorRGBA::Yellow());
+    // Encabezado
+    Render2D::DrawPixelString("CONFIGURACION DEL MOTOR - AJUSTES GLOBALES", 220, 38, 2, ColorRGBA::White());
+    Render2D::DrawPixelString("D-PAD ARRIBA/ABAJO: NAVEGAR | (A) / TACTIL: CAMBIAR | (L)/(R): PESTANAS | (+): GUARDAR", 190, 72, 1, ColorRGBA{160, 200, 240, 255});
 
-    // 4. Pestañas Superiores
-    m_tabGraphics.Render(renderer);
-    m_tabAudio.Render(renderer);
-    m_tabControls.Render(renderer);
-    m_tabDebug.Render(renderer);
+    // Pestañas
+    m_tabGraphics.Render();
+    m_tabAudio.Render();
+    m_tabControls.Render();
 
-    // 5. Marco Contenedor
-    Render2D::DrawBox(renderer, 160, 180, 960, 380, ColorRGBA{8, 14, 24, 220}, ColorRGBA{0, 200, 240, 140});
-
-    // 6. Filas de Opciones
-    if (m_useSliderForRow) {
-        m_rowSlider.Render(renderer);
-        for (int i = 1; i < 5; ++i) {
-            m_rowButtons[i].Render(renderer);
-        }
-    } else {
-        for (int i = 0; i < 5; ++i) {
-            m_rowButtons[i].Render(renderer);
-        }
+    // Filas interactivas
+    for (int i = 0; i < 5; ++i) {
+        m_rowButtons[i].Render();
     }
 
-    // 7. Botones de Acción (Guardar / Defectos)
-    m_btnSave.Render(renderer);
-    m_btnDefaults.Render(renderer);
+    // Resaltado visual del cursor de navegación por mando físico (D-Pad Focus Ring)
+    const auto& focusedRect = m_rowButtons[m_focusedRow].GetRect();
+    Render2D::DrawBox(focusedRect.x - 3, focusedRect.y - 3, focusedRect.w + 6, focusedRect.h + 6,
+                      ColorRGBA{0, 0, 0, 0}, ColorRGBA::Yellow());
 
-    // 8. Mensaje de Estado / Feedback
-    if (m_statusTimer > 0.0f) {
-        Render2D::drawPixelString(renderer, m_statusMessage.c_str(), 320, 640, 2, m_statusColor);
-    } else {
-        Render2D::drawPixelString(renderer, "PULSA UN BOTON PARA MODIFICAR LA OPCION | PERSISTENCIA EN DISCO", 280, 640, 2, ColorRGBA{160, 180, 200, 220});
+    // Botones inferiores
+    m_btnSave.Render();
+    m_btnDefaults.Render();
+    m_backButton.Render();
+
+    // Mensaje de estado flotante
+    if (m_statusTimer > 0.0f && m_statusMessage) {
+        Render2D::DrawBox(240, 642, 800, 36, ColorRGBA{10, 15, 25, 240}, m_statusColor);
+        Render2D::DrawPixelString(m_statusMessage, 260, 652, 1, m_statusColor);
     }
 
-    // 9. Barra Guía
-    Render2D::drawPixelString(renderer, "TOUCH / A: MODIFICAR | B: VOLVER | +: MENU PAUSA | -: OSD METRICAS", 275, 680, 2, ColorRGBA{140, 150, 165, 255});
+    Render2D::End();
 }
 
 } // namespace WiiU

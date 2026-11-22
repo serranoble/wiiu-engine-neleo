@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <vector>
 #include <string>
-#include <string_view>
 
 namespace WiiU {
 
@@ -114,6 +113,10 @@ struct AudioVoice {
     // Telemetría para OSD y debug
     float distanceToListener{0.0f};
     float perceivedLoudness{0.0f};
+
+    // [OPT-224 / OPT-249] Virtualizacion de voces y sueno acustico LOD
+    bool isVirtualized{false};
+    bool isSleeping{false};
 };
 
 /**
@@ -122,6 +125,9 @@ struct AudioVoice {
 struct AudioEngineTelemetry {
     uint32_t activeVoices{0};
     uint32_t totalVoices{32};
+    uint32_t virtualizedVoices{0};
+    uint32_t sleepingVoices{0};
+    uint32_t maxVirtualVoices{128};
     uint32_t stolenVoicesTotal{0};
     float listenerX{0.0f};
     float listenerY{0.0f};

@@ -1,14 +1,18 @@
 #pragma once
 
+#if !defined(__WIIU__) && !defined(__wiiu__)
 #include <SDL2/SDL.h>
-#if defined(__WIIU__) || defined(__wiiu__)
+#else
 #include <vpad/input.h>
 #include <padscore/kpad.h>
 #include <padscore/wpad.h>
 #endif
 #include "Input/VirtualGamepad.hpp"
 #include "Input/ActionMapping.hpp"
+#include "Input/InputContextStack.hpp"
 #include "Input/RumbleManager.hpp"
+#include <atomic>
+#include <array>
 #include <string>
 #include <cstddef>
 
@@ -78,26 +82,64 @@ public:
     }
 
     // =========================================================================
+    // [OPT-400] ENRUTAMIENTO JERARQUICO POR CONTEXTO DE ENTRADA
+    // =========================================================================
+    [[nodiscard]] InputContextStack& GetContextStack() noexcept { return m_contextStack; }
+    [[nodiscard]] const InputContextStack& GetContextStack() const noexcept { return m_contextStack; }
+
+    [[nodiscard]] float GetActionAxisInContext(InputContext ctx, InputAction action, size_t player = 0) const noexcept {
+        return m_contextStack.IsActionAllowed(ctx, action) ? GetActionAxis(action, player) : 0.0f;
+    }
+
+    [[nodiscard]] bool IsActionHeldInContext(InputContext ctx, InputAction action, size_t player = 0) const noexcept {
+        return m_contextStack.IsActionAllowed(ctx, action) && IsActionHeld(action, player);
+    }
+
+    [[nodiscard]] bool WasActionTriggeredInContext(InputContext ctx, InputAction action, size_t player = 0) const noexcept {
+        return m_contextStack.IsActionAllowed(ctx, action) && WasActionTriggered(action, player);
+    }
+
+    // =========================================================================
+    // [OPT-401] GUARDIA DE DESCONEXION HID Y AUTO-PAUSA
+    // =========================================================================
+    using DisconnectCallback = void (*)(size_t playerIndex, void* userData);
+
+    void SetAutoPauseOnDisconnect(bool enabled) noexcept { m_autoPauseOnDisconnect = enabled; }
+    [[nodiscard]] bool IsAutoPauseOnDisconnectEnabled() const noexcept { return m_autoPauseOnDisconnect; }
+    void SetDisconnectCallback(DisconnectCallback cb, void* userData = nullptr) noexcept {
+        m_disconnectCallback = cb;
+        m_disconnectUserData = userData;
+    }
+    [[nodiscard]] bool WasControllerDisconnectedThisFrame() const noexcept { return m_controllerDisconnectedThisFrame; }
+    [[nodiscard]] size_t GetLastDisconnectedPlayer() const noexcept { return m_lastDisconnectedPlayer; }
+
+    using ActionSoundCallback = void(*)(void* userData);
+    void SetActionSoundCallback(ActionSoundCallback cb, void* userData = nullptr) noexcept {
+        m_actionSoundCallback = cb;
+        m_actionSoundUserData = userData;
+    }
+
+    // =========================================================================
     // MÉTODOS DE RETROCOMPATIBILIDAD (100% PRESERVADOS)
     // =========================================================================
-    bool WasActionTriggeredThisFrame() const { return m_actionTriggeredThisFrame; }
+    [[nodiscard]] bool WasActionTriggeredThisFrame() const noexcept { return m_actionTriggeredThisFrame; }
     void TriggerAction(const std::string& sourceName);
 
-    const TouchState& GetTouchState() const { return m_touchState; }
-    const StickState& GetLeftStick() const { return m_leftStick; }
-    const StickState& GetRightStick() const { return m_rightStick; }
-    bool IsButtonHeld() const { return m_buttonHeld; }
-    int GetButtonPressCount() const { return m_buttonPressCount; }
-    const std::string& GetLastButtonName() const { return m_lastButtonName; }
-    float GetFlashTimer() const { return m_flashTimer; }
-    [[nodiscard]] bool IsBackRequested() const { return m_backRequested; }
+    [[nodiscard]] const TouchState& GetTouchState() const noexcept { return m_touchState; }
+    [[nodiscard]] const StickState& GetLeftStick() const noexcept { return m_leftStick; }
+    [[nodiscard]] const StickState& GetRightStick() const noexcept { return m_rightStick; }
+    [[nodiscard]] bool IsButtonHeld() const noexcept { return m_buttonHeld; }
+    [[nodiscard]] int GetButtonPressCount() const noexcept { return m_buttonPressCount; }
+    [[nodiscard]] const std::string& GetLastButtonName() const noexcept { return m_lastButtonName; }
+    [[nodiscard]] float GetFlashTimer() const noexcept { return m_flashTimer; }
+    [[nodiscard]] bool IsBackRequested() const noexcept { return m_backRequested; }
     [[nodiscard]] bool IsPauseRequested() const noexcept { return m_pauseRequested; }
     void ConsumePauseRequest() noexcept { m_pauseRequested = false; }
     [[nodiscard]] bool IsResourceMonitorRequested() const noexcept { return m_resourceMonitorRequested; }
     void ConsumeResourceMonitorRequest() noexcept { m_resourceMonitorRequested = false; }
-    [[nodiscard]] bool IsExitRequested() const noexcept { return m_exitRequested; }
-    void RequestExit() noexcept { m_exitRequested = true; }
-    void ConsumeExitRequest() noexcept { m_exitRequested = false; }
+    [[nodiscard]] bool IsExitRequested() const noexcept { return m_exitRequested.load(std::memory_order_acquire); }
+    void RequestExit() noexcept { m_exitRequested.store(true, std::memory_order_release); }
+    void ConsumeExitRequest() noexcept { m_exitRequested.store(false, std::memory_order_release); }
     [[nodiscard]] uint32_t GetButtonsHold() const noexcept { return m_buttonsHold; }
     [[nodiscard]] uint32_t GetButtonsTrigger() const noexcept { return m_buttonsTrigger; }
     [[nodiscard]] bool IsButtonHeld(uint32_t buttonMask) const noexcept { return (m_buttonsHold & buttonMask) != 0; }
@@ -105,20 +147,34 @@ public:
 
 private:
     InputManager() = default;
-    ~InputManager() = default;
+    ~InputManager();
 
     void OpenConnectedControllers();
-    void PollSDLEvents(bool& outRunning);
+    void CloseConnectedControllers() noexcept;
+    void PollPlatformEvents(bool& outRunning);
     void PollWiiUHardware(float dt);
     void PollSDLHardware(bool& outRunning);
 
     VirtualGamepad m_gamepads[MAX_PLAYERS]{};
+    bool m_prevConnected[MAX_PLAYERS]{};
+    InputContextStack m_contextStack{};
+    bool m_autoPauseOnDisconnect{true};
+    bool m_controllerDisconnectedThisFrame{false};
+    size_t m_lastDisconnectedPlayer{0};
+    DisconnectCallback m_disconnectCallback{nullptr};
+    void* m_disconnectUserData{nullptr};
+    ActionSoundCallback m_actionSoundCallback{nullptr};
+    void* m_actionSoundUserData{nullptr};
+#if !defined(__WIIU__) && !defined(__wiiu__)
+    std::array<SDL_GameController*, MAX_PLAYERS> m_sdlControllers{};
+    std::array<SDL_Joystick*, MAX_PLAYERS> m_sdlJoysticks{};
+#endif
 
     bool m_actionTriggeredThisFrame{false};
     bool m_backRequested{false};
     bool m_pauseRequested{false};
     bool m_resourceMonitorRequested{false};
-    bool m_exitRequested{false};
+    std::atomic<bool> m_exitRequested{false};
     uint32_t m_buttonsHold{0};
     uint32_t m_buttonsTrigger{0};
     TouchState m_touchState{};

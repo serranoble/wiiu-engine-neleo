@@ -2,9 +2,34 @@
 
 #include "Graphics/Math3D.hpp"
 #include <cstdint>
-#include <algorithm>
 
 namespace WiiU {
+
+/**
+ * @brief [OPT-274] Maquina de Estados Finitos de Locomocion Cinematica (KCC-FSM).
+ */
+enum class KCCLocomotionState : uint8_t {
+    Idle = 0,
+    Walk,
+    Run,
+    Jump,
+    Fall,
+    Slide,
+    Land
+};
+
+[[nodiscard]] inline const char* GetKCCLocomotionStateName(KCCLocomotionState state) noexcept {
+    switch (state) {
+        case KCCLocomotionState::Idle:  return "IDLE";
+        case KCCLocomotionState::Walk:  return "WALK";
+        case KCCLocomotionState::Run:   return "RUN";
+        case KCCLocomotionState::Jump:  return "JUMP";
+        case KCCLocomotionState::Fall:  return "FALL";
+        case KCCLocomotionState::Slide: return "SLIDE";
+        case KCCLocomotionState::Land:  return "LAND";
+        default:                        return "UNKNOWN";
+    }
+}
 
 /**
  * @brief [OPT-207] Componente de Controlador Cinemático de Personaje (Kinematic Character Component).
@@ -51,6 +76,13 @@ struct KinematicCharacterComponent {
     // Acústica y cinemática de pasos
     float footstepDistanceAccum{0.0f};           // Metros recorridos desde el último paso sonoro
     float footstepInterval{1.6f};                // Intervalo en metros para disparar audio de pisada
+
+    // [OPT-274] Estado de la Maquina de Estados Finitos de Locomocion (KCC-FSM)
+    KCCLocomotionState locomotionState{KCCLocomotionState::Idle};
+    float stateTimer{0.0f};                      // Tiempo transcurrido en el estado actual (s)
+    float coyoteTimer{0.0f};                     // Ventana de gracia tras dejar una plataforma (s)
+    float coyoteDuration{0.12f};                 // Duracion maxima del coyote-time (s)
+    float landingDuration{0.14f};                // Duracion breve del estado Land al tocar suelo (s)
 
     constexpr KinematicCharacterComponent() noexcept = default;
 

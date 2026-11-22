@@ -1,9 +1,18 @@
 #include "Core/ECS/Systems/KinematicCharacterSystem.hpp"
-#include "Audio/AudioEngine3D.hpp"
 #include <cmath>
 #include <algorithm>
 
 namespace WiiU {
+
+namespace {
+KinematicCharacterSystem::FootstepCallback g_footstepCallback = nullptr;
+void* g_footstepUserData = nullptr;
+} // namespace
+
+void KinematicCharacterSystem::SetFootstepCallback(FootstepCallback cb, void* userData) noexcept {
+    g_footstepCallback = cb;
+    g_footstepUserData = userData;
+}
 
 float KinematicCharacterSystem::GetTerrainHeight(float x, float z) noexcept {
     float h1 = 0.70f * std::sin(0.32f * x) * std::cos(0.32f * z);
@@ -168,6 +177,46 @@ bool KinematicCharacterSystem::CheckLineOfSight(const Point3D& from, const Point
     return outOcclusion > 0.05f;
 }
 
+void KinematicCharacterSystem::UpdateLocomotionFSM(KinematicCharacterComponent& kcc,
+                                                   bool wasGrounded,
+                                                   bool onSteepSlope,
+                                                   float dt) noexcept {
+    const KCCLocomotionState prevState = kcc.locomotionState;
+    KCCLocomotionState nextState = prevState;
+
+    if (kcc.isGrounded) {
+        kcc.coyoteTimer = kcc.coyoteDuration;
+        if (!wasGrounded) {
+            nextState = KCCLocomotionState::Land;
+        } else if (prevState == KCCLocomotionState::Land && kcc.stateTimer < kcc.landingDuration &&
+                   kcc.horizontalSpeed < 0.35f) {
+            nextState = KCCLocomotionState::Land;
+        } else if (kcc.horizontalSpeed > 0.25f) {
+            nextState = (kcc.isRunning && kcc.horizontalSpeed > kcc.walkSpeed * 1.15f)
+                        ? KCCLocomotionState::Run
+                        : KCCLocomotionState::Walk;
+        } else {
+            nextState = KCCLocomotionState::Idle;
+        }
+    } else {
+        kcc.coyoteTimer = std::max(0.0f, kcc.coyoteTimer - dt);
+        if (onSteepSlope) {
+            nextState = KCCLocomotionState::Slide;
+        } else if (kcc.velocity.y > 0.25f) {
+            nextState = KCCLocomotionState::Jump;
+        } else {
+            nextState = KCCLocomotionState::Fall;
+        }
+    }
+
+    if (nextState != prevState) {
+        kcc.locomotionState = nextState;
+        kcc.stateTimer = 0.0f;
+    } else {
+        kcc.stateTimer += dt;
+    }
+}
+
 void KinematicCharacterSystem::Update(ECSWorld& world, float dt) {
     if (dt <= 0.0f || dt > 0.25f) {
         dt = 0.016667f; // Clamping de estabilidad numérica anti-delta spikes
@@ -175,12 +224,16 @@ void KinematicCharacterSystem::Update(ECSWorld& world, float dt) {
 
     world.ForEach<TransformComponent, KinematicCharacterComponent>(
         [dt](Entity /*entity*/, TransformComponent& transform, KinematicCharacterComponent& kcc) {
-            // 1. Procesar solicitud de impulso de salto vertical
+            const bool wasGrounded = kcc.isGrounded;
+            bool onSteepSlope = false;
+
+            // 1. Procesar solicitud de impulso de salto vertical (soporta coyote-time)
             if (kcc.jumpRequested) {
-                if (kcc.isGrounded) {
+                if (kcc.isGrounded || kcc.coyoteTimer > 0.0f) {
                     kcc.velocity.y = kcc.jumpSpeed;
                     kcc.isGrounded = false;
                     kcc.isJumping = true;
+                    kcc.coyoteTimer = 0.0f;
                 }
                 kcc.jumpRequested = false;
             }
@@ -236,21 +289,24 @@ void KinematicCharacterSystem::Update(ECSWorld& world, float dt) {
                         kcc.footstepDistanceAccum += kcc.horizontalSpeed * dt;
                         if (kcc.footstepDistanceAccum >= kcc.footstepInterval) {
                             kcc.footstepDistanceAccum = 0.0f;
-                            AudioEngine3D::Instance().PlaySound3D(
-                                AudioEngine3D::Instance().GetFootstepClip(),
-                                AudioEmitter3D{newPos, Point3D{0.0f, 0.0f, 0.0f}, 1.0f, 15.0f, 1.0f, 0.40f, 1.0f, 0.0f, false, 70}
-                            );
+                            if (g_footstepCallback) {
+                                g_footstepCallback(newPos, g_footstepUserData);
+                            }
                         }
                     }
                 } else {
                     // Pendiente excesiva (> 45°): resbalar cuesta abajo por fuerza de deslizamiento
                     kcc.isGrounded = false;
+                    onSteepSlope = true;
                     kcc.velocity.x += groundNorm.x * kcc.gravity * 0.65f * dt;
                     kcc.velocity.z += groundNorm.z * kcc.gravity * 0.65f * dt;
                 }
             } else {
                 kcc.isGrounded = false;
             }
+
+            // [OPT-274] Actualizar FSM de locomocion cinematica
+            UpdateLocomotionFSM(kcc, wasGrounded, onSteepSlope, dt);
 
             // Sincronizar transformación del componente ECS
             transform.position = newPos;

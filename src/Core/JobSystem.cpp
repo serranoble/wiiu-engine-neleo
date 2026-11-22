@@ -1,4 +1,5 @@
 #include "Core/JobSystem.hpp"
+#include <chrono>
 #include <cstdio>
 
 namespace WiiU {
@@ -13,12 +14,16 @@ JobSystem::~JobSystem() {
 }
 
 void JobSystem::Init() {
-    if (m_initialized) {
+    if (m_initialized.load(std::memory_order_acquire)) {
         return;
     }
 
-    m_head.store(0, std::memory_order_relaxed);
-    m_tail.store(0, std::memory_order_relaxed);
+    for (uint32_t i = 0; i < static_cast<uint32_t>(QUEUE_CAPACITY); ++i) {
+        m_queue[i].sequence.store(i, std::memory_order_relaxed);
+        m_queue[i].job = JobDeclaration{};
+    }
+    m_dequeuePos.store(0, std::memory_order_relaxed);
+    m_enqueuePos.store(0, std::memory_order_relaxed);
     m_completedJobs.store(0, std::memory_order_relaxed);
     m_totalDispatched.store(0, std::memory_order_relaxed);
 
@@ -29,11 +34,11 @@ void JobSystem::Init() {
 
     m_running.store(true, std::memory_order_release);
     m_workerThread = std::thread(&JobSystem::WorkerLoop, this);
-    m_initialized = true;
+    m_initialized.store(true, std::memory_order_release);
 }
 
 void JobSystem::Shutdown() {
-    if (!m_initialized) {
+    if (!m_initialized.exchange(false, std::memory_order_acq_rel)) {
         return;
     }
 
@@ -44,8 +49,6 @@ void JobSystem::Shutdown() {
     if (m_workerThread.joinable()) {
         m_workerThread.join();
     }
-
-    m_initialized = false;
 }
 
 void JobSystem::WorkerLoop() {
@@ -54,7 +57,7 @@ void JobSystem::WorkerLoop() {
     OSSetThreadAffinity(OSGetCurrentThread(), 1 << 2);
 #endif
 
-    while (m_running.load(std::memory_order_relaxed)) {
+    while (m_running.load(std::memory_order_acquire)) {
         JobDeclaration job;
         if (PopJob(job)) {
             if (job.task) {
@@ -67,7 +70,7 @@ void JobSystem::WorkerLoop() {
             }
             m_completedJobs.fetch_add(1, std::memory_order_relaxed);
         } else {
-            if (!m_running.load(std::memory_order_relaxed)) {
+            if (!m_running.load(std::memory_order_acquire)) {
                 break;
             }
             SleepUntilJobAvailable();
@@ -76,36 +79,43 @@ void JobSystem::WorkerLoop() {
 }
 
 bool JobSystem::PushJob(const JobDeclaration& job) noexcept {
-    while (m_pushLock.test_and_set(std::memory_order_acquire)) {
-        // Pausa ligera de spinlock
+    // [OPT-97] Cola acotada MPMC lock-free de Dmitry Vyukov (inmune a wraparound y sobrescritura en PPC750CL)
+    uint32_t pos = m_enqueuePos.load(std::memory_order_relaxed);
+    for (;;) {
+        JobSlot& cell = m_queue[pos & QUEUE_MASK];
+        const uint32_t seq = cell.sequence.load(std::memory_order_acquire);
+        const int32_t dif = static_cast<int32_t>(seq - pos);
+        if (dif == 0) {
+            if (m_enqueuePos.compare_exchange_weak(pos, pos + 1u, std::memory_order_relaxed)) {
+                cell.job = job;
+                cell.sequence.store(pos + 1u, std::memory_order_release);
+                m_totalDispatched.fetch_add(1u, std::memory_order_relaxed);
+                return true;
+            }
+        } else if (dif < 0) {
+            return false; // Cola saturada
+        } else {
+            pos = m_enqueuePos.load(std::memory_order_relaxed);
+        }
     }
-
-    uint32_t head = m_head.load(std::memory_order_relaxed);
-    uint32_t tail = m_tail.load(std::memory_order_relaxed);
-
-    if (tail - head >= QUEUE_CAPACITY) {
-        m_pushLock.clear(std::memory_order_release);
-        return false; // Cola saturada
-    }
-
-    m_queue[tail & QUEUE_MASK] = job;
-    m_tail.store(tail + 1, std::memory_order_release);
-    m_totalDispatched.fetch_add(1, std::memory_order_relaxed);
-
-    m_pushLock.clear(std::memory_order_release);
-    return true;
 }
 
 bool JobSystem::PopJob(JobDeclaration& outJob) noexcept {
-    uint32_t head = m_head.load(std::memory_order_relaxed);
-    while (true) {
-        uint32_t tail = m_tail.load(std::memory_order_acquire);
-        if (head >= tail) {
+    uint32_t pos = m_dequeuePos.load(std::memory_order_relaxed);
+    for (;;) {
+        JobSlot& cell = m_queue[pos & QUEUE_MASK];
+        const uint32_t seq = cell.sequence.load(std::memory_order_acquire);
+        const int32_t dif = static_cast<int32_t>(seq - (pos + 1u));
+        if (dif == 0) {
+            if (m_dequeuePos.compare_exchange_weak(pos, pos + 1u, std::memory_order_relaxed)) {
+                outJob = cell.job;
+                cell.sequence.store(pos + static_cast<uint32_t>(QUEUE_CAPACITY), std::memory_order_release);
+                return true;
+            }
+        } else if (dif < 0) {
             return false; // Cola vacía
-        }
-        if (m_head.compare_exchange_weak(head, head + 1, std::memory_order_acquire, std::memory_order_relaxed)) {
-            outJob = m_queue[head & QUEUE_MASK];
-            return true;
+        } else {
+            pos = m_dequeuePos.load(std::memory_order_relaxed);
         }
     }
 }
@@ -116,7 +126,7 @@ void JobSystem::Dispatch(JobFunction func, void* param, std::atomic<uint32_t>* c
 }
 
 void JobSystem::Dispatch(const JobDeclaration& job) {
-    if (!m_initialized) {
+    if (!m_initialized.load(std::memory_order_acquire)) {
         if (job.task) {
             job.task(job.param);
         }
@@ -151,7 +161,7 @@ void JobSystem::DispatchBatch(const JobDeclaration* jobs, size_t count, std::ato
         return;
     }
 
-    if (!m_initialized) {
+    if (!m_initialized.load(std::memory_order_acquire)) {
         for (size_t i = 0; i < count; ++i) {
             if (jobs[i].task) {
                 jobs[i].task(jobs[i].param);
@@ -168,6 +178,8 @@ void JobSystem::DispatchBatch(const JobDeclaration* jobs, size_t count, std::ato
         JobDeclaration j = jobs[i];
         if (counter) {
             j.counter = counter;
+        } else if (j.counter) {
+            j.counter->fetch_add(1, std::memory_order_relaxed);
         }
         while (!PushJob(j)) {
             JobDeclaration localJob;
@@ -221,8 +233,8 @@ void JobSystem::SleepUntilJobAvailable() {
 #else
     std::unique_lock<std::mutex> lock(m_syncMutex);
     m_jobAvailableCv.wait(lock, [this]() {
-        return m_head.load(std::memory_order_relaxed) < m_tail.load(std::memory_order_relaxed) ||
-               !m_running.load(std::memory_order_relaxed);
+        return m_dequeuePos.load(std::memory_order_acquire) != m_enqueuePos.load(std::memory_order_acquire) ||
+               !m_running.load(std::memory_order_acquire);
     });
 #endif
 }
@@ -231,6 +243,9 @@ void JobSystem::WakeWorker() {
 #if defined(__WIIU__) || defined(__wiiu__)
     OSSignalEvent(&m_jobAvailableEvent);
 #else
+    {
+        std::lock_guard<std::mutex> lock(m_syncMutex);
+    }
     m_jobAvailableCv.notify_one();
 #endif
 }
@@ -239,6 +254,9 @@ void JobSystem::SignalCounterDone() {
 #if defined(__WIIU__) || defined(__wiiu__)
     OSSignalEvent(&m_jobDoneEvent);
 #else
+    {
+        std::lock_guard<std::mutex> lock(m_syncMutex);
+    }
     m_jobDoneCv.notify_all();
 #endif
 }

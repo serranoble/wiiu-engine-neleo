@@ -8,6 +8,7 @@
 #include "Core/ECS/Components/ColliderComponent.hpp"
 #include "Core/ECS/Components/RigidBodyComponent.hpp"
 #include "Core/ECS/Components/KinematicCharacterComponent.hpp"
+#include "Core/Physics/SpatialHashGrid.hpp"
 
 namespace WiiU {
 
@@ -18,6 +19,8 @@ namespace WiiU {
 struct RigidBodyContact {
     Entity entityA{Entity::Null};
     Entity entityB{Entity::Null};
+    int16_t proxyIdxA{-1};                  ///< Indice cacheado O(1) en m_proxies para evitar busqueda lineal en solver.
+    int16_t proxyIdxB{-1};
     Point3D normal{0.0f, 1.0f, 0.0f};       ///< Vector unitario normal que apunta desde A hacia B.
     Point3D contactPoint{0.0f, 0.0f, 0.0f}; ///< Punto representativo de contacto en coordenadas de mundo.
     float penetration{0.0f};                ///< Profundidad de interpenetración métrica (>= 0).
@@ -193,6 +196,9 @@ private:
 
     std::array<PhysicsConstraint, MAX_CONSTRAINTS> m_constraints{};
     size_t m_constraintCount{0};
+
+    // [OPT-275] Rejilla espacial hash Zero-Alloc para fase ancha (Broadphase)
+    SpatialHashGrid m_broadphaseGrid{4.0f};
 
     PhysicsTelemetry m_telemetry{};
 };

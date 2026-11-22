@@ -38,6 +38,8 @@ struct CameraComponent {
     float aspectRatio{1280.0f / 720.0f};
     Point3D target{0.0f, 0.8f, 0.0f};
     Point3D up{0.0f, 1.0f, 0.0f};
+    Point3D lastPosition{0.0f, 0.0f, 0.0f};
+    float orthoHalfHeight{10.0f};
     Matrix4x4 viewMatrix{Matrix4x4::Identity()};
     Matrix4x4 projMatrix{Matrix4x4::Identity()};
     Matrix4x4 viewProjMatrix{Matrix4x4::Identity()};

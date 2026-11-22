@@ -4,6 +4,7 @@
 
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/clear.h>
+#include <gx2/context.h>
 #include <gx2/mem.h>
 #include <gx2/state.h>
 #include <gx2/surface.h>
@@ -65,15 +66,18 @@ struct RHIRenderPassDesc {
     RHIAccessFlags finalAccess{RHIAccessFlags::ColorAttachmentWrite | RHIAccessFlags::DepthStencilWrite};
 
 #if defined(__WIIU__) || defined(__wiiu__)
+    GX2ContextState* contextState{nullptr};
     GX2ColorBuffer* colorBuffer{nullptr};
     GX2DepthBuffer* depthBuffer{nullptr};
 #else
+    void* contextState{nullptr};
     void* colorBuffer{nullptr};
     void* depthBuffer{nullptr};
 #endif
 
     bool autoInvalidateCaches{true};
     bool autoFlushOnEnd{true};
+    bool enableHiZFastClear{true};
 };
 
 /**

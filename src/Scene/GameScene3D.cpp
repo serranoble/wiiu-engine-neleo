@@ -1,19 +1,16 @@
 #include "Scene/GameScene3D.hpp"
-#include "Graphics/GX2StateHelper.hpp"
+#include "Core/Window.hpp"
 #include "Graphics/RHI/RHIFullscreenShader.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
 #include "Core/MemoryManager.hpp"
 #include <cstring>
 
 #if defined(__WIIU__) || defined(__wiiu__)
-#include <coreinit/core.h>
 #include <proc_ui/procui.h>
 #include <gx2/mem.h>
-#include <gx2/utils.h>
 #include <gx2/registers.h>
 #include <gx2/event.h>
 #include <gx2/state.h>
-#include <gx2/draw.h>
 #include <gx2/clear.h>
 #include <gx2r/surface.h>
 #endif
@@ -22,7 +19,8 @@ namespace {
 
 void DrainGPUQueueIfForeground() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (ProcUIIsRunning() && ProcUIInForeground()) {
+    if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+        WiiU::Window::HasForeground() && !WiiU::Window::IsExitingProcUI()) {
         GX2DrawDone();
     }
 #endif
@@ -82,9 +80,9 @@ Matrix4x4 GameScene3D::GetViewProjectionMatrix() const noexcept {
     return GetProjectionMatrix() * GetViewMatrix();
 }
 
-void GameScene3D::Render(SDL_Renderer* renderer) {
+void GameScene3D::Render() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    m_pColorBuffer = GetSDL2ColorBuffer(renderer);
+    m_pColorBuffer = static_cast<GX2ColorBuffer*>(Window::GetActiveNativeColorBuffer());
     if (!m_nativeContextState || !m_pColorBuffer) {
         return;
     }
@@ -108,7 +106,10 @@ void GameScene3D::Render(SDL_Renderer* renderer) {
     float a = static_cast<float>(m_clearColor.a) / 255.0f;
     GX2ClearColor(m_pColorBuffer, r, g, b, a);
     if (m_depthBufferCreated) {
-        GX2ClearDepthStencilEx(&m_depthBuffer, 1.0f, 0, GX2_CLEAR_FLAGS_DEPTH);
+        const GX2ClearFlags clearFlags = (m_depthBuffer.hiZPtr != nullptr)
+                                         ? GX2_CLEAR_FLAGS_BOTH
+                                         : GX2_CLEAR_FLAGS_DEPTH;
+        GX2ClearDepthStencilEx(&m_depthBuffer, 1.0f, 0, clearFlags);
     }
 
     // Restaurar contexto, targets, viewport/scissor y Color Control tras GX2Clear*
@@ -122,7 +123,7 @@ void GameScene3D::Render(SDL_Renderer* renderer) {
         m_pColorBuffer, m_depthBufferCreated ? &m_depthBuffer : nullptr);
     GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
     GX2SetScissor(0, 0, 1280, 720);
-    GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
+    GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, TRUE);
     RHIPipelineCache::Instance().Invalidate();
 
     // Preparación de matrices de cámara y actualización del estado de DebugDraw3D
@@ -151,8 +152,6 @@ void GameScene3D::Render(SDL_Renderer* renderer) {
         OnGameRenderDebug3D();
         OnGameRenderHUD();
     }
-#else
-    (void)renderer;
 #endif
 }
 
@@ -161,7 +160,7 @@ bool GameScene3D::InitGX2Pipeline() {
     // 1. Inicializar shaders, samplers y estado de ForwardRendererGX2
     bool rendererOk = ForwardRendererGX2::Instance().Initialize();
 
-    // 2. Crear Búfer de Profundidad nativo en eDRAM (1280x720, D24_S8)
+    // 2. Crear Búfer de Profundidad (1280x720, D24_S8) vía GX2R (reside en MEM2 para sobrevivir transiciones ProcUI/HOME)
     if (!m_depthBufferCreated) {
         std::memset(&m_depthBuffer, 0, sizeof(GX2DepthBuffer));
         m_depthBuffer.surface.dim = GX2_SURFACE_DIM_TEXTURE_2D;
@@ -170,6 +169,7 @@ bool GameScene3D::InitGX2Pipeline() {
         m_depthBuffer.surface.depth = 1;
         m_depthBuffer.surface.mipLevels = 1;
         m_depthBuffer.surface.format = GX2_SURFACE_FORMAT_FLOAT_D24_S8;
+        m_depthBuffer.surface.aa = GX2_AA_MODE1X;
         m_depthBuffer.surface.use = GX2_SURFACE_USE_DEPTH_BUFFER;
         m_depthBuffer.surface.tileMode = GX2_TILE_MODE_DEFAULT;
         m_depthBuffer.viewNumSlices = 1; // Invariante de Latte: descarta rebanadas residuales
@@ -179,8 +179,26 @@ bool GameScene3D::InitGX2Pipeline() {
         if (GX2RCreateSurface(&m_depthBuffer.surface, static_cast<GX2RResourceFlags>(
             GX2R_RESOURCE_BIND_DEPTH_BUFFER | GX2R_RESOURCE_USAGE_GPU_WRITE | GX2R_RESOURCE_USAGE_GPU_READ
         ))) {
+            // [OPT-21 / OPT-39 / OPT-212 / OPT-267] Asignar superficie Hi-Z alineada y respetar orden Cafe OS:
+            // GX2InitDepthBufferRegs PRIMERO, GX2InitDepthBufferHiZEnable DESPUES (evita sobrescritura de db_depth_info)
+            uint32_t hiZSize = 0;
+            uint32_t hiZAlign = 0;
+            GX2CalcDepthBufferHiZInfo(&m_depthBuffer, &hiZSize, &hiZAlign);
+            bool hiZEnabled = false;
+            if (hiZSize > 0) {
+                const size_t safeAlign = (hiZAlign < 256u) ? 256u : static_cast<size_t>(hiZAlign);
+                m_hiZBuffer = MemoryManager::Instance().AllocAligned(
+                    safeAlign, hiZSize, MemoryTag::SurfaceDepth, "GameScene3D_HiZ");
+                if (m_hiZBuffer) {
+                    std::memset(m_hiZBuffer, 0, hiZSize);
+                    m_depthBuffer.hiZPtr = m_hiZBuffer;
+                    m_depthBuffer.hiZSize = hiZSize;
+                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU, m_hiZBuffer, hiZSize);
+                    hiZEnabled = true;
+                }
+            }
             GX2InitDepthBufferRegs(&m_depthBuffer);
-            GX2InitDepthBufferHiZEnable(&m_depthBuffer, FALSE); // Prevenir lectura no inicializada de HiZ
+            GX2InitDepthBufferHiZEnable(&m_depthBuffer, hiZEnabled ? TRUE : FALSE);
             m_depthBufferCreated = true;
         }
     }
@@ -213,7 +231,13 @@ void GameScene3D::DestroyGX2Pipeline() {
     // Liberación automática RAII de todas las texturas y CubeMap de la escena (GPU ya drenada)
     ReleaseSceneTextures();
 
-    // Destrucción determinista de superficie de profundidad
+    // Destrucción determinista de superficie de profundidad y Hi-Z
+    if (m_hiZBuffer) {
+        MemoryManager::Instance().FreeAligned(m_hiZBuffer);
+        m_hiZBuffer = nullptr;
+        m_depthBuffer.hiZPtr = nullptr;
+        m_depthBuffer.hiZSize = 0;
+    }
     if (m_depthBufferCreated) {
         GX2RDestroySurfaceEx(&m_depthBuffer.surface, GX2R_RESOURCE_BIND_NONE);
         m_depthBufferCreated = false;
@@ -284,6 +308,11 @@ ResourceHandle<GX2Texture> GameScene3D::CreateSceneSolidTexture(uint32_t rgba8Co
 
 bool GameScene3D::LoadSceneCubeMap(std::string_view filepath, const char* debugLabel) {
 #if defined(__WIIU__) || defined(__wiiu__)
+    if (m_sceneCubeMapCreated) {
+        DrainGPUQueueIfForeground();
+        Graphics::TextureLoaderGX2::DestroyTexture(m_sceneCubeMap);
+        m_sceneCubeMapCreated = false;
+    }
     if (Graphics::TextureLoaderGX2::LoadCookedCubeMapFromFile(filepath, m_sceneCubeMap, debugLabel)) {
         m_sceneCubeMapCreated = true;
         return true;
@@ -297,6 +326,11 @@ bool GameScene3D::LoadSceneCubeMap(std::string_view filepath, const char* debugL
 
 bool GameScene3D::LoadSceneCubeMapFromMemory(const uint8_t* data, size_t size, const char* debugLabel) {
 #if defined(__WIIU__) || defined(__wiiu__)
+    if (m_sceneCubeMapCreated) {
+        DrainGPUQueueIfForeground();
+        Graphics::TextureLoaderGX2::DestroyTexture(m_sceneCubeMap);
+        m_sceneCubeMapCreated = false;
+    }
     if (Graphics::TextureLoaderGX2::LoadCookedCubeMapFromMemory(data, size, m_sceneCubeMap, debugLabel)) {
         m_sceneCubeMapCreated = true;
         return true;

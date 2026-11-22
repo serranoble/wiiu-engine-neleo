@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <utility>
 #include <array>
-#include <algorithm>
 #include "Core/ECS/Entity.hpp"
 
 namespace WiiU {

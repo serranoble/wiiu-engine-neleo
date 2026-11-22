@@ -1,8 +1,8 @@
 #include "Audio/AudioEngine3D.hpp"
+#include "Audio/AudioManager.hpp"
+#include "Core/Config/EngineConfig.hpp"
 #include "Core/Math/PRNG.hpp"
-#include <SDL2/SDL.h>
 #include <cmath>
-#include <cstring>
 #include <algorithm>
 
 namespace WiiU {
@@ -24,7 +24,10 @@ AudioEngine3D::~AudioEngine3D() {
 bool AudioEngine3D::Init() {
     if (m_initialized) return true;
 
-    SDL_LockAudio();
+    const auto& cfg = EngineConfig::Instance();
+    const float sfxVol = cfg.audio.sfxEnabled ? cfg.audio.sfxVolume : 0.0f;
+
+    AudioManager::Instance().LockAudioDevice();
     for (size_t i = 0; i < MAX_VOICES; ++i) {
         m_voices[i] = AudioVoice{};
         m_voices[i].generation = 1;
@@ -32,7 +35,7 @@ bool AudioEngine3D::Init() {
     }
     m_listener = AudioListener3D{};
     m_stolenVoicesCounter = 0;
-    m_busVolumes = {1.0f, 0.85f, 1.0f, 0.90f};
+    m_busVolumes = {1.0f, 0.85f, sfxVol, 0.90f};
     m_duckingEnvelope = 1.0f;
     m_reverbWetMix = 0.0f;
     m_lastDopplerPitch = 1.0f;
@@ -42,7 +45,7 @@ bool AudioEngine3D::Init() {
     m_reverbCursorR = 0;
     m_reverbDampL = 0.0f;
     m_reverbDampR = 0.0f;
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
 
     GenerateProceduralClips();
 
@@ -144,7 +147,7 @@ void AudioEngine3D::GenerateProceduralClips() {
 }
 
 void AudioEngine3D::SetListener(const AudioListener3D& listener) {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     m_listener = listener;
 
     // Normalizar vectores de orientación defensivamente
@@ -176,75 +179,76 @@ void AudioEngine3D::SetListener(const AudioListener3D& listener) {
         }
     }
     m_lastDopplerPitch = trackedDoppler;
-    SDL_UnlockAudio();
+    RebalanceVirtualVoices();
+    AudioManager::Instance().UnlockAudioDevice();
 }
 
 void AudioEngine3D::SetBusVolume(AudioBus bus, float volume) {
     const size_t idx = static_cast<size_t>(bus);
     if (idx >= static_cast<size_t>(AudioBus::Count)) return;
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     m_busVolumes[idx] = std::clamp(volume, 0.0f, 1.5f);
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
 }
 
 float AudioEngine3D::GetBusVolume(AudioBus bus) const {
     const size_t idx = static_cast<size_t>(bus);
     if (idx >= static_cast<size_t>(AudioBus::Count)) return 1.0f;
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     const float vol = m_busVolumes[idx];
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return vol;
 }
 
 void AudioEngine3D::SetReverbWetMix(float wet) {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     m_reverbWetMix = std::clamp(wet, 0.0f, 0.85f);
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
 }
 
 float AudioEngine3D::GetReverbWetMix() const {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     const float wet = m_reverbWetMix;
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return wet;
 }
 
 float AudioEngine3D::GetActiveDuckingGain() const {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     const float duck = m_duckingEnvelope;
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return duck;
 }
 
 float AudioEngine3D::GetLastDopplerPitch() const {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     const float doppler = m_lastDopplerPitch;
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return doppler;
 }
 
 AudioListener3D AudioEngine3D::GetListener() const {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     AudioListener3D copy = m_listener;
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return copy;
 }
 
 void AudioEngine3D::SetSubmerged(bool isSubmerged) {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     m_listener.isSubmerged = isSubmerged;
     for (size_t i = 0; i < MAX_VOICES; ++i) {
         if (m_voices[i].active && m_voices[i].is3D) {
             CalculateVoiceGains(m_voices[i], m_listener);
         }
     }
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
 }
 
 bool AudioEngine3D::IsSubmerged() const {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     bool sub = m_listener.isSubmerged;
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return sub;
 }
 
@@ -330,6 +334,51 @@ void AudioEngine3D::CalculateVoiceGains(AudioVoice& voice, const AudioListener3D
     voice.targetGainL = std::clamp(voice.emitter.volume * distGain * panL * occVolMod, 0.0f, 1.5f);
     voice.targetGainR = std::clamp(voice.emitter.volume * distGain * panR * occVolMod, 0.0f, 1.5f);
     voice.perceivedLoudness = std::sqrt(voice.targetGainL * voice.targetGainL + voice.targetGainR * voice.targetGainR);
+    // [OPT-249] Acoustic LOD: dormir emisores fuera de rango audible
+    voice.isSleeping = (dist > voice.emitter.maxDistance * 1.15f) || (voice.perceivedLoudness < 0.002f);
+}
+
+void AudioEngine3D::RebalanceVirtualVoices() noexcept {
+    // Seleccion determinista Zero-Alloc de las top MAX_PHYSICAL_VOICES (32) voces activas
+    struct VoiceScore {
+        uint16_t index{0};
+        float score{0.0f};
+    };
+    std::array<VoiceScore, MAX_VIRTUAL_VOICES> candidates{};
+    size_t candCount = 0;
+
+    for (size_t i = 0; i < MAX_VIRTUAL_VOICES; ++i) {
+        auto& v = m_voices[i];
+        if (!v.active) continue;
+        if (v.is3D && v.isSleeping) {
+            v.isVirtualized = true;
+            continue;
+        }
+        v.isVirtualized = true;
+        const float score = static_cast<float>(v.priority) * 10.0f + v.perceivedLoudness * 100.0f;
+        candidates[candCount++] = VoiceScore{static_cast<uint16_t>(i), score};
+    }
+
+    if (candCount <= MAX_PHYSICAL_VOICES) {
+        for (size_t i = 0; i < candCount; ++i) {
+            m_voices[candidates[i].index].isVirtualized = false;
+        }
+        return;
+    }
+
+    // Seleccion parcial de las 32 voces mas importantes (O(N * 32) sin heap)
+    for (size_t k = 0; k < MAX_PHYSICAL_VOICES; ++k) {
+        size_t best = k;
+        for (size_t j = k + 1; j < candCount; ++j) {
+            if (candidates[j].score > candidates[best].score) {
+                best = j;
+            }
+        }
+        if (best != k) {
+            std::swap(candidates[k], candidates[best]);
+        }
+        m_voices[candidates[k].index].isVirtualized = false;
+    }
 }
 
 size_t AudioEngine3D::AllocateVoice(uint8_t priority, float perceivedLoudness) {
@@ -371,14 +420,14 @@ size_t AudioEngine3D::AllocateVoice(uint8_t priority, float perceivedLoudness) {
 SoundHandle AudioEngine3D::PlaySound3D(const SoundClip& clip, const AudioEmitter3D& emitter) {
     if (clip.samples.empty()) return SoundHandle{};
 
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     AudioVoice tempVoice{};
     tempVoice.emitter = emitter;
     CalculateVoiceGains(tempVoice, m_listener);
 
     size_t voiceIdx = AllocateVoice(emitter.priority, tempVoice.perceivedLoudness);
     if (voiceIdx >= MAX_VOICES) {
-        SDL_UnlockAudio();
+        AudioManager::Instance().UnlockAudioDevice();
         return SoundHandle{};
     }
 
@@ -406,19 +455,22 @@ SoundHandle AudioEngine3D::PlaySound3D(const SoundClip& clip, const AudioEmitter
     voice.lpfStateR = 0.0f;
     voice.distanceToListener = tempVoice.distanceToListener;
     voice.perceivedLoudness = tempVoice.perceivedLoudness;
+    voice.isSleeping = tempVoice.isSleeping;
+    voice.isVirtualized = false;
 
+    RebalanceVirtualVoices();
     SoundHandle handle{static_cast<uint16_t>(voiceIdx), voice.generation};
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return handle;
 }
 
 SoundHandle AudioEngine3D::PlaySound2D(const SoundClip& clip, float volume, bool loop, uint8_t priority, AudioBus bus) {
     if (clip.samples.empty()) return SoundHandle{};
 
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     size_t voiceIdx = AllocateVoice(priority, volume);
     if (voiceIdx >= MAX_VOICES) {
-        SDL_UnlockAudio();
+        AudioManager::Instance().UnlockAudioDevice();
         return SoundHandle{};
     }
 
@@ -444,16 +496,19 @@ SoundHandle AudioEngine3D::PlaySound2D(const SoundClip& clip, float volume, bool
     voice.lpfStateL = 0.0f;
     voice.lpfStateR = 0.0f;
     voice.perceivedLoudness = vol;
+    voice.isSleeping = false;
+    voice.isVirtualized = false;
 
+    RebalanceVirtualVoices();
     SoundHandle handle{static_cast<uint16_t>(voiceIdx), voice.generation};
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return handle;
 }
 
 void AudioEngine3D::UpdateEmitter(SoundHandle handle, const AudioEmitter3D& emitter) {
     if (!handle.IsValid() || handle.voiceIndex >= MAX_VOICES) return;
 
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     auto& voice = m_voices[handle.voiceIndex];
     if (voice.active && voice.generation == handle.generation && voice.is3D) {
         voice.emitter = emitter;
@@ -462,37 +517,37 @@ void AudioEngine3D::UpdateEmitter(SoundHandle handle, const AudioEmitter3D& emit
         voice.bus = emitter.bus;
         CalculateVoiceGains(voice, m_listener);
     }
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
 }
 
 void AudioEngine3D::StopSound(SoundHandle handle) {
     if (!handle.IsValid() || handle.voiceIndex >= MAX_VOICES) return;
 
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     auto& voice = m_voices[handle.voiceIndex];
     if (voice.active && voice.generation == handle.generation) {
         voice.active = false;
         voice.clip = nullptr;
     }
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
 }
 
 void AudioEngine3D::StopAllSounds() {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     for (size_t i = 0; i < MAX_VOICES; ++i) {
         m_voices[i].active = false;
         m_voices[i].clip = nullptr;
     }
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
 }
 
 bool AudioEngine3D::IsPlaying(SoundHandle handle) const {
     if (!handle.IsValid() || handle.voiceIndex >= MAX_VOICES) return false;
 
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     const auto& voice = m_voices[handle.voiceIndex];
     bool playing = (voice.active && voice.generation == handle.generation);
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return playing;
 }
 
@@ -503,7 +558,8 @@ void AudioEngine3D::MixAudio(int16_t* outStereoStream, int numFrames, float mast
     bool hasDuckingTrigger = false;
     for (size_t v = 0; v < MAX_VOICES; ++v) {
         const auto& voice = m_voices[v];
-        if (voice.active && voice.bus == AudioBus::SFX && voice.priority >= 60 &&
+        if (voice.active && !voice.isVirtualized && !voice.isSleeping &&
+            voice.bus == AudioBus::SFX && voice.priority >= 60 &&
             (voice.currentGainL + voice.currentGainR) > 0.02f) {
             hasDuckingTrigger = true;
             break;
@@ -541,9 +597,23 @@ void AudioEngine3D::MixAudio(int16_t* outStereoStream, int numFrames, float mast
                 continue;
             }
             const float totalFramesF = static_cast<float>(totalFrames);
+            const float phaseStep = std::max(0.25f, voice.dopplerPitch);
+
+            // [OPT-224 / OPT-249] Voces virtualizadas o en sueno acustico avanzan su reloj en O(1) sin DSP
+            if (voice.isVirtualized || voice.isSleeping) {
+                voice.samplePhase += phaseStep * static_cast<float>(chunkFrames);
+                if (voice.samplePhase >= totalFramesF) {
+                    if (voice.isLooping) {
+                        voice.samplePhase = std::fmod(voice.samplePhase, totalFramesF);
+                    } else {
+                        voice.active = false;
+                    }
+                }
+                continue;
+            }
+
             const int channels = voice.clip->channels;
             const float alpha = voice.lpfAlpha;
-            const float phaseStep = std::max(0.25f, voice.dopplerPitch);
 
             const size_t busIdx = std::min(static_cast<size_t>(voice.bus), static_cast<size_t>(AudioBus::Ambience));
             const bool duckedBus = (voice.bus == AudioBus::BGM || voice.bus == AudioBus::Ambience);
@@ -653,9 +723,10 @@ void AudioEngine3D::MixAudio(int16_t* outStereoStream, int numFrames, float mast
 }
 
 AudioEngineTelemetry AudioEngine3D::GetTelemetry() const {
-    SDL_LockAudio();
+    AudioManager::Instance().LockAudioDevice();
     AudioEngineTelemetry telem{};
-    telem.totalVoices = MAX_VOICES;
+    telem.totalVoices = MAX_PHYSICAL_VOICES;
+    telem.maxVirtualVoices = MAX_VIRTUAL_VOICES;
     telem.stolenVoicesTotal = m_stolenVoicesCounter;
     telem.listenerX = m_listener.position.x;
     telem.listenerY = m_listener.position.y;
@@ -664,13 +735,19 @@ AudioEngineTelemetry AudioEngine3D::GetTelemetry() const {
 
     for (size_t i = 0; i < MAX_VOICES; ++i) {
         if (m_voices[i].active) {
-            telem.activeVoices++;
+            if (m_voices[i].isSleeping) {
+                telem.sleepingVoices++;
+            } else if (m_voices[i].isVirtualized) {
+                telem.virtualizedVoices++;
+            } else {
+                telem.activeVoices++;
+            }
             if (m_voices[i].is3D) {
                 telem.maxOcclusionInScene = std::max(telem.maxOcclusionInScene, m_voices[i].emitter.occlusion);
             }
         }
     }
-    SDL_UnlockAudio();
+    AudioManager::Instance().UnlockAudioDevice();
     return telem;
 }
 
