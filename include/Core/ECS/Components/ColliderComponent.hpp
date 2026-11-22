@@ -43,7 +43,7 @@ enum class ColliderShape : uint8_t {
  * - Esfera vs Esfera: Distancia euclídea al cuadrado (Christer Ericson, Cap. 4.3.1).
  * - Esfera vs AABB: Algoritmo de James Arvo (Graphics Gems 1990) y Christer Ericson (Cap. 5.1.3).
  */
-struct ColliderComponent {
+struct alignas(32) ColliderComponent {
     Point3D localOffset{0.0f, 0.0f, 0.0f};      ///< Desplazamiento local respecto a `TransformComponent::position`.
     Point3D halfExtents{0.5f, 0.5f, 0.5f};      ///< Semiextensiones $(\Delta x, \Delta y, \Delta z)$ cuando `shape == AABB`.
     float radius{0.5f};                         ///< Radio métrico de la esfera envolvente cuando `shape == Sphere`.

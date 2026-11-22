@@ -21,26 +21,35 @@ void TransformSystem::Update(ECSWorld& world) {
         transform.isDirty = false;
     });
 
-    // Pase 2: Resolución de Jerarquías Padre-Hijo (OPT-254 Flat Scene Graph)
-    world.ForEach<TransformComponent, HierarchyComponent>(
-        [&world](Entity /*entity*/, TransformComponent& childTransform, const HierarchyComponent& hierarchy) {
-            if (!hierarchy.HasParent()) {
-                return;
-            }
-
-            const auto* parentTransform = world.GetComponent<TransformComponent>(hierarchy.parent);
-            if (!parentTransform) {
-                return;
-            }
-
-            // Componer matriz de mundo del hijo multiplicando la del padre por el TRS local del hijo
-            Matrix4x4 localTRS = Matrix4x4::Translation(childTransform.position.x, childTransform.position.y, childTransform.position.z)
-                               * (Matrix4x4::RotationY(childTransform.rotation.y) * (Matrix4x4::RotationX(childTransform.rotation.x) * Matrix4x4::RotationZ(childTransform.rotation.z)))
-                               * Matrix4x4::Scale(childTransform.scale.x, childTransform.scale.y, childTransform.scale.z);
-
-            childTransform.worldMatrix = parentTransform->worldMatrix * localTRS;
+    // Pase 2: Resolución de Jerarquías Padre-Hijo en orden ascendente de profundidad (OPT-254 Flat Scene Graph)
+    uint16_t maxDepth = 0;
+    world.ForEach<HierarchyComponent>([&maxDepth](Entity /*entity*/, const HierarchyComponent& h) {
+        if (h.HasParent() && h.depth > maxDepth) {
+            maxDepth = h.depth;
         }
-    );
+    });
+
+    for (uint16_t currentDepth = 1; currentDepth <= maxDepth; ++currentDepth) {
+        world.ForEach<TransformComponent, HierarchyComponent>(
+            [&world, currentDepth](Entity /*entity*/, TransformComponent& childTransform, const HierarchyComponent& hierarchy) {
+                if (!hierarchy.HasParent() || hierarchy.depth != currentDepth) {
+                    return;
+                }
+
+                const auto* parentTransform = world.GetComponent<TransformComponent>(hierarchy.parent);
+                if (!parentTransform) {
+                    return;
+                }
+
+                // Componer matriz de mundo del hijo multiplicando la del padre por el TRS local del hijo
+                Matrix4x4 localTRS = Matrix4x4::Translation(childTransform.position.x, childTransform.position.y, childTransform.position.z)
+                                   * (Matrix4x4::RotationY(childTransform.rotation.y) * (Matrix4x4::RotationX(childTransform.rotation.x) * Matrix4x4::RotationZ(childTransform.rotation.z)))
+                                   * Matrix4x4::Scale(childTransform.scale.x, childTransform.scale.y, childTransform.scale.z);
+
+                childTransform.worldMatrix = parentTransform->worldMatrix * localTRS;
+            }
+        );
+    }
 }
 
 } // namespace WiiU

@@ -6,7 +6,13 @@
 #include "Core/MemoryManager.hpp"
 #include <cmath>
 #include <cstring>
-#include <malloc.h>
+
+#if defined(__WIIU__) || defined(__wiiu__)
+#include "Core/Window.hpp"
+#include <gx2/event.h>
+#include <gx2/state.h>
+#include <proc_ui/procui.h>
+#endif
 
 namespace WiiU {
 
@@ -97,20 +103,28 @@ bool Render2DGX2::Init() {
     if (m_shaderLoaded && !m_bufferCreated) {
         bool allBuffersOk = true;
         for (size_t i = 0; i < BUFFER_SLOTS; ++i) {
+            std::memset(&m_vertexBuffers[i], 0, sizeof(GX2RBuffer));
             m_vertexBuffers[i].flags = static_cast<GX2RResourceFlags>(
                 GX2R_RESOURCE_BIND_VERTEX_BUFFER | GX2R_RESOURCE_USAGE_CPU_WRITE | GX2R_RESOURCE_USAGE_GPU_READ);
             m_vertexBuffers[i].elemSize = sizeof(Render2DVertexGX2);
             m_vertexBuffers[i].elemCount = static_cast<uint32_t>(MAX_VERTICES);
 
-            if (!GX2RCreateBuffer(&m_vertexBuffers[i])) {
+            if (GX2RCreateBuffer(&m_vertexBuffers[i])) {
+                m_bufferSlotCreated[i] = true;
+            } else {
+                m_bufferSlotCreated[i] = false;
                 allBuffersOk = false;
             }
         }
         m_bufferCreated = allBuffersOk;
         m_currentBufferSlot = 0;
+        m_bufferVertexOffset = 0;
     }
 
     m_initialized = (m_shaderLoaded && m_bufferCreated);
+    if (!m_initialized) {
+        Shutdown();
+    }
     return m_initialized;
 #else
     m_initialized = true;
@@ -120,23 +134,33 @@ bool Render2DGX2::Init() {
 
 void Render2DGX2::Shutdown() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (m_bufferCreated) {
-        for (size_t i = 0; i < BUFFER_SLOTS; ++i) {
-            GX2RDestroyBufferEx(&m_vertexBuffers[i], GX2R_RESOURCE_BIND_NONE);
-        }
-        m_bufferCreated = false;
-        m_currentBufferSlot = 0;
+    bool hasGpuResources = m_shaderLoaded || m_directVs || m_directPs || m_directFsProgram;
+    for (size_t i = 0; i < BUFFER_SLOTS; ++i) {
+        if (m_bufferSlotCreated[i]) hasGpuResources = true;
+    }
+    if (hasGpuResources && ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+        Window::HasForeground() && !Window::IsExitingProcUI()) {
+        GX2DrawDone();
     }
 
-    if (m_useDirectGFD) {
-        if (m_directFsProgram) { MemoryManager::Instance().FreeAligned(m_directFsProgram); }
-        if (m_directPsProgram) { MemoryManager::Instance().FreeAligned(m_directPsProgram); }
-        if (m_directPs) { void* raw = static_cast<void*>(m_directPs); MemoryManager::Instance().Free(raw); m_directPs = nullptr; }
-        if (m_directVsProgram) { MemoryManager::Instance().FreeAligned(m_directVsProgram); }
-        if (m_directVs) { void* raw = static_cast<void*>(m_directVs); MemoryManager::Instance().Free(raw); m_directVs = nullptr; }
-        m_useDirectGFD = false;
-        m_shaderLoaded = false;
+    for (size_t i = 0; i < BUFFER_SLOTS; ++i) {
+        if (m_bufferSlotCreated[i]) {
+            GX2RDestroyBufferEx(&m_vertexBuffers[i], GX2R_RESOURCE_BIND_NONE);
+            std::memset(&m_vertexBuffers[i], 0, sizeof(GX2RBuffer));
+            m_bufferSlotCreated[i] = false;
+        }
     }
+    m_bufferCreated = false;
+    m_currentBufferSlot = 0;
+    m_bufferVertexOffset = 0;
+
+    if (m_directFsProgram) { MemoryManager::Instance().FreeAligned(m_directFsProgram); m_directFsProgram = nullptr; }
+    if (m_directPsProgram) { MemoryManager::Instance().FreeAligned(m_directPsProgram); m_directPsProgram = nullptr; }
+    if (m_directPs)        { void* raw = static_cast<void*>(m_directPs); MemoryManager::Instance().Free(raw); m_directPs = nullptr; }
+    if (m_directVsProgram) { MemoryManager::Instance().FreeAligned(m_directVsProgram); m_directVsProgram = nullptr; }
+    if (m_directVs)        { void* raw = static_cast<void*>(m_directVs); MemoryManager::Instance().Free(raw); m_directVs = nullptr; }
+    m_useDirectGFD = false;
+    m_shaderLoaded = false;
 #endif
     m_vertexBatch.clear();
     m_vertexBatch.shrink_to_fit();
@@ -153,7 +177,8 @@ void Render2DGX2::Begin() {
 #if defined(__WIIU__) || defined(__wiiu__)
     if (!m_shaderLoaded || !m_bufferCreated || !m_useDirectGFD || !m_directVs || !m_directPs) return;
 
-    // 1. Vincular Fetch Shader y Shaders de Vértices y Píxeles
+    // 1. Asegurar modo de registros uniformes y vincular shaders
+    GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
     GX2SetFetchShader(&m_directFetchShader);
     GX2SetVertexShader(m_directVs);
     GX2SetPixelShader(m_directPs);
@@ -179,10 +204,10 @@ void Render2DGX2::Begin() {
     psUniforms[12] = 1.0f; psUniforms[13] = 1.0f; psUniforms[14] = 1.0f; psUniforms[15] = 0.0f;
     GX2SetPixelUniformReg(0, 16, psUniforms);
 
-    // 4. Estados de Rasterización para UI 2D Superpuesta mediante RHI Pipeline Cache
+    // 4. Estados de Rasterización para UI 2D Superpuesta mediante RHI Pipeline Cache (RT0 blend = 0x01)
+    RHIPipelineCache::Instance().Invalidate();
     RHIPipelineState state(false, false, RHI_COMPARE_ALWAYS, BlendMode::AlphaBlend, false, RHI_FRONT_FACE_CCW);
     RHIPipelineCache::Instance().BindState(state);
-    GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
 
     GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
     GX2SetScissor(0, 0, 1280, 720);
@@ -393,24 +418,52 @@ void Render2DGX2::End() {
         return;
     }
 
-    // Subir vértices acumulados al búfer de vértices activo en VRAM (Double-Buffering Ping-Pong)
+    const uint32_t vertCount = static_cast<uint32_t>(m_vertexBatch.size());
+    if (vertCount > static_cast<uint32_t>(MAX_VERTICES)) {
+        m_vertexBatch.clear();
+        RHIPipelineCache::Instance().Invalidate();
+        return;
+    }
+
+    if (m_bufferVertexOffset + vertCount > static_cast<uint32_t>(MAX_VERTICES)) {
+        if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+            Window::HasForeground() && !Window::IsExitingProcUI()) {
+            GX2DrawDone();
+        }
+        m_currentBufferSlot = (m_currentBufferSlot + 1u) % BUFFER_SLOTS;
+        m_bufferVertexOffset = 0u;
+    }
+
+    // Subir vértices acumulados al sub-rango libre del búfer activo en VRAM (Triple-Buffering)
     GX2RBuffer& activeBuf = m_vertexBuffers[m_currentBufferSlot];
     void* ptr = GX2RLockBufferEx(&activeBuf, GX2R_RESOURCE_BIND_NONE);
     if (ptr) {
-        std::memcpy(ptr, m_vertexBatch.data(), m_vertexBatch.size() * sizeof(Render2DVertexGX2));
-        GX2RUnlockBufferEx(&activeBuf, GX2R_RESOURCE_BIND_NONE);
+        uint8_t* dst = static_cast<uint8_t*>(ptr) +
+                       static_cast<size_t>(m_bufferVertexOffset) * sizeof(Render2DVertexGX2);
+        const uint32_t byteSize = static_cast<uint32_t>(vertCount * sizeof(Render2DVertexGX2));
+        std::memcpy(dst, m_vertexBatch.data(), byteSize);
+        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_ATTRIBUTE_BUFFER, dst, byteSize);
+        GX2RUnlockBufferEx(&activeBuf, GX2R_RESOURCE_DISABLE_CPU_INVALIDATE);
 
-        // Vincular búfer de atributos y emitir 1 sola llamada GPU
+        // Vincular búfer de atributos y emitir 1 sola llamada GPU desde el offset del pase
         GX2RSetAttributeBuffer(&activeBuf, 0, sizeof(Render2DVertexGX2), 0);
-        GX2DrawEx(GX2_PRIMITIVE_MODE_TRIANGLES, static_cast<uint32_t>(m_vertexBatch.size()), 0, 1);
+        GX2DrawEx(GX2_PRIMITIVE_MODE_TRIANGLES, vertCount, m_bufferVertexOffset, 1);
         GX2Flush();
 
-        // Avanzar ranura de búfer circular para el siguiente fotograma
-        m_currentBufferSlot = (m_currentBufferSlot + 1) % BUFFER_SLOTS;
+        m_bufferVertexOffset += vertCount;
     }
     RHIPipelineCache::Instance().Invalidate();
 #endif
     m_vertexBatch.clear();
+}
+
+void Render2DGX2::NextFrame() noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (m_bufferVertexOffset > 0u) {
+        m_currentBufferSlot = (m_currentBufferSlot + 1u) % BUFFER_SLOTS;
+        m_bufferVertexOffset = 0u;
+    }
+#endif
 }
 
 } // namespace WiiU

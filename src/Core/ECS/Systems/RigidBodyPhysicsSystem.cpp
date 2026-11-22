@@ -263,10 +263,42 @@ void RigidBodyPhysicsSystem::IntegrateVelocities(float dt) noexcept {
 
 void RigidBodyPhysicsSystem::GenerateContacts() noexcept {
     m_contactCount = 0;
+    if (m_proxyCount < 2) return;
+
+    // [OPT-275] Fase Ancha (Broadphase) mediante SpatialHashGrid Zero-Alloc O(N) amortizado
+    m_broadphaseGrid.Clear();
+    for (size_t i = 0; i < m_proxyCount; ++i) {
+        const BodyProxy& p = m_proxies[i];
+        const Point3D c = p.transform->position + p.collider->localOffset;
+        if (p.collider->shape == ColliderShape::Sphere) {
+            m_broadphaseGrid.InsertSphere(static_cast<uint32_t>(i), c, p.collider->radius);
+        } else {
+            m_broadphaseGrid.Insert(static_cast<uint32_t>(i),
+                                    c - p.collider->halfExtents,
+                                    c + p.collider->halfExtents);
+        }
+    }
+
+    uint32_t candidates[MAX_BODY_PROXIES]{};
 
     for (size_t i = 0; i < m_proxyCount; ++i) {
         const BodyProxy& a = m_proxies[i];
-        for (size_t j = i + 1; j < m_proxyCount; ++j) {
+        const Point3D centerA = a.transform->position + a.collider->localOffset;
+
+        size_t candCount = 0;
+        if (a.collider->shape == ColliderShape::Sphere) {
+            candCount = m_broadphaseGrid.QuerySphere(centerA, a.collider->radius, candidates, MAX_BODY_PROXIES);
+        } else {
+            candCount = m_broadphaseGrid.QueryAABB(centerA - a.collider->halfExtents,
+                                                   centerA + a.collider->halfExtents,
+                                                   candidates, MAX_BODY_PROXIES);
+        }
+
+        for (size_t ci = 0; ci < candCount; ++ci) {
+            const size_t j = static_cast<size_t>(candidates[ci]);
+            if (j <= i || j >= m_proxyCount) {
+                continue;
+            }
             if (m_contactCount >= MAX_CONTACTS) {
                 return;
             }
@@ -290,7 +322,6 @@ void RigidBodyPhysicsSystem::GenerateContacts() noexcept {
                 continue;
             }
 
-            const Point3D centerA = a.transform->position + a.collider->localOffset;
             const Point3D centerB = b.transform->position + b.collider->localOffset;
 
             Point3D normalAB{0.0f, 1.0f, 0.0f};
@@ -329,6 +360,8 @@ void RigidBodyPhysicsSystem::GenerateContacts() noexcept {
                 RigidBodyContact& c = m_contacts[m_contactCount++];
                 c.entityA = a.entity;
                 c.entityB = b.entity;
+                c.proxyIdxA = static_cast<int16_t>(i);
+                c.proxyIdxB = static_cast<int16_t>(j);
                 c.normal = normalAB;
                 c.contactPoint = contactPt;
                 c.penetration = penetration;
@@ -464,8 +497,10 @@ void RigidBodyPhysicsSystem::SolveVelocityContacts(float dt) noexcept {
     for (uint32_t iter = 0; iter < m_solverIterations; ++iter) {
         for (size_t ci = 0; ci < m_contactCount; ++ci) {
             RigidBodyContact& c = m_contacts[ci];
-            const int32_t idxA = FindProxyIndex(c.entityA);
-            const int32_t idxB = FindProxyIndex(c.entityB);
+            const int32_t idxA = (c.proxyIdxA >= 0 && static_cast<size_t>(c.proxyIdxA) < m_proxyCount)
+                                 ? static_cast<int32_t>(c.proxyIdxA) : FindProxyIndex(c.entityA);
+            const int32_t idxB = (c.proxyIdxB >= 0 && static_cast<size_t>(c.proxyIdxB) < m_proxyCount)
+                                 ? static_cast<int32_t>(c.proxyIdxB) : FindProxyIndex(c.entityB);
             if (idxA < 0 || idxB < 0) continue;
 
             BodyProxy& pA = m_proxies[static_cast<size_t>(idxA)];

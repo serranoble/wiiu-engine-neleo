@@ -7,16 +7,9 @@
 #include "Core/ECS/Components/CameraComponent.hpp"
 #include "Core/ECS/Components/HierarchyComponent.hpp"
 #include "Core/ECS/Systems/TransformSystem.hpp"
-#include "Core/ECS/Systems/AudioSpatialSystem.hpp"
 #include "Core/ECS/Systems/CameraSystem.hpp"
 #include "Core/ECS/Components/BoundingVolumeComponent.hpp"
-#include "Core/ECS/Components/KinematicCharacterComponent.hpp"
 #include "Core/ECS/Systems/CullingSystem.hpp"
-#include "Core/ECS/Systems/KinematicCharacterSystem.hpp"
-#include "Graphics/RHI/RHIPipelineState.hpp"
-#include "Graphics/RHI/RHIPipelineCache.hpp"
-#include "Graphics/RHI/RHIRenderPass.hpp"
-#include "Graphics/RHI/DisplayCompositor.hpp"
 #include <cstdio>
 
 namespace WiiU {
@@ -253,12 +246,9 @@ bool ECSWorld::VerifyECSIntegrity() {
         return false;
     }
 
-    // Ejecución de AudioSpatialSystem: sincronización de posición espacial hacia AudioEmitter3D
-    AudioSpatialSystem::Update(testWorld);
-    if (audioComp.emitter.position.x != 5.0f || audioComp.emitter.position.y != 10.0f || audioComp.emitter.position.z != 15.0f) {
-        std::printf("[ECSWorld] ERROR: AudioSpatialSystem no sincronizó la posición de Transform hacia AudioEmitter3D.\n");
-        return false;
-    }
+    // Nota: las pruebas de integracion cruzada (AudioSpatialSystem, RHI, KCC) residen en engine_framework (Engine::Init)
+    // para mantener engine_core 100% libre de dependencias circulares.
+    (void)audioComp;
 
     // 10. Verificación de Optimizaciones Pendientes (Hito 71: OPT-252, OPT-253, OPT-254)
     // 10.1 OPT-252: MaterialComponent (POD y parámetros de pipeline)
@@ -305,29 +295,7 @@ bool ECSWorld::VerifyECSIntegrity() {
         return false;
     }
 
-    // 11. Verificación de Optimizaciones Hito 72 (OPT-255, OPT-256, OPT-257)
-    // 11.1 OPT-255: RHIPipelineState y RHIPipelineCache
-    auto& rhiCache = RHIPipelineCache::Instance();
-    rhiCache.Invalidate();
-    rhiCache.ResetStats();
-    RHIPipelineState stateA(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, true, 0);
-    uint64_t hashA = stateA.GetHash();
-    if (hashA == 0xFFFFFFFFFFFFFFFFULL || hashA == 0) {
-        std::printf("[ECSWorld] ERROR: RHIPipelineState generó un hash inválido.\n");
-        return false;
-    }
-    rhiCache.BindState(stateA);
-    if (rhiCache.GetStateChanges() != 1 || rhiCache.GetRedundantBypasses() != 0) {
-        std::printf("[ECSWorld] ERROR: RHIPipelineCache primera llamada no registró 1 cambio y 0 bypasses.\n");
-        return false;
-    }
-    rhiCache.BindState(stateA);
-    if (rhiCache.GetRedundantBypasses() != 1) {
-        std::printf("[ECSWorld] ERROR: RHIPipelineCache no evitó la llamada redundante (bypass fallido).\n");
-        return false;
-    }
-
-    // 11.2 OPT-256: BoundingVolumeComponent y CullingSystem
+    // 11. Verificación de CullingSystem y BoundingVolumeComponent (OPT-256)
     Entity culledEntity = testWorld.CreateEntity();
     auto& cullTrans = testWorld.EmplaceComponent<TransformComponent>(culledEntity, Point3D{0.0f, 0.0f, 0.0f});
     auto& cullMesh = testWorld.EmplaceComponent<MeshComponent>(culledEntity);
@@ -353,97 +321,17 @@ bool ECSWorld::VerifyECSIntegrity() {
         return false;
     }
 
-    // Probar CullingSystem::UpdateParallel con JobSystem multihilo en Core 2
+    // Probar CullingSystem::UpdateParallel
     cullTrans.position = Point3D{0.0f, 0.0f, 0.0f};
     cullTrans.isDirty = true;
     TransformSystem::Update(testWorld);
     CullingSystem::UpdateParallel(testWorld, cam, 1280.0f, 720.0f);
     if (cullBound.isCulled || !cullMesh.isVisible) {
-        std::printf("[ECSWorld] ERROR: CullingSystem::UpdateParallel falló al procesar entidad visible en Core 2.\n");
+        std::printf("[ECSWorld] ERROR: CullingSystem::UpdateParallel falló al procesar entidad visible.\n");
         return false;
     }
 
-    // 11.3 OPT-257: DisplayCompositor y Viewport Asimétrico
-    auto& comp = DisplayCompositor::Instance();
-    comp.SetMode(CompositorMode::TVOnly);
-    if (comp.GetMode() != CompositorMode::TVOnly) {
-        std::printf("[ECSWorld] ERROR: DisplayCompositor no retuvo el modo TVOnly.\n");
-        return false;
-    }
-    comp.CycleMode();
-    if (comp.GetMode() != CompositorMode::DRCOnly) {
-        std::printf("[ECSWorld] ERROR: DisplayCompositor no avanzó a DRCOnly.\n");
-        return false;
-    }
-    comp.CycleMode();
-    if (comp.GetMode() != CompositorMode::PictureInPicture) {
-        std::printf("[ECSWorld] ERROR: DisplayCompositor no avanzó a PictureInPicture.\n");
-        return false;
-    }
-    comp.CycleMode();
-    if (comp.GetMode() != CompositorMode::SplitDualView) {
-        std::printf("[ECSWorld] ERROR: DisplayCompositor no avanzó a SplitDualView.\n");
-        return false;
-    }
-    comp.CycleMode();
-    if (comp.GetMode() != CompositorMode::TVOnly) {
-        std::printf("[ECSWorld] ERROR: DisplayCompositor ciclo no retornó a TVOnly.\n");
-        return false;
-    }
-
-    // 12. Verificación de Optimizaciones Hito 74 (OPT-262, OPT-264, OPT-265, OPT-266)
-    // 12.1 OPT-262: Validación de Silicio (Silicon State Guard)
-    RHIPipelineState validState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque);
-    if (validState.Validate() != RHIValidationResult::Valid || !validState.IsValid()) {
-        std::printf("[ECSWorld] ERROR: RHIPipelineState válido fue marcado erróneamente como inválido (OPT-262).\n");
-        return false;
-    }
-    RHIPipelineState invalidDepthState(true, true, 8, BlendMode::Opaque);
-    if (invalidDepthState.Validate() != RHIValidationResult::InvalidDepthFunc || invalidDepthState.IsValid()) {
-        std::printf("[ECSWorld] ERROR: Silicon State Guard no detectó depthFunc > 7 (OPT-262).\n");
-        return false;
-    }
-    RHIPipelineState hazardState(true, true, RHI_COMPARE_ALWAYS, BlendMode::AlphaBlend);
-    if (hazardState.Validate() != RHIValidationResult::HazardDepthWriteAlways) {
-        std::printf("[ECSWorld] ERROR: Silicon State Guard no detectó riesgo DepthWrite+ALWAYS en AlphaBlend (OPT-262).\n");
-        return false;
-    }
-
-    // 12.2 OPT-264: Type-Safe Bitmask-Driven Dirty Flags
-    RHIPipelineState sDiff1(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false, RHI_FRONT_FACE_CCW);
-    RHIPipelineState sDiff2(true, false, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false, RHI_FRONT_FACE_CCW);
-    RHIStateBits diffBits = sDiff1.ComputeDiff(sDiff2);
-    if (diffBits != RHIStateBits::DepthWrite || !HasAny(diffBits, RHIStateBits::AllDepth) || HasAny(diffBits, RHIStateBits::AllBlend)) {
-        std::printf("[ECSWorld] ERROR: ComputeDiff no calculó con precisión la máscara de bits diferencial (OPT-264).\n");
-        return false;
-    }
-    rhiCache.BindState(sDiff1);
-    rhiCache.BindState(sDiff2);
-    if (rhiCache.GetLastDirtyBits() != RHIStateBits::DepthWrite) {
-        std::printf("[ECSWorld] ERROR: RHIPipelineCache no registró la máscara de dirty bits esperada (OPT-264).\n");
-        return false;
-    }
-
-    // 12.3 OPT-265: Declarative Render Pass & Automatic Barrier Tracking
-    RHIRenderPass::ResetStats();
-    RHIRenderPassDesc passDesc{};
-    passDesc.name = "TestPass";
-    passDesc.colorLoadAction = RHILoadAction::Clear;
-    passDesc.initialAccess = RHIAccessFlags::ShaderResourceRead;
-    passDesc.finalAccess = RHIAccessFlags::ColorAttachmentWrite;
-    {
-        ScopedRenderPass passScope(passDesc);
-        if (!RHIRenderPass::IsInsidePass() || RHIRenderPass::GetPassCount() != 1) {
-            std::printf("[ECSWorld] ERROR: ScopedRenderPass no activó correctamente el pase de render (OPT-265).\n");
-            return false;
-        }
-    }
-    if (RHIRenderPass::IsInsidePass()) {
-        std::printf("[ECSWorld] ERROR: ScopedRenderPass no cerró el pase en su destructor RAII (OPT-265).\n");
-        return false;
-    }
-
-    // 12.4 OPT-266: StrongId y Tipado Fuerte de Entidades
+    // 12. OPT-266: StrongId y Tipado Fuerte de Entidades
     StrongEntityId strongE1 = e1.ToStrongId();
     if (!strongE1.IsValid() || strongE1.Get() != e1.id) {
         std::printf("[ECSWorld] ERROR: Conversión Entity a StrongEntityId falló (OPT-266).\n");
@@ -461,71 +349,7 @@ bool ECSWorld::VerifyECSIntegrity() {
         return false;
     }
 
-    // 13. Verificación de Hito 4: Kinematic Character Controller (KCC) y Acústica LPF (OPT-207)
-    // 13.1 Creación de entidad de jugador y configuración de KCC
-    Entity playerTest = testWorld.CreateEntity();
-    auto& pTrans = testWorld.EmplaceComponent<TransformComponent>(playerTest, Point3D{0.0f, 10.0f, 0.0f}); // Elevado en el aire
-    auto& pKcc = testWorld.EmplaceComponent<KinematicCharacterComponent>(playerTest, 0.35f, 1.75f, 4.0f, 7.5f, 5.8f, 16.0f);
-
-    if (pKcc.isGrounded || pKcc.horizontalSpeed != 0.0f) {
-        std::printf("[ECSWorld] ERROR: KinematicCharacterComponent estado inicial inconsistente (OPT-207).\n");
-        return false;
-    }
-
-    // 13.2 Simulación de gravedad en el aire
-    KinematicCharacterSystem::Update(testWorld, 0.02f);
-    if (pKcc.velocity.y >= 0.0f || pKcc.isGrounded) {
-        std::printf("[ECSWorld] ERROR: KCC no aplicó gravedad en el aire (OPT-207).\n");
-        return false;
-    }
-
-    // 13.3 Apoyo y encaje en suelo (Grounded Detection)
-    float groundAtOrigin = KinematicCharacterSystem::GetTerrainHeight(0.0f, 0.0f);
-    pTrans.position = Point3D{0.0f, groundAtOrigin + 0.875f, 0.0f};
-    pKcc.velocity = Point3D{0.0f, 0.0f, 0.0f};
-    KinematicCharacterSystem::Update(testWorld, 0.02f);
-    if (!pKcc.isGrounded || pKcc.velocity.y != 0.0f) {
-        std::printf("[ECSWorld] ERROR: KCC no detectó apoyo firme en suelo transitable (OPT-207).\n");
-        return false;
-    }
-
-    // 13.4 Impulso cinemático de salto (Jump Physics)
-    pKcc.RequestJump();
-    KinematicCharacterSystem::Update(testWorld, 0.02f);
-    if (pKcc.velocity.y <= 0.0f || pKcc.isGrounded || !pKcc.isJumping) {
-        std::printf("[ECSWorld] ERROR: KCC fallo al procesar impulso de salto (OPT-207).\n");
-        return false;
-    }
-
-    // 13.5 Colisión continua de barrido contra muralla (Swept Collision & Slide OPT-207)
-    Point3D testWallPos{-3.5f, 0.95f, -2.25f}; // Posición penetrante dentro del volumen de la muralla
-    Point3D testWallVel{0.0f, 0.0f, -4.0f};    // Vector de velocidad entrando hacia la muralla (-Z)
-    KinematicCharacterSystem::ResolveSweptCollision(testWallPos, testWallVel, 0.35f, 1.75f, 0.02f);
-    if (testWallPos.z < KinematicCharacterSystem::WALL_AABB.max.z + 0.35f || testWallVel.z < 0.0f) {
-        std::printf("[ECSWorld] ERROR: ResolveSweptCollision no expulsó el personaje ni anuló la velocidad penetrante (OPT-207).\n");
-        return false;
-    }
-
-    // 13.6 Trazado analítico de oclusión acústica (Line of Sight Raycast)
-    Point3D emitterBehindWall{-3.5f, 0.95f, -4.0f}; // Detrás de la muralla
-    Point3D listenerInFront{-3.5f, 0.95f, -1.0f};   // Frente a la muralla
-    float occlusionFactor = 0.0f;
-    bool isOccluded = KinematicCharacterSystem::CheckLineOfSight(emitterBehindWall, listenerInFront, occlusionFactor);
-    if (!isOccluded || occlusionFactor < 0.80f) {
-        std::printf("[ECSWorld] ERROR: CheckLineOfSight no detectó oclusión acústica de la muralla (OPT-207).\n");
-        return false;
-    }
-
-    Point3D clearEmitter{0.0f, 12.0f, 0.0f};
-    Point3D clearListener{10.0f, 12.0f, 0.0f};
-    float clearOcclusion = 0.0f;
-    bool isClear = KinematicCharacterSystem::CheckLineOfSight(clearEmitter, clearListener, clearOcclusion);
-    if (isClear || clearOcclusion > 0.05f) {
-        std::printf("[ECSWorld] ERROR: CheckLineOfSight reportó falsa oclusión en espacio despejado (OPT-207).\n");
-        return false;
-    }
-
-    // 14. Verificación del Subsistema de Mallas y Volúmenes Envolventes (Hito 80 / OPT-293)
+    // 13. Verificación del Subsistema de Mallas y Volúmenes Envolventes (Hito 80 / OPT-293)
     Entity meshEntity = testWorld.CreateEntity();
     auto& mComp = testWorld.EmplaceComponent<MeshComponent>(meshEntity);
     auto& bComp = testWorld.EmplaceComponent<BoundingVolumeComponent>(meshEntity);

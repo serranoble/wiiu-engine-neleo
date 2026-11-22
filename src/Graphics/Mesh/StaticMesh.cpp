@@ -28,13 +28,6 @@ inline float SwapFloat(float val) noexcept {
     return res;
 }
 
-// Banderas de endianness de la máquina local
-#if defined(__WIIU__) || defined(__wiiu__) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-constexpr bool IS_HOST_BIG_ENDIAN = true;
-#else
-constexpr bool IS_HOST_BIG_ENDIAN = false;
-#endif
-
 } // namespace
 
 StaticMesh::StaticMesh(StaticMesh&& other) noexcept
@@ -146,14 +139,9 @@ bool StaticMesh::LoadFromMemory(const uint8_t* data, size_t size) {
         return false;
     }
 
-    if (m_header.vboOffset + m_header.vboSize > size ||
-        m_header.iboOffset + m_header.iboSize > size) {
+    if (static_cast<size_t>(m_header.vboOffset) + static_cast<size_t>(m_header.vboSize) > size ||
+        static_cast<size_t>(m_header.iboOffset) + static_cast<size_t>(m_header.iboSize) > size) {
         return false;
-    }
-
-    // Verificación de alineaciones de silicio (256 bytes VBO, 32 bytes IBO)
-    if ((m_header.vboOffset & 0xFF) != 0) {
-        // Advertencia: VBO no alineado a 256 bytes
     }
 
     const uint8_t* vboData = data + m_header.vboOffset;
@@ -187,8 +175,8 @@ bool StaticMesh::CreateFromVertices(const std::vector<MeshVertex>& vertices, con
     m_header.iboSize = static_cast<uint32_t>(indices.size() * sizeof(uint32_t));
 
     // Bounding box & sphere
-    float minX = 1e9f, minY = 1e9f, minZ = 1e9f;
-    float maxX = -1e9f, maxY = -1e9f, maxZ = -1e9f;
+    float minX = vertices[0].pos[0], minY = vertices[0].pos[1], minZ = vertices[0].pos[2];
+    float maxX = minX, maxY = minY, maxZ = minZ;
     for (const auto& v : vertices) {
         minX = std::min(minX, v.pos[0]);
         minY = std::min(minY, v.pos[1]);
@@ -221,6 +209,9 @@ bool StaticMesh::CreateFromVertices(const std::vector<MeshVertex>& vertices, con
 bool StaticMesh::UploadToGPU(const uint8_t* vboData, uint32_t vboSize,
                             const uint8_t* iboData, uint32_t iboSize) {
 #if defined(__WIIU__) || defined(__wiiu__)
+    std::memset(&m_vbo, 0, sizeof(m_vbo));
+    std::memset(&m_ibo, 0, sizeof(m_ibo));
+
     m_vbo.flags = static_cast<GX2RResourceFlags>(
         GX2R_RESOURCE_BIND_VERTEX_BUFFER |
         GX2R_RESOURCE_USAGE_CPU_WRITE |
@@ -230,12 +221,14 @@ bool StaticMesh::UploadToGPU(const uint8_t* vboData, uint32_t vboSize,
     m_vbo.elemCount = m_header.vertexCount;
 
     if (!GX2RCreateBuffer(&m_vbo)) {
+        std::memset(&m_vbo, 0, sizeof(m_vbo));
         return false;
     }
 
     void* pVbo = GX2RLockBufferEx(&m_vbo, GX2R_RESOURCE_BIND_NONE);
     if (!pVbo) {
         GX2RDestroyBufferEx(&m_vbo, GX2R_RESOURCE_BIND_NONE);
+        std::memset(&m_vbo, 0, sizeof(m_vbo));
         return false;
     }
     std::memcpy(pVbo, vboData, vboSize);
@@ -251,6 +244,8 @@ bool StaticMesh::UploadToGPU(const uint8_t* vboData, uint32_t vboSize,
 
     if (!GX2RCreateBuffer(&m_ibo)) {
         GX2RDestroyBufferEx(&m_vbo, GX2R_RESOURCE_BIND_NONE);
+        std::memset(&m_vbo, 0, sizeof(m_vbo));
+        std::memset(&m_ibo, 0, sizeof(m_ibo));
         return false;
     }
 
@@ -258,6 +253,8 @@ bool StaticMesh::UploadToGPU(const uint8_t* vboData, uint32_t vboSize,
     if (!pIbo) {
         GX2RDestroyBufferEx(&m_ibo, GX2R_RESOURCE_BIND_NONE);
         GX2RDestroyBufferEx(&m_vbo, GX2R_RESOURCE_BIND_NONE);
+        std::memset(&m_ibo, 0, sizeof(m_ibo));
+        std::memset(&m_vbo, 0, sizeof(m_vbo));
         return false;
     }
     std::memcpy(pIbo, iboData, iboSize);

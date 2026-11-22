@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <cstdint>
 #include <vector>
 #include "Graphics/Math3D.hpp"
 #include "Graphics/Color.hpp"
@@ -25,7 +25,7 @@ public:
 
     void ResetSeed(uint64_t seed);
     void Update(float dt);
-    void Render(SDL_Renderer* renderer, int screenWidth, int screenHeight);
+    void Render(int screenWidth = 1280, int screenHeight = 720);
 
     [[nodiscard]] uint64_t GetCurrentSeed() const noexcept { return m_initialSeed; }
     [[nodiscard]] const PRNG& GetPRNG() const noexcept { return m_prng; }
@@ -35,8 +35,6 @@ private:
     uint64_t m_initialSeed{0x1337BEEFCAFEULL};
     PRNG m_prng;
     std::vector<Star> m_stars;
-    std::vector<SDL_Vertex> m_vertexBatch;
-    std::vector<int> m_indexBatch;
 };
 
 } // namespace WiiU

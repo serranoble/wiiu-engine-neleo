@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Window.hpp"
-#include <SDL2/SDL.h>
 #include <memory>
 
 namespace WiiU {
@@ -19,21 +18,24 @@ public:
 
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
+    Engine(Engine&&) = delete;
+    Engine& operator=(Engine&&) = delete;
 
     bool Init(std::unique_ptr<IScene> initialScene = nullptr);
     void Run();
     void Shutdown();
 
-    bool IsRunning() const { return m_running; }
-    void Stop() { m_running = false; }
+    [[nodiscard]] bool IsRunning() const noexcept { return m_running; }
+    void Stop() noexcept { m_running = false; }
 
 private:
     void Update(float dt);
     void Render();
 
     Window m_window;
+    bool m_initialized{false};
     bool m_running{false};
-    bool m_wasPureGX2{false};
+    int m_lastSwapInterval{-1};
 };
 
 } // namespace WiiU

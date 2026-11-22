@@ -4,7 +4,6 @@
 #include <cstdio>
 #include <cstdarg>
 #include <string_view>
-#include <algorithm>
 
 namespace WiiU {
 
@@ -32,6 +31,9 @@ public:
         m_length = 0;
     }
 
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((format(printf, 2, 3)))
+#endif
     int Format(const char* fmt, ...) noexcept {
         if (!fmt) {
             Clear();

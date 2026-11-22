@@ -20,6 +20,7 @@ class StorageManager {
 public:
     StorageManager() = delete;
 
+    static void SetAppFolderName(std::string_view folderName) noexcept;
     static void Initialize();
     static void Shutdown();
     [[nodiscard]] static bool IsInitialized() noexcept;
@@ -70,6 +71,32 @@ public:
      * @brief Carga completa de un archivo de guardado a un búfer en memoria.
      */
     static bool LoadSaveFile(std::string_view relativePath, std::vector<uint8_t>& outBuffer);
+
+    /**
+     * @brief [OPT-398] Guarda datos de forma atomica con envoltura criptografica HMAC-SHA256.
+     */
+    static bool SaveFileVerifiedAtomic(std::string_view relativePath, const void* data, size_t size,
+                                       std::string_view hmacKey = DEFAULT_SAVE_HMAC_KEY);
+
+    /**
+     * @brief [OPT-398] Carga y valida integridad HMAC-SHA256 en tiempo constante.
+     */
+    static bool LoadSaveFileVerified(std::string_view relativePath, std::vector<uint8_t>& outPayload,
+                                     std::string_view hmacKey = DEFAULT_SAVE_HMAC_KEY);
+
+    /**
+     * @brief [OPT-397] Despacha un guardado no bloqueante a Core 2 usando doble bufer ping-pong.
+     * @return true si el trabajo fue aceptado en una ranura libre; false si ambos buferes estan ocupados.
+     */
+    static bool SaveFileAsync(std::string_view relativePath, const void* data, size_t size,
+                              bool signWithHmac = false,
+                              std::string_view hmacKey = DEFAULT_SAVE_HMAC_KEY);
+
+    [[nodiscard]] static bool IsAsyncSavePending() noexcept;
+    static void WaitForAsyncSaves() noexcept;
+    [[nodiscard]] static bool GetLastAsyncSaveSuccess() noexcept;
+
+    static constexpr std::string_view DEFAULT_SAVE_HMAC_KEY = "WiiU_Engine_C++20_SaveIntegrity_v1";
 
 private:
     static bool s_initialized;

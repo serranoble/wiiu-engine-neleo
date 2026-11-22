@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <cstdint>
 #include <cstdlib>
 
 namespace WiiU {
@@ -8,19 +8,10 @@ namespace WiiU {
 class PRNG;
 
 struct ColorRGBA {
-    Uint8 r{255};
-    Uint8 g{255};
-    Uint8 b{255};
-    Uint8 a{255};
-
-    constexpr SDL_Color ToSDLColor() const {
-        return SDL_Color{r, g, b, a};
-    }
-
-    // Backward compatibility alias
-    constexpr SDL_Color toSDLColor() const {
-        return ToSDLColor();
-    }
+    uint8_t r{255};
+    uint8_t g{255};
+    uint8_t b{255};
+    uint8_t a{255};
 
     static constexpr ColorRGBA Red()     { return ColorRGBA{235, 55, 55, 255}; }
     static constexpr ColorRGBA Cyan()    { return ColorRGBA{0, 200, 240, 255}; }
@@ -34,9 +25,9 @@ struct ColorRGBA {
     [[deprecated("Use ColorRGBA::Random(PRNG&) for deterministic PRNG per Jason Gregory 4.6")]]
     static ColorRGBA Random() {
         return ColorRGBA{
-            static_cast<Uint8>(60 + std::rand() % 196),
-            static_cast<Uint8>(60 + std::rand() % 196),
-            static_cast<Uint8>(60 + std::rand() % 196),
+            static_cast<uint8_t>(60 + std::rand() % 196),
+            static_cast<uint8_t>(60 + std::rand() % 196),
+            static_cast<uint8_t>(60 + std::rand() % 196),
             255
         };
     }

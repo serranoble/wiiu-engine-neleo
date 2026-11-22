@@ -34,8 +34,13 @@ enum class InputAction : uint16_t {
 enum class InputContext : uint8_t {
     Gameplay3D = 0,     // Control completo de avatar y física en mundo 3D
     UIModal = 1,        // Menús de opciones, cuadros de diálogo y modales de pausa
-    Viewer3D = 2        // Modo visor e inspección de modelos con cámara orbital
+    Viewer3D = 2,       // Modo visor e inspección de modelos con cámara orbital
+    DebugConsole = 3    // Terminal de desarrollo / CVars en vivo
 };
+
+[[nodiscard]] inline constexpr uint32_t ActionToBit(InputAction action) noexcept {
+    return (static_cast<uint32_t>(action) < 32u) ? (1u << static_cast<uint32_t>(action)) : 0u;
+}
 
 /**
  * @brief Mapeador canónico de acciones lógicas a partir de un VirtualGamepad.

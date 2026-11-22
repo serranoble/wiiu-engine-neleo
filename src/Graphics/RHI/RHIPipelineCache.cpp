@@ -18,14 +18,12 @@ void RHIPipelineCache::Invalidate() noexcept {
 }
 
 void RHIPipelineCache::BindState(const RHIPipelineState& state) {
-    // [OPT-262] Silicon State Guard: Validación de invariantes de hardware
-    [[maybe_unused]] RHIValidationResult valRes = state.Validate();
-#if defined(DEBUG) || !defined(NDEBUG)
-    // En builds con aserciones habilitadas o autodiagnósticos, verificar validez
-    if (valRes != RHIValidationResult::Valid) {
-        // Estado con riesgo o valores ilegales detectado por la capa de validación
+    // [OPT-262] Silicon State Guard: Validación defensiva de invariantes de hardware antes de escribir registros GX2
+    const RHIValidationResult valRes = state.Validate();
+    if (valRes == RHIValidationResult::InvalidDepthFunc ||
+        valRes == RHIValidationResult::InvalidFrontFace) {
+        return;
     }
-#endif
 
     uint64_t newHash = state.ComputeHash();
     if (newHash == m_currentHash) {
@@ -54,7 +52,10 @@ void RHIPipelineCache::BindState(const RHIPipelineState& state) {
 
     // 2. Configurar Blend Mode, Color Control y Hardware Alpha-Test si cambió
     if (HasAny(dirty, RHIStateBits::AllBlend)) {
-        GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
+        const uint8_t blendTargetMask =
+            (state.blendMode == BlendMode::AlphaBlend || state.blendMode == BlendMode::Additive)
+            ? 0x01u : 0x00u;
+        GX2SetColorControl(GX2_LOGIC_OP_COPY, blendTargetMask, FALSE, TRUE);
         if (state.blendMode == BlendMode::AlphaBlend) {
             GX2SetAlphaTest(FALSE, GX2_COMPARE_FUNC_ALWAYS, 0.0f);
             GX2SetBlendControl(

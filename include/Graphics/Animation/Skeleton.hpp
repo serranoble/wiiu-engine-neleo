@@ -32,7 +32,8 @@ struct Skeleton {
 
     int32_t FindJointIndex(const char* jointName) const noexcept {
         if (!jointName) return -1;
-        for (uint32_t i = 0; i < jointCount; ++i) {
+        const uint32_t safeCount = (jointCount > MAX_SKELETON_JOINTS) ? MAX_SKELETON_JOINTS : jointCount;
+        for (uint32_t i = 0; i < safeCount; ++i) {
             if (std::strncmp(joints[i].name, jointName, sizeof(joints[i].name)) == 0) {
                 return static_cast<int32_t>(i);
             }

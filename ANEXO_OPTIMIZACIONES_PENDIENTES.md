@@ -1,8 +1,8 @@
 # ANEXO DE OPTIMIZACIONES PENDIENTES POR ABORDAR
 **Proyecto:** WiiU Demos - Motor Gráfico y Computación de Alto Rendimiento 3D  
 **Plataforma:** Nintendo Wii U (Espresso PPC 750CL Tri-Core @ 1.24 GHz, AMD Latte GX2 GPU @ 550 MHz, Cafe OS)  
-**Última Actualización:** 14 de Noviembre de 2026 (Hito 137 - Desacoplamiento de Carga Multihilo en Core 2 y Escalado Fullscreen 16:9 en Modelos Estáticos: `OPT-429`; Hito 136: `OPT-428` — Integración de Botón HOME, Bucle de Mensajes Cafe OS y Ciclo de Vida Limpio; Hito 135: `OPT-421` a `OPT-427`)  
-**Propósito:** Este documento registra de manera viva, continua y estructurada todas las técnicas, algoritmos y optimizaciones investigadas y aplicadas en el motor (`OPT-01` a `OPT-429`), sirviendo como bitácora técnica e inventario para el roadmap multi-consola.
+**Última Actualización:** 19 de Noviembre de 2026 (Hito 144 — Migración Completa a Wii U 100% Nativo sin SDL2 [Fases 1, 2 y 3 + Validación Hardware Real]: Swapchain GX2 Nativo TV+DRC + Heaps MEM1/FG + `ProcUIInitEx` y TV/DRC activos en Menú HOME [`Window`/`InputManager`] + Guardas unificadas `Window::HasForeground() && !Window::IsExitingProcUI()` en `GX2DrawDone()`, `Render2DGX2` Triple-Buffer, `sndcore2`/AX Ping-Pong MEM2 16384B sin cruce de banco 512 MB + `DCStoreRange` + Hilo Mix Dedicado [`prio - 1`] + Arranque L/R Sincronizado [`m_axVoicesStarted`, `endOffset = AX_BUFFER_SAMPLES - 1u`], Cero `SDL_` en Targets Wii U [`349,655` B `.rpx` / `51,204,672` B `.wuhb`] y Doble **APROBACIÓN FINAL** Ciclo 2; `OPT-442`)  
+**Propósito:** Este documento registra de manera viva, continua y estructurada todas las técnicas, algoritmos y optimizaciones investigadas y aplicadas en el motor (`OPT-01` a `OPT-442`), sirviendo como bitácora técnica e inventario para el roadmap multi-consola.
 
 ---
 
@@ -22,24 +22,24 @@
 | **OPT-10** | CPU SIMD | Data-Oriented Design (SoA) Paired-Singles | Mike Acton (CppCon 14) | **PENDIENTE** | Backlog CPU |
 | **OPT-11** | Concurrencia | Lock-Free Work-Stealing Ring-Buffer Queue | Andersson (DICE Frostbite) | **PENDIENTE** | Backlog Arquitectura |
 | **OPT-12** | Arquitectura GPU | Pipeline State Object (PSO) Caching | EA SEED / Gregory | **PENDIENTE** | Backlog Arquitectura |
-| **OPT-13** | Pipeline GPU | Material System Abstraction & UBOs (256B) | DICE Frostbite / Gregory | **PENDIENTE** | Backlog Arquitectura |
+| **OPT-13** | Pipeline GPU | Material System Abstraction & UBOs (256B) | DICE Frostbite / Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-14** | Geometría GPU | Hardware Adaptive Tessellation | AMD R700 / DICE BF3 | **PENDIENTE** | Backlog GPU |
 | **OPT-15** | Simulación Agua | Projected Grid Water Surface | Johanson (2004) / Crytek | **EVALUADO / RESERVADO** | Mar Abierto |
 | **OPT-16** | Simulación Agua | Geometry Clipmaps para Océano | Losasso & Hoppe (2004) | **EVALUADO / RESERVADO** | Océano Abierto |
 | **OPT-17** | Simulación Agua | FFT Ocean Waves (Espectro de Phillips) | Jerry Tessendorf (2001) | **DESCARTADO** | Inviable en Wii U |
 | **OPT-18** | Pipeline 3D GPU | Pipeline 100% GX2 Hardware Puro & Z-Buffer en eDRAM (Zero SDL 3D) | Latte GX2 / Espresso | **IMPLEMENTADO** | Hitos 28 y 29 (7 Oct 2026) |
 | **OPT-19** | Precisión Z-Buffer | Floating-Point Reverse-Z Depth Buffering (`PerspectiveReverseZ`) | Pettineo / Persson (GDC 13) | **PENDIENTE** | Backlog GPU |
-| **OPT-20** | Rendimiento GPU | Hardware Instanced Drawing (`GX2DrawIndexedInstanced`) | Chajdas / Collin (Frostbite) | **PENDIENTE** | Backlog GPU |
-| **OPT-21** | Oclusión GPU | Aceleración Hardware Hi-Z (Hierarchical Z) en eDRAM | AMD R700 Whitepaper | **PENDIENTE** | Backlog GPU |
+| **OPT-20** | Rendimiento GPU | Hardware Instanced Drawing (`GX2DrawIndexedInstanced`) | Chajdas / Collin (Frostbite) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-21** | Oclusión GPU | Aceleración Hardware Hi-Z (Hierarchical Z) en eDRAM | AMD R700 Whitepaper | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-22** | Arquitectura Motor | FrameGraph / Render Graph Architecture (DAG de Pases) | O'Donnell (Frostbite GDC 17) | **PENDIENTE** | Backlog Arquitectura |
 | **OPT-23** | CPU SIMD / Cache | Data-Oriented Scene Graph & Flat Transform Arrays (SoA) | Mike Acton (CppCon 14) / Llopis | **PENDIENTE** | Backlog CPU / Arquitectura |
 | **OPT-24** | Arquitectura RAII | Handle-Based GPU Resource Wrappers con Move-Only Semantics | Stroustrup / Sutter / Gregory | **PENDIENTE** | Backlog Arquitectura / Clean Code |
 | **OPT-25** | Geometría GPU | Cuantización Atributos Vértices (`10_10_10_2` @ 32B) | Ericson / Andersson (DICE GDC 11) | **PENDIENTE** | Backlog GPU |
-| **OPT-26** | Oclusión GPU | Hardware Depth Pre-Pass / Early-Z en eDRAM | Sousa (Crytek) / Persson | **PENDIENTE** | Backlog GPU |
-| **OPT-27** | Arquitectura Motor | Stateless Command Bucket & Render Queue Sorting | Ericson (Sony) / Fiedler / Gregory | **PENDIENTE** | Backlog Arquitectura |
+| **OPT-26** | Oclusión GPU | Hardware Depth Pre-Pass / Early-Z en eDRAM | Sousa (Crytek) / Persson | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-27** | Arquitectura Motor | Stateless Command Bucket & Render Queue Sorting | Ericson (Sony) / Fiedler / Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-28** | Memoria / GPU | Transient Uniform Ring Buffer (Streaming Arena) | Valient (Guerrilla) / Gregory | **PENDIENTE** | Backlog GPU / CPU |
 | **OPT-29** | Arquitectura E/S / GPU | Pipeline Resiliente de E/S Multiescalón & Carga Directa GFD sin Dependencia de WHB | Cafe OS GFD / Gregory | **IMPLEMENTADO** | Hito 30 (7 Oct 2026) |
-| **OPT-30** | Arquitectura Motor / E/S | Virtual File System (VFS) Asíncrono con Double-Buffering Ring | Gregory / Naughty Dog GDC 15 | **PENDIENTE** | Backlog Arquitectura |
+| **OPT-30** | Arquitectura Motor / E/S | Virtual File System (VFS) Asíncrono con Double-Buffering Ring | Gregory / Naughty Dog GDC 15 | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-31** | Shaders / Arquitectura | Bytecode GFD Shader Reflection & Generación Automática de Fetch Shaders | GPU Pro 7 / EA SEED Halcyon | **PENDIENTE** | Backlog Arquitectura |
 | **OPT-32** | Pipeline GPU / Silicio | Alineación Estricta a 256 Bytes en Búferes de Programa de Shaders (`memalign(256)`) | AMD R700 ISA / SQ_PGM_START | **IMPLEMENTADO** | Hito 31 (8 Oct 2026) |
 | **OPT-33** | Iluminación / GPU | Clustered Forward Shading en Frustum 3D | Olsson & Billeter / Persson GDC 15 | **PENDIENTE** | Backlog GPU / Shaders |
@@ -48,7 +48,7 @@
 | **OPT-36** | Memoria / GPU | Multi-Tier Sub-Allocator & Pool Arena para Recursos GPU (Bump Arena) | Gregory / Christer Ericson | **PENDIENTE** | Backlog Memoria / GPU |
 | **OPT-37** | Arquitectura Driver / GPU | Two-Tier Resilient Graphics Driver Ingestion Layer (Bare-Metal Fallback) | Gregory / WUT Runtime Internals | **PENDIENTE** | Backlog Driver / Arquitectura |
 | **OPT-38** | Arquitectura / Plataforma | Estandarización de Macros de Plataforma y Activación de Símbolos GX2 (`__WIIU__` / `__wiiu__`, `<gx2/mem.h>`, `GX2_AA_MODE1X`) | WUT SDK / CMake / Cafe OS | **IMPLEMENTADO** | Hito 32 (8 Oct 2026) |
-| **OPT-39** | Oclusi�n / GPU | Latte eDRAM Hi-Z Surface Binding & Hardware Fast-Clear Architecture | AMD R700 Whitepaper / EA SEED | **PENDIENTE** | Backlog GPU / Latte |
+| **OPT-39** | Oclusi�n / GPU | Latte eDRAM Hi-Z Surface Binding & Hardware Fast-Clear Architecture | AMD R700 Whitepaper / EA SEED | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-40** | Rendimiento GPU | GPU Command Buffer Batching via Secondary Ring Buffers (`GX2DirectCallList`) | DICE Frostbite / Gregory | **PENDIENTE** | Backlog GPU |
 | **OPT-41** | Geometría GPU | Compressed Vertex Attribute Streams via 16-bit Half-Float (`FLOAT_16_16`) | Ericson / DICE GDC 11 | **PENDIENTE** | Backlog Memoria / GPU |
 | **OPT-42** | Arquitectura Motor | Type-Safe Generational Handle Resource Manager con RAII Move-Only | Bitsquid / C++ Core Guidelines | **PENDIENTE** | Backlog Arquitectura |
@@ -56,10 +56,10 @@
 | **OPT-44** | Arquitectura Motor | Desacoplamiento de Framework de Alto Nivel (`WHBProc`) y Bucle Determinista de Eventos SDL2 en `Engine::Run()` | Gregory / Nystrom (Game Programming Patterns) | **IMPLEMENTADO** | Hito 33 (9 Oct 2026) |
 | **OPT-45** | Gestión Memoria | Desalojo Proactivo de Heap (`shrink_to_fit`) y Transferencia $\mathcal{O}(1)$ en Streaming de Audio | Gregory (Game Engine Architecture) / POSIX | **IMPLEMENTADO** | Hito 33 (9 Oct 2026) |
 | **OPT-46** | UI / Transiciones | Compuerta de Transición Determinista con Guarda Temporal Defensiva (*Bounded Time Smoothing & Asymptotic Guard*) | Mallett (Game Engine Gems 3) / Pettineo | **IMPLEMENTADO** | Hito 33 (9 Oct 2026) |
-| **OPT-47** | Streaming Audio | Double-Buffered Ping-Pong Ring-Buffer Streaming para BGM ($\le 256$ KB RAM) | Gregory / Walder (DICE Frostbite) | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-47** | Streaming Audio | Double-Buffered Ping-Pong Ring-Buffer Streaming para BGM ($\le 256$ KB RAM) | Gregory / Walder (DICE Frostbite) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-48** | Arquitectura GPU | Pre-calentamiento y Pre-compilación de Shaders GX2 y VBOs en Pantalla de Carga (*Pipeline State Pre-Warming*) | Ka Chen (ForzaTech GDC 14) / Frostbite | **IMPLEMENTADO** | Hito 45 (11 Oct 2026) |
 | **OPT-49** | Concurrencia | Time-Sliced Cooperative Asset Streaming via Corrutinas C++20 / Fibers | Naughty Dog / Gyrling (GDC 15) | **PENDIENTE** | Backlog Concurrencia |
-| **OPT-50** | Arquitectura Motor | Decoupled Application Lifecycle State Machine para Cafe OS / SDL2 | Robert Nystrom / DICE Frostbite | **PENDIENTE** | Backlog Arquitectura |
+| **OPT-50** | Arquitectura Motor | Decoupled Application Lifecycle State Machine para Cafe OS / SDL2 | Robert Nystrom / DICE Frostbite | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-51** | Arquitectura Motor | Modular Category-Based Scene Graph & Acyclic Hierarchical Navigation | Jason Gregory / Robert Nystrom | **IMPLEMENTADO** | Hito 34 (9 Oct 2026) |
 | **OPT-52** | Audio / Concurrencia | Thread-Safe Master Audio Mixing Bus with Clamped Arithmetic | Jason Gregory / SDL2 Audio Subsystem | **IMPLEMENTADO** | Hito 34 (9 Oct 2026) |
 | **OPT-53** | UI / Entrada Táctil | Ergonomic Touch Dragging UI Slider with Vertical Hit-Tolerance Band | Apple / Google Touch HIG | **IMPLEMENTADO** | Hito 34 (9 Oct 2026) |
@@ -70,7 +70,7 @@
 | **OPT-58** | UI / Entrada Multicontrol | Unified Multi-Peripheral Back Navigation & Polymorphic UI Input Adapter (`IsBackRequested`) | Nintendo HIG / C++20 Closures | **IMPLEMENTADO** | Hito 35 (9 Oct 2026) |
 | **OPT-59** | Pipeline GPU / Latte | Pipeline State Object (PSO) Hash Caching & State Redundancy Elimination | EA SEED / Vulkan / DirectX 12 / Gregory | **PENDIENTE** | Backlog GPU / Fase 3 |
 | **OPT-60** | Memoria / Arquitectura | Ring-Buffered Double-Ended Frame Scratch Allocator (Two-Sided Linear Frame Arena) | Jason Gregory / Casey Muratori | **PENDIENTE** | Backlog Memoria |
-| **OPT-61** | Entrada / Arquitectura | Hierarchical Input Action Mapping & Virtual Controller Contexts | Gregory / Unreal Engine Enhanced Input | **PENDIENTE** | Backlog Entrada |
+| **OPT-61** | Entrada / Arquitectura | Hierarchical Input Action Mapping & Virtual Controller Contexts | Gregory / Unreal Engine Enhanced Input | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-62** | Pipeline GPU / UI | Subsistema de Renderizado 2D 100% Nativo en Silicio GX2 (`Render2DGX2`) & Coalescencia RLE | AMD Latte GX2 / Nintendo Cafe OS | **IMPLEMENTADO** | Hito 36 (9 Oct 2026) |
 | **OPT-63** | Arquitectura Motor | Contrato `IScene::IsPureGX2()` & Guarda Defensiva de Transición de Estados (`m_wasPureGX2`) | Jason Gregory / Robert Nystrom | **IMPLEMENTADO** | Hito 36 (9 Oct 2026) |
 | **OPT-64** | Arquitectura UI | Immediate-Mode 2D Vertex Cache & Command Packing (`ImDrawList` Architecture) | Omar Cornut (Dear ImGui) / Gregory | **PENDIENTE** | Backlog UI / Fase 3 |
@@ -113,7 +113,7 @@
 | **OPT-101** | Shaders / GPU | Canonical 1:1 CafeGLSL Uniform Register Packing (52 Floats KC2[0..12] Contiguous Streaming) | AMD R700 ISA / CafeGLSL glslcompiler | **IMPLEMENTADO** | Hito 42 (9 Oct 2026) |
 | **OPT-102** | Gráficos / Shaders | Continuous Fullscreen Horizon & Atmosphere Backdrop Rendering (Hyrule Lake Basin & Anchored Mountain Silhouette) | Nintendo BotW / Rendering Architecture | **IMPLEMENTADO** | Hito 42 (9 Oct 2026) |
 | **OPT-103** | Arquitectura Motor | Deterministic Engine Teardown Sequence (RAII Worker Thread Joining, `SceneManager::Clear()`, and `GX2DrawDone()` GPU Drain Barrier) | Cafe OS Kernel / Gregory / POSIX | **IMPLEMENTADO** | Hito 42 (9 Oct 2026) |
-| **OPT-104** | Arquitectura Motor | Stateless Command Bucket & Multithreaded Draw Sorting | Christer Ericson / Glenn Fiedler / Jason Gregory | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-104** | Arquitectura Motor | Stateless Command Bucket & Multithreaded Draw Sorting | Christer Ericson / Glenn Fiedler / Jason Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-105** | Concurrencia / Motor | Double-Buffered Component Snapshot Architecture for Lock-Free Parallel Systems | Tony Albrecht / Mike Acton / Jason Gregory | **PENDIENTE** | Backlog Concurrencia / Fase 3 |
 | **OPT-106** | Concurrencia / CPU | Sistema de Tareas Multihilo JobSystem para CPU Espresso Tri-Core con Cola Lock-Free y Suspensión OSEvent (0% CPU) | Christian Gyrling / Johan Andersson / Jason Gregory | **IMPLEMENTADO** | Hito 75 (21 Oct 2026) |
 | **OPT-107** | Arquitectura Motor | Preemptive Frame-Abort on Cafe OS Lifecycle Transitions & Deterministic Headless Tear-Down | Nintendo Cafe OS / TRC Guidelines | **IMPLEMENTADO** | Hito 43 (10 Oct 2026) |
@@ -135,25 +135,25 @@
 | **OPT-123** | Arquitectura Motor / Eventos | Zero-Overhead Type-Erased Hardware Event Observer Pattern (Fast Delegate Bus) | Robert Nystrom / Jason Gregory / Ryazanov | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-124** | Pipeline GPU / Silicio | Pipeline 100% Nativo GX2 en Demo 9 (Luz y Sombras), Z-Buffer en eDRAM y Proyección Analítica de Penumbra Difusa | AMD Latte GX2 / Nintendo Cafe OS | **IMPLEMENTADO** | Hito 47 (11 Oct 2026) |
 | **OPT-125** | Silicio GPU / eDRAM | Stencil-Buffered Planar Shadow Decals (Anti-Double-Blending en eDRAM D24S8) | Jim Blinn / Heidmann / Kilgard | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-126** | Pipeline GPU / Shaders | Hardware Shadow Mapping con Samplers PCF 2x2 en Silicio Latte GX2 (`sampler2DShadow`) | AMD R700 / Williams / Engel | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-126** | Pipeline GPU / Shaders | Hardware Shadow Mapping con Samplers PCF 2x2 en Silicio Latte GX2 (`sampler2DShadow`) | AMD R700 / Williams / Engel | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-127** | Shaders / Visual | Analytical Capsule & Sphere Contact Shadows en Shaders CafeGLSL | Iñigo Quílez / Alex Evans | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-128** | Concurrencia / Simulación | Parallel CPU Analytical Shadow Extrusion & Double-Buffered Shadow VBO (`GX2RBuffer` Ping-Pong) | Gyrling (Naughty Dog GDC 15) / Acton / Gregory | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-129** | Iluminación / GPU | Clustered Forward Point Light Shading via Frustum 3D Grid Binning | Olsson & Billeter (HPG 12) / Persson (GDC 12) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-130** | Arquitectura Motor | 64-Bit Render State Sorting & Stateless Draw Command Bucket Architecture | Christer Ericson (Sony) / Fiedler / Gregory | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-130** | Arquitectura Motor | 64-Bit Render State Sorting & Stateless Draw Command Bucket Architecture | Christer Ericson (Sony) / Fiedler / Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-131** | Silicio GPU / E/S | Desacoplamiento 100% de WHB en Escenas GX2 Nativas y `Render2DGX2` via Carga Directa GFD (`memalign(256)` + `GX2Invalidate`) | Cafe OS GFD / AMD Latte ISA | **IMPLEMENTADO** | Hito 48 (11 Oct 2026) |
 | **OPT-132** | Arquitectura Motor / Micronúcleo | Erradicación de Falsas Guardas de Micronúcleo (`!ProcUIIsRunning()`) y Soberanía de Ciclo de Vida en Eventos SDL2 (`SDL_QUIT`) | Cafe OS ProcUI / libSDL2 Internals | **IMPLEMENTADO** | Hito 48 (11 Oct 2026) |
 | **OPT-133** | Arquitectura GPU / Frame 0 | Erradicación de Inicialización Prematura de Silicio GX2 en Pantalla de Carga (Superficie 2D SDL en Frame 0) | Ka Chen (ForzaTech GDC 14) / Frostbite | **IMPLEMENTADO** | Hito 48 (11 Oct 2026) |
-| **OPT-134** | Oclusión / eDRAM GPU | Hardware Depth Pre-Pass & Hi-Z Hierarchical Occlusion Culling en eDRAM de AMD Latte | AMD R700 Whitepaper / Crytek / DICE BF3 | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-134** | Oclusión / eDRAM GPU | Hardware Depth Pre-Pass & Hi-Z Hierarchical Occlusion Culling en eDRAM de AMD Latte | AMD R700 Whitepaper / Crytek / DICE BF3 | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-135** | Iluminación / Sombras | Analytical Area Light Soft Shadows via Karis' Representative Point Method | Brian Karis (Epic UE4) / Heitz (LTC) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-136** | Arquitectura Motor / FSM | Hardware-Agnostic Application Lifecycle State Machine (ALSM) con Inyección de Controladores de Plataforma | Nystrom / Gregory / TRC Guidelines | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-136** | Arquitectura Motor / FSM | Hardware-Agnostic Application Lifecycle State Machine (ALSM) con Inyección de Controladores de Plataforma | Nystrom / Gregory / TRC Guidelines | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-137** | Pipeline GPU / Shaders | Unified GPU Pipeline State Object (PSO) & Shader Reflection Registry | Colin Barré-Brisebois (Frostbite) / EA SEED | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-138** | Memoria / VRAM Streaming | Ring-Buffered Double-Buffering Staging Arena para Geometría Dinámica (VRAM Streaming Arena) | Mike Acton (CppCon 14) / Muratori / Gregory | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-139** | Tooling / Shaders | Generación validada de headers fallback C++ desde binarios CafeGLSL GFD (`EmbedGsh.ps1`) | Herramienta del proyecto / GFD `Gfx2` | **IMPLEMENTADO** | Hito 49 (12 Oct 2026) |
 | **OPT-140** | Arquitectura GPU / E/S | Eliminar rutas WHB-first restantes y usar carga Direct GFD en escenas nativas | Auditoría de código / WUT GFD | **PENDIENTE** | Reconciliar Hito 48 |
-| **OPT-141** | Build / Empaquetado | Añadir dependencias explícitas de assets para regenerar WUHB al cambiar contenido | CMake/WUT build graph | **PENDIENTE** | Backlog de tooling |
+| **OPT-141** | Build / Empaquetado | Añadir dependencias explícitas de assets para regenerar WUHB al cambiar contenido | CMake/WUT build graph | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-142** | Arquitectura Motor / Silicio GPU | Simplificación Radical de Pipeline de Iluminación y Terreno 24x24 en Demo 9 | Jason Gregory / Mike Acton / KISS | **IMPLEMENTADO** | Hito 49 (15 Oct 2026) |
-| **OPT-143** | Arquitectura Motor / Render Queue | Stateless Draw Call Sorting & 64-Bit Render Key Architecture | Christer Ericson / Fiedler / Gregory | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-144** | Memoria / GPU / Constantes | Data-Oriented Multi-Light Uniform Buffer Object (UBO) Ring-Buffer Streaming | Mike Acton / AMD R700 ISA / Gregory | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-143** | Arquitectura Motor / Render Queue | Stateless Draw Call Sorting & 64-Bit Render Key Architecture | Christer Ericson / Fiedler / Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-144** | Memoria / GPU / Constantes | Data-Oriented Multi-Light Uniform Buffer Object (UBO) Ring-Buffer Streaming | Mike Acton / AMD R700 ISA / Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-145** | Iluminación / Shaders / GPU | Single-Pass Clustered Forward Light Shading with Hardware Depth-Bound Culling | Olsson & Billeter / Persson GDC 12 | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-146** | Silicio GPU / Shaders | Dynamic Header Sizing for GFD Shaders and Canonical SDL2 Framebuffer Resolution | WUT GFD / Cafe OS / SDL2 | **IMPLEMENTADO** | Hito 50 (15 Oct 2026) |
 | **OPT-147** | Arquitectura Motor / RAII | GFDShaderHandle<T> RAII Smart Header Wrapper | Stroustrup / Meyers / Gregory | **PENDIENTE** | Backlog Fase 3 |
@@ -161,7 +161,7 @@
 | **OPT-149** | Pipeline GPU / Sincronización | GX2SyncPointBarrier & Pipeline Flush on Scene Transitions (`GX2DrawDone`) | AMD R700 ISA / Vulkan Spec | **IMPLEMENTADO** | Hito 58 (17 Oct 2026) |
 | **OPT-150** | Silicio GPU / VRAM & HUD | Corrección Canónica de Flags GX2R (CPU_WRITE | GPU_READ) y Máscaras Latte R700 en Render2DGX2 | AMD Latte ISA / WUT SDK | **IMPLEMENTADO** | Hito 51 (15 Oct 2026) |
 | **OPT-151** | Arquitectura GPU / Lotes | Pre-Baked Secondary Display List Geometry Batching (GX2DirectCallList) | Johan Andersson / Jason Gregory | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-152** | Iluminación / Memoria GPU | Coalesced Light Block & Constant Register Offset Streaming | Mike Acton / AMD R700 ISA | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-152** | Iluminación / Memoria GPU | Coalesced Light Block & Constant Register Offset Streaming | Mike Acton / AMD R700 ISA | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-153** | Memoria GPU / UI | Triple-Buffered Persistent UI Staging Ring (GX2RBuffer Triple-Buffering) | Omar Cornut / Casey Muratori | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-154** | Silicio GPU / Topología & HUD | Winding Order CCW Canónico, Supresión de Culling en Rasterizador, Extinción Lumínica y HUD Canónico 2.0f | AMD Latte GX2 / Blinn / Clean Code | **IMPLEMENTADO** | Hito 52 (15 Oct 2026) |
 | **OPT-155** | Shaders / Calidad Visual | Anti-Aliasing Analítico Adaptativo de Cuadrícula 24x24 con Filtro Hermite y Atenuación Proyectiva | Baldwin / Myers / Quílez | **IMPLEMENTADO** | Hito 56 (16 Oct 2026) |
@@ -170,7 +170,7 @@
 | **OPT-158** | Pipeline GPU / Silicio | Unificación Canónica de VBO en VRAM (`m_vertexBuffer`), Streaming Contiguo a Offset 0 y Blindaje Anti-NaN | AMD Latte GX2 / Vulkan Spec | **IMPLEMENTADO** | Hito 53 (15 Oct 2026) |
 | **OPT-159** | Arquitectura Motor / Batching | Canonical Multi-Submesh Manifest & Single-IBO Base-Vertex Batching | Jason Gregory / Unreal Engine / Ericson | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-160** | Memoria GPU / Uniforms | Multi-Pass Transient Uniform Ring Buffer (`GX2RBuffer` Arena) | Guerrilla Games / DICE Frostbite | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-161** | Oclusión GPU / Silicio | Hardware Early-Z Depth Pre-Pass with Null Pixel Shader | Tiago Sousa (Crytek) / Humus / AMD R700 | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-161** | Oclusión GPU / Silicio | Hardware Early-Z Depth Pre-Pass with Null Pixel Shader | Tiago Sousa (Crytek) / Humus / AMD R700 | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-162** | Silicio GPU / Fallback GFD | Direct GFD Fetch Shader Attribute Mask Canonical Standardization (`0x00010205` / `0x00010203` / `0x00010405`) & Dual-Path WHB/GFD Resiliency | AMD Latte ISA / Cafe OS GFD / WUT SDK | **IMPLEMENTADO** | Hito 54 (16 Oct 2026) |
 | **OPT-163** | Shaders / Rendimiento GPU | Branchless Linear Fragment Shading (`stack_size = 0`, `num_gprs = 4`) on AMD Latte VLIW5 ALUs & ROM Binary Ingestion | AMD R700 ISA / Blinn-Phong / Embedded ROM | **IMPLEMENTADO** | Hito 54 (16 Oct 2026) |
 | **OPT-164** | Arquitectura Motor / Cinemática | Data-Driven Decoupled Camera Orbit Controller via Exponential Smoothing & Screen-Space Gesture Mapping | Jason Gregory / Christer Ericson / Muratori | **IMPLEMENTADO** | Hito 56 (16 Oct 2026) |
@@ -213,19 +213,19 @@
 | **OPT-201** | Shaders / Iluminación Atmosférica | Precomputed Atmospheric Single Scattering LUT in eDRAM | Eric Bruneton / Nintendo EAD | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-202** | Geometría GPU / Terreno | Continuous Perimeter Skirt Mesh Stitching for Terrain Quad-Tree LOD | Peter Lindstrom / Hugues Hoppe | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-203** | Shaders / Transparencias | Screen-Space Stochastic Alpha Dithering via 4x4 Bayer Matrix on Latte TMUs | Eric Enderton / AMD GPUOpen | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-204** | Entrada / Arquitectura Motor | Multi-Peripheral Unified Action Mapping & Input Context Stack (Contextual Input Architecture) | Jason Gregory / Unreal Engine 5 / Nystrom | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-204** | Entrada / Arquitectura Motor | Multi-Peripheral Unified Action Mapping & Input Context Stack (Contextual Input Architecture) | Jason Gregory / Unreal Engine 5 / Nystrom | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-205** | Cinemática / Arquitectura Cámara | Barrido de Colisión Analítica de Cámara contra Terreno y Obstáculos (Ground-Frustum Collision Sweeping) | Mark Haigh-Hutchinson / Ericson / Gregory | **IMPLEMENTADO** | Hito 60 (18 Oct 2026) |
 | **OPT-206** | Memoria / GPU / Silicio | Handle-Based Unified VBO/IBO Geometry Buffer Sub-Allocator (Virtual Buffer Pool) | Wunkolo / Christer Ericson / DICE Frostbite | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-207** | Cinemática / Físicas KCC / Acústica 3D | Kinematic Character Controller (KCC) con Swept Capsule & Slide Response, Detección de Suelo/Pendiente y Oclusión Acústica LPF | Jason Gregory / Christer Ericson / Mark Haigh-Hutchinson | **IMPLEMENTADO** | Hito 76 (21 Oct 2026) |
 | **OPT-208** | Post-Procesado / Shaders | Robust Contrast-Adaptive Sharpening (True 5-Tap RCAS) in Post-Processing Pass | Nicolas Thibieroz / Timothy Lottes (AMD) | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-209** | Shaders / Fluidos | Analytical Screen-Space Water Depth Reconstruction via Linearized eDRAM Z-Buffer (`D24_S8`) | Tiago Sousa / Nintendo EAD | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-210** | Arquitectura Motor / Ciclo de Vida | Hardware-Agnostic ProcUI Lifecycle Observer & Preemptive Frame-Abort Signal Bus | Cafe OS Guide / Jason Gregory / Nystrom | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-210** | Arquitectura Motor / Ciclo de Vida | Hardware-Agnostic ProcUI Lifecycle Observer & Preemptive Frame-Abort Signal Bus | Cafe OS Guide / Jason Gregory / Nystrom | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-211** | Concurrencia / Silicio GPU | Non-Blocking GPU Fence Token Polling (`GX2TestSyncToken`) for Asynchronous Pipeline Teardown | AMD Latte Architecture / Vulkan Fences | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-212** | Silicio GPU / eDRAM | Native eDRAM Surface Allocation with Tiled Hi-Z Acceleration (`GX2InitDepthBufferHiZEnable`) | AMD R700 Whitepaper / DICE Frostbite | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-212** | Silicio GPU / eDRAM | Native eDRAM Surface Allocation with Tiled Hi-Z Acceleration (`GX2InitDepthBufferHiZEnable`) | AMD R700 Whitepaper / DICE Frostbite | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-213** | Gestión Memoria / Anti-Fugas | Handle de Índice Generacional Compacto (`ResourceHandle<T>`) y Pool DOD (`ResourcePool<T, Capacity>`) | Sean Middleditch / Frykholm (Bitsquid) | **IMPLEMENTADO** | Hito 63 (19 Oct 2026) |
 | **OPT-214** | Gestión Memoria / Silicio GPU | Arena de Escena / Nivel con Alineación GX2 de 256 Bytes (`SceneArena`) | Jason Gregory / AMD R700 Spec | **IMPLEMENTADO** | Hito 63 (19 Oct 2026) |
 | **OPT-215** | Memoria / GPU / Arquitectura | Double-Ended Stack Arena (Two-Sided Linear Frame Allocator) for RHI Scratch & GPU Streaming | Jason Gregory / Casey Muratori | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-216** | Pipeline GPU / RHI | Handle-Based GPU Descriptor Set & Unified Material System Abstraction for Latte GX2 | Yuriy O'Donnell (Frostbite GDC 17) | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-216** | Pipeline GPU / RHI | Handle-Based GPU Descriptor Set & Unified Material System Abstraction for Latte GX2 | Yuriy O'Donnell (Frostbite GDC 17) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-217** | Concurrencia / CPU | Lock-Free Read Generational Resource Pool via Atomic Generation Words for Espresso PPC750CL | Niklas Frykholm / PowerPC ISA 2.06 | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-218** | Arquitectura Motor / Clean Code | Hierarchical Memory Scope Guard (Scoped Arena Rollback RAII Wrapper) | Bjarne Stroustrup / Casey Muratori | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-219** | Gestión Memoria / Silicio GPU | Reemplazo de 12 Contenedores Dinámicos del Heap por `SceneArena` y `ArenaVector<T>` en Geometría 3D | Mike Acton (CppCon 14) / Jason Gregory | **IMPLEMENTADO** | Hito 64 (19 Oct 2026) |
@@ -233,7 +233,7 @@
 | **OPT-221** | Arquitectura / Gameplay / Cámara | Decoupled Orbital Camera Controller Component with Spring Damping and Analytical Collision Sweep | Jason Gregory / Haigh-Hutchinson / Epic Games | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-222** | Arquitectura Gráfica / Texturas | Procedural Texture Factory & VRAM Direct Surface Streaming | Jason Gregory / Colin Barré-Brisebois / AMD Latte | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-223** | Audio Espacial 3D / DSP | Motor de Audio Espacial 3D con Voice Pool de 32 Canales, Paneo de Potencia Constante y LPF de Oclusión Acústica/Subacuática (`AudioEngine3D`) | Jason Gregory / AES / SDL2 | **IMPLEMENTADO** | Hito 65 (19 Oct 2026) |
-| **OPT-224** | Audio / Arquitectura Motor | Distance-Based Priority Culling & Virtual Voice Virtualization (Hierarchical Voice Manager) | Jason Gregory / Rob Bridgett / AES | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-224** | Audio / Arquitectura Motor | Distance-Based Priority Culling & Virtual Voice Virtualization (Hierarchical Voice Manager) | Jason Gregory / Rob Bridgett / AES | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-225** | Audio / Acústica | Acoustic Room/Portal Propagation Graph & Geometry-Aware Diffraction (Acoustic Spatial Graph) | Microsoft Research / Steam Audio | **PENDIENTE** | Backlog Fas
 | **OPT-226** | Audio / CPU SIMD | SIMD Vectorized Voice Mixer via Paired-Singles Acceleration for PowerPC Espresso (`__builtin_paired_*`) | IBM PowerPC 750CL / Mike Acton | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-227** | Audio / Arquitectura Motor | Gestor de Ciclo de Vida Acústico y Conmutación Determinista BGM/3D en Transición de Escenas (`IScene::IsMenu()`, `SceneManager::ChangeScene`, `AudioManager::RestartBGM`) | Jason Gregory / Nintendo HIG / SDL2 | **IMPLEMENTADO** | Hito 66 (19 Oct 2026) |
@@ -242,7 +242,7 @@
 | **OPT-230** | Audio / Gameplay | Sample-Accurate Interactive Music Stems & Beat-Synchronized Cueing Engine | Guy Somberg / Michael Sweet / GDC 2016 | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-231** | Arquitectura Motor / Pausa | Sistema de Pausa Centralizado Universal, Congelamiento Determinista de Simulación/Audio y Modal Holográfico 2D Multiplataforma (GX2 / SDL2) | Robert Nystrom / Jason Gregory / Nintendo HIG | **IMPLEMENTADO** | Hito 67 (19 Oct 2026) |
 | **OPT-232** | Simulación / Tiempo | Decoupled Multi-Clock Simulation & Temporal Time-Dilation System (Hierarchical Time Manager) | Jason Gregory / Glenn Fiedler / UE4 | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-233** | UI / Arquitectura Motor | Modal Stack & Composited Scene Overlay Layer Architecture (Hierarchical Viewport Graph) | Robert Nystrom / Jason Gregory / ImGui | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-233** | UI / Arquitectura Motor | Modal Stack & Composited Scene Overlay Layer Architecture (Hierarchical Viewport Graph) | Robert Nystrom / Jason Gregory / ImGui | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-234** | Shaders / Post-Procesado | GPU Frame Snapshot Texture Blit & Holographic Glass Blur Shading on Latte eDRAM | Tiago Sousa / AMD R700 Whitepaper | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-235** | Arquitectura Motor / ECS | Identificador Generacional de Entidad de 32 Bits (`Entity`) con Detección $\mathcal{O}(1)$ Anti-Use-After-Free | Jason Gregory / Mike Acton / Bitsquid | **IMPLEMENTADO** | Hito 68 (19 Oct 2026) |
 | **OPT-236** | Estructuras de Datos DOD | Contenedor de Componentes Sparse-Set con Swap-and-Pop $\mathcal{O}(1)$ y Contigüidad L1D (`ComponentPool<T>`) | Michele Caini (EnTT) / Vittorio Romeo | **IMPLEMENTADO** | Hito 68 (19 Oct 2026) |
@@ -256,9 +256,9 @@
 | **OPT-244** | Iluminación / ECS | Componente de Fuente de Iluminación 3D Orientado a Datos (`LightComponent` @ 32B L1D) | Tiago Sousa (Crytek) / AMD R700 ISA | **IMPLEMENTADO** | Hito 69 (19 Oct 2026) |
 | **OPT-245** | Cinemática 3D / ECS | Sistema de Transformación y Cinemática Espacial 3D (`TransformSystem`) | Jason Gregory / Mike Acton | **IMPLEMENTADO** | Hito 69 (19 Oct 2026) |
 | **OPT-246** | Audio Espacial / ECS | Sistema de Audio Espacial 3D Orientado a Datos (`AudioSpatialSystem`) | Rob Bridgett / Simon Ashby | **IMPLEMENTADO** | Hito 69 (19 Oct 2026) |
-| **OPT-247** | Arquitectura Motor / Render | Data-Driven RenderMeshSystem & RenderPacket Batching Architecture | Christer Ericson / Jason Gregory / EA DICE | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-247** | Arquitectura Motor / Render | Data-Driven RenderMeshSystem & RenderPacket Batching Architecture | Christer Ericson / Jason Gregory / EA DICE | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-248** | Geometría GPU / Core 2 SMP | Hierarchical Frustum Culling & Bounding Sphere Batching in ECS Worker Core (Core 2) | Daniel Wright / Ulf Assarsson / Nintendo EAD | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-249** | Audio / Acústica / ECS | Distance-Based Acoustic LOD & Dynamic Spatial Sleep for Inaudible Audio Emitters | Simon Ashby / Raymond C. Turner / SCEE | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-249** | Audio / Acústica / ECS | Distance-Based Acoustic LOD & Dynamic Spatial Sleep for Inaudible Audio Emitters | Simon Ashby / Raymond C. Turner / SCEE | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-250** | Arquitectura Motor / C++20 | Compile-Time System Signature Introspection & Static View Queries via C++20 Concepts | Vittorio Romeo / Bjarne Stroustrup / EnTT | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-251** | Arquitectura Motor / ECS | Migración Completa de la Escena Piloto Testigo Demo 10 (`SceneEnvironmentGX2`) a la Arquitectura ECS C++20 Orientada a Datos | Jason Gregory / Mike Acton / EA Frostbite | **IMPLEMENTADO** | Hito 70 (19 Oct 2026) |
 | **OPT-252** | Pipeline Gráfico / RHI / ECS | Componente Desacoplado de Material y Pipeline State (`MaterialComponent`) | Colin Barré-Brisebois / Jason Gregory / EA SEED | **IMPLEMENTADO** | Hito 71 (19 Oct 2026) |
@@ -269,22 +269,22 @@
 | **OPT-257** | Cinemática / Cámaras 3D | Dual-Screen Asymmetric Viewport Compositor for Wii U (TV + GamePad DRC) via `CameraComponent` | Nintendo Wii U Tech Docs / Mark Haigh-Hutchinson | **IMPLEMENTADO** | Hito 72 (20 Oct 2026) |
 | **OPT-258** | Estructuras de Datos / Culling | Hierarchical Flat Bounding Volume Hierarchy (BVH) & Frustum Culling on Core 2 Espresso | Christer Ericson / Daniel Wright / Frostbite | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-259** | Precisión Z-Buffer / Silicio | Floating-Point Reverse-Z Depth Buffering & Hi-Z Early-Z Acceleration on Latte eDRAM | Matt Pettineo / Emil Persson / AMD RV770 Whitepaper | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-260** | Arquitectura Motor / RHI | Stateless Render Command Bucketing & 64-Bit Key Radix Sorting Architecture | Christer Ericson / Yuriy O'Donnell / Jason Gregory | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-261** | GPU Pipeline / eDRAM | Hardware Early-Z Depth Pre-Pass Architecture with Microcode Pipeline State Isolation | Tiago Sousa / Emil Persson / AMD R700 Whitepaper | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-260** | Arquitectura Motor / RHI | Stateless Render Command Bucketing & 64-Bit Key Radix Sorting Architecture | Christer Ericson / Yuriy O'Donnell / Jason Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-261** | GPU Pipeline / eDRAM | Hardware Early-Z Depth Pre-Pass Architecture with Microcode Pipeline State Isolation | Tiago Sousa / Emil Persson / AMD R700 Whitepaper | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-262** | Arquitectura RHI / Debug | Automated Compile-Time / Runtime RHI Validation Layer & Silicon State Guard | Khronos / John Carmack / Jason Gregory | **IMPLEMENTADO** | Hito 74 (21 Oct 2026) |
 | **OPT-263** | Rasterización / Geometría | Conservative Screen-Space Silhouette Area Culling for Latte Quad-Divergence Mitigation | Hasselgren / Akenine-Möller / AMD Latte Guide | **EVALUADO / RESERVADO** | Vegetación Masiva |
 | **OPT-264** | RHI / Silicio GPU Latte | Type-Safe Bitmask-Driven Silicon State Dirty Flags (Fine-Grained Sub-State Tracking) | Jason Gregory / John Carmack / Khronos Group | **IMPLEMENTADO** | Hito 74 (21 Oct 2026) |
 | **OPT-265** | Arquitectura Motor / Render Graph | Declarative Render Pass Pipeline Barrier & Automatic Hazard Tracking | Yuriy O'Donnell / Matthäus Chajdas / Tobias Hector | **IMPLEMENTADO** | Hito 74 (21 Oct 2026) |
 | **OPT-266** | Arquitectura ECS / Clean Code | Zero-Cost Strongly-Typed Entity and Handle ID Types via C++20 NTTP | Walter E. Brown / Sean Middleditch / Bjarne Stroustrup | **IMPLEMENTADO** | Hito 74 (21 Oct 2026) |
-| **OPT-267** | Silicio GPU Latte / eDRAM | Hardware Depth-Stencil Fast-Clear with Latte eDRAM Hi-Z Tile Invalidation (`GX2InitDepthBufferHiZEnable` & `GX2ClearDepthStencilEx`) | AMD R700 Whitepaper / Chajdas / Sousa | **PENDIENTE** | Backlog Framework |
+| **OPT-267** | Silicio GPU Latte / eDRAM | Hardware Depth-Stencil Fast-Clear with Latte eDRAM Hi-Z Tile Invalidation (`GX2InitDepthBufferHiZEnable` & `GX2ClearDepthStencilEx`) | AMD R700 Whitepaper / Chajdas / Sousa | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-268** | RHI / Arquitectura Motor | Dynamic Render Target Viewport Scissor Stack Guard in `RHIRenderPass` | Jason Gregory / Vulkan Spec | **PENDIENTE** | Backlog Framework |
 | **OPT-269** | CPU SIMD / Concurrencia | Descarga Paralela de Frustum Culling a Core 2 en `CullingSystem` vía `JobSystem` | Mike Acton / Christer Ericson / IBM PPC 750CL | **IMPLEMENTADO** | Hito 75 (21 Oct 2026) |
 | **OPT-270** | Arquitectura Motor / Render Graph | FrameGraph Directed Acyclic Graph (DAG) Pass Compilation & Automatic Synchronization | Yuriy O'Donnell / Matthäus Chajdas / Tobias Hector | **PENDIENTE** | Backlog Arquitectura |
 | **OPT-271** | Concurrencia / Microarquitectura | Work-Stealing Job Deques with PowerPC lwsync Barrier Optimization | Robert D. Blumofe / Christian Gyrling / Dmitry Vyukov | **PENDIENTE** | Backlog Concurrencia |
 | **OPT-272** | CPU SIMD / Geometría | Structure-of-Arrays (SoA) SIMD Frustum Culling with PowerPC 750CL Paired-Singles Assembly | IBM PPC 750CL Manual / Mike Acton / Christer Ericson | **PENDIENTE** | Backlog SIMD |
 | **OPT-273** | Audio / Concurrencia | Asynchronous Audio DSP & Spatial Occlusion Offloading to Core 2 via JobSystem | Jason Gregory / Sean Middleditch / Wwise | **PENDIENTE** | Backlog Audio |
-| **OPT-274** | Cinemática / Arquitectura KCC | Kinematic Character Controller Decoupled Locomotion State Machine (KCC-FSM) | Jason Gregory / Matt Pettineo / Epic Games | **PENDIENTE** | Backlog Cinemática |
-| **OPT-275** | Físicas / Estructuras DOD | Spatial Hash Grid Broadphase Collision Query for Dynamic KCC & Acoustic Raycasting | Christer Ericson / Erwin Coumans / Mike Acton | **PENDIENTE** | Backlog Físicas |
+| **OPT-274** | Cinemática / Arquitectura KCC | Kinematic Character Controller Decoupled Locomotion State Machine (KCC-FSM) | Jason Gregory / Matt Pettineo / Epic Games | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-275** | Físicas / Estructuras DOD | Spatial Hash Grid Broadphase Collision Query for Dynamic KCC & Acoustic Raycasting | Christer Ericson / Erwin Coumans / Mike Acton | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-276** | Audio Espacial / Acústica | Analytical Edge Acoustic Diffraction & Frequency-Dependent Biot-Tolstoy-Medwin Filter | Nicolas Tsingos / Carl Schissler / Dinesh Manocha | **PENDIENTE** | Backlog Audio |
 | **OPT-277** | Cinemática / Cámaras 3D | Decoupled Spring-Arm Follow Camera System with Predictive Lag & Sphere-Cast | Mark Haigh-Hutchinson / Epic Games USpringArm | **PENDIENTE** | Backlog Cámaras |
 | **OPT-278** | Telemetría / OSD | Monitor Global de Recursos OSD (Botón "-") & Telemetría en Vivo de Silicio (CPU, GPU, MEM1, MEM2, Arenas, Audio, RHI) | Jason Gregory / Sony SIE / EA Frostbite | **IMPLEMENTADO** | Hito 77 (21 Oct 2026) |
@@ -328,7 +328,7 @@
 | **OPT-316** | Shaders / Tipografía Vectorial | Multi-Channel Signed Distance Field (MSDF) Vector Font Atlas en Shaders CafeGLSL de Latte | Viktor Chlumský / Chris Green (Valve) | **PENDIENTE** | Backlog Shaders Fase 3 |
 | **OPT-317** | Memoria / Telemetría Silicio | Modelado Físico Riguroso de Jerarquía de Memoria eDRAM (MEM1 32 MB) vs DDR3 (MEM2 1024 MB) y Telemetría de Silicio | Jason Gregory (Cap. 6.3) / Nintendo Cafe OS | **IMPLEMENTADO** | Hito 90 (24 Oct 2026) |
 | **OPT-318** | Renderizado 3D / Estrés GPU | Spawner de Estrés de Silicio y Límites Empíricos de Rasterización a 60 FPS en GPU AMD Latte (1 a 16 Casas, 141.8k Tris, 80 Draws) | Jason Gregory / AMD RV770 Reference | **IMPLEMENTADO** | Hito 90 (24 Oct 2026) |
-| **OPT-319** | Renderizado 3D / Silicio GX2 | Hardware Geometry Instancing & Per-Instance Transform Stream Buffer (`GX2DrawIndexedInstanced`) | Jason Gregory (Cap. 10.2.7) / Wolfgang Engel | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-319** | Renderizado 3D / Silicio GX2 | Hardware Geometry Instancing & Per-Instance Transform Stream Buffer (`GX2DrawIndexedInstanced`) | Jason Gregory (Cap. 10.2.7) / Wolfgang Engel | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-320** | Visibilidad / Culling GPU | Hierarchical Z-Buffering (Hi-Z) & GPU Occlusion Culling con Bounding Boxes para Instancias Masivas | Ned Greene / Colin Barr�-Brisebois | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-321** | C�maras / Silicio GPU Latte | Component-Based Camera Collision Sweep & Elastic Spring-Arm (`SpringArmComponent` + `SpringArmSystem`) | Mark Haigh-Hutchinson / Jason Gregory | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-322** | Shaders / Renderizado 3D | Iluminación de Estudio Profesional de 3 Puntos (Key/Fill/Rim), Half-Lambert Wrap y Proyección Tangente | Brent Burley / Morten Mikkelsen / Jason Gregory | **IMPLEMENTADO** | Hito 92 (24 Oct 2026) |
@@ -336,7 +336,7 @@
 | **OPT-324** | Shaders / Materiales PBR | Microfacet Cook-Torrance BRDF (Distribución GGX + Enmascaramiento Smith) en Silicio CafeGLSL | Bruce Walter / Brian Karis / Jason Gregory | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-325** | Renderizado 3D / Shaders | Ciclo Dinámico Día/Noche (1 min/etapa), Transición Hermite $C^1$ e Independencia de Zoom en Silicio GX2 | A.J. Preetham / Sean O'Neil / Jason Gregory | **IMPLEMENTADO** | Hito 93 (24 Oct 2026) |
 | **OPT-326** | Atmósfera / Shaders | Continuous Ephemeris Orbit & Physically-Based Atmospheric Sun/Moon Color Curve | Eric Bruneton / Tomoyuki Nishita / Jason Gregory | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-327** | Renderizado 3D / Shaders | Dual-Source Directional Light Multiplexing & Shadow Map Handover | Jason Gregory / Nicolas Thibieroz & Wolfgang Engel | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-327** | Renderizado 3D / Shaders | Dual-Source Directional Light Multiplexing & Shadow Map Handover | Jason Gregory / Nicolas Thibieroz & Wolfgang Engel | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-328** | Shaders / Silicio GPU Latte | Alpha-to-Coverage (A2C) con 4x MSAA y Dithering Bayer en Silicio Latte GX2 (`GX2SetAlphaToCoverage`) | Ignacio Casta�o / Chris Green & Hume / AMD RV770 | **PENDIENTE** | Backlog Shaders / Fase 3 |
 | **OPT-329** | Cámaras / Concurrencia | Decoupled Multi-Ray Whisker Feelers & Asynchronous Camera Collision Sweeps (`SpringArmSystem`) | Mark Haigh-Hutchinson / Jason Gregory / Christer Ericson | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-330** | Animación / Silicio GX2 | Linear Blend Skinning (LBS) en Silicio AMD Latte GX2 con Deformación en Vertex Shader CafeGLSL (`skinning_gx2.vert` / `skinning_gx2.gsh`) mediante registros uniformes KC2[8..103] | Jason Gregory / Naty Hoffman / AMD Latte ISA | **IMPLEMENTADO** | Hito 95 (25 Oct 2026) |
@@ -352,19 +352,19 @@
 | **OPT-340** | Animacin / ECS | Multi-Track Cross-Fading, Animation Blend Tree & Footfall Phase Sync | Jason Gregory / Christian Gyrling (Naughty Dog) | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-341** | Cooker / Shading | Pre-muestreo y Horneado de Oclusin Ambiental de Vrtices en Asset Cooker Offline (Vertex AO Baking) | Per Christensen (Pixar SIGGRAPH 08) / Gregory | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-342** | Animacin / CPU Cach | Hierarchical Skeleton Level-of-Detail (LOD) & Joint Evaluation Culling por Distancia de Pantalla | Naty Hoffman / Jason Gregory (Cap. 11.8) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-343** | Renderizado 3D / Silicio GX2 | Skinned Mesh GPU Instancing & Multi-Instance Uniform Palette Cycling (`GX2DrawIndexedInstanced`) | Jason Gregory (Cap. 14.2) / Frostbite EA DICE | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-344** | Entrada / Arquitectura | Unified Input Action Mapping y Context Layering System (InputContext) | Jason Gregory (Cap. 8) / Unreal Enhanced Input | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-343** | Renderizado 3D / Silicio GX2 | Skinned Mesh GPU Instancing & Multi-Instance Uniform Palette Cycling (`GX2DrawIndexedInstanced`) | Jason Gregory (Cap. 14.2) / Frostbite EA DICE | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-344** | Entrada / Arquitectura | Unified Input Action Mapping y Context Layering System (InputContext) | Jason Gregory (Cap. 8) / Unreal Enhanced Input | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-345** | Cooker / Pipeline 3D | Extensible Model Importer Backend Pipeline (Abstract Model Importer / Strategy Pattern) | Jason Gregory (Cap. 14) / CryEngine Pipeline | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-346** | Tooling / Build System | Multi-Threaded Batch Model Cooker & Asset Dependency Manifest (`cook_models_batch.py`) | Jason Gregory (Cap. 14.5) / Ninja Build DAG | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-347** | Cooker / Shading | Automatic Tangent Space Generation (MikkTSpace) & Normal Mapping Packing en Cooker | Morten Mikkelsen (2008) / Khronos glTF | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-348** | Shaders / Silicio GX2 | Skybox CubeMap Nativo GX2 con Proyección Z=W y Depth Test LEQUAL | Gordon & Clevenger (Cap. 9) / AMD Latte GX2 | **IMPLEMENTADO** | Hito 99 |
 | **OPT-349** | Shaders / Espacio Tangente | Perturbación Analítica de Normales en Espacio Tangente (TBN) vía Derivadas dFdx/dFdy | Gordon & Clevenger (Cap. 10) / Christian Schüler | **IMPLEMENTADO** | Hito 99 |
 | **OPT-350** | Shaders / Reflexión | Reflexión Ambiental CubeMap en Tiempo Real con Fresnel de Schlick ( = 0.04$) | Gordon & Clevenger (Cap. 9) / Christophe Schlick | **IMPLEMENTADO** | Hito 99 |
-| **OPT-351** | Renderizado / Pipeline GX2 | Reversed Skybox Draw Order with Early-Z Hierarchical Occlusion Culling | Tiago Sousa (Crytek GDC 08) / Emil Persson (Avalanche) | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-351** | Renderizado / Pipeline GX2 | Reversed Skybox Draw Order with Early-Z Hierarchical Occlusion Culling | Tiago Sousa (Crytek GDC 08) / Emil Persson (Avalanche) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-352** | Shaders / PBR | Cook-Torrance Microfacet BRDF (GGX / Smith) con Irradiancia por Armónicos Esféricos (SH L2) | Brian Karis (Epic Games 2013) / Naty Hoffman | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-353** | Shaders / IBL | Pre-Filtered Specular Environment Map & 2D BRDF Integration LUT (Split-Sum Approximation) | Brian Karis (Epic Games) / Sébastien Lagarde | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-354** | Shaders / Micro-Relieve | Parallax Occlusion Mapping (POM) con Auto-Sombreado en Espacio Tangente sobre Silicio GX2 | Natalya Tatarchuk (ATI Research) / Jason Gregory | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-355** | Arquitectura / ECS | Modular Skybox & Environment Render Pass Architecture (SkyboxPass / EnvironmentComponent) | Jason Gregory (3rd Ed., Cap. 14) / Yuriy O'Donnell | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-355** | Arquitectura / ECS | Modular Skybox & Environment Render Pass Architecture (SkyboxPass / EnvironmentComponent) | Jason Gregory (3rd Ed., Cap. 14) / Yuriy O'Donnell | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-356** | Arquitectura / ECS | ECS Frame-Phase Topology & System Execution Barrier (Topology DAG / Version Bitmask) | Jason Gregory (3rd Ed., Cap. 14.4) / Mike Acton | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-357** | Pipeline Texturas / Silicio | Native AMD Latte GX2 Hardware Texture Swizzling & Tiled Mipmap Sub-Allocator (`GX2_TILE_MODE_TILED_2D_THIN_1`) | AMD R700 ISA / Jason Gregory (Cap. 10.2) / DICE Frostbite | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-358** | Shaders / Iluminaci�n | Valve Half-Lambert Dual-Lobe Wrap Diffusion & Subsurface Scattering Approximation for Stylized Rendering | Jason Mitchell & Chris Green (Valve SIGGRAPH 06) / John Hable | **PENDIENTE** | Backlog Fase 3 |
@@ -374,16 +374,16 @@
 | **OPT-362** | Shaders / Atmósfera | Altitude-Anchored Horizon Atmospheric Fog Blending with Skybox Zenith/Nadir Harmonics | Tiago Sousa (Crysis GDC 08) / Inigo Quilez / Sébastien Hillaire | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-363** | Shaders / Memoria | Dual-Paraboloid Environment Mapping as Low-Memory Skybox Alternative (33% VRAM Reduction) | Wolfgang Heidrich (SIGGRAPH 98) / Jason Gregory | **EVALUADO / RESERVADO** | Backlog Fase 3 |
 | **OPT-364** | Shading / Anti-Aliasing | PBR Specular-Anti-Aliasing via Toksvig Normal Variances or Geometric Roughness Filtering | Michael Toksvig (NVIDIA 05) / Kaplanyan (Crytek 11) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-365** | Arquitectura / RHI | Data-Driven Material Property Block (MPB) & Unified Constant Buffer Descriptor Architecture | Jason Gregory (3rd Ed., Cap. 13.1) / DICE Frostbite | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-365** | Arquitectura / RHI | Data-Driven Material Property Block (MPB) & Unified Constant Buffer Descriptor Architecture | Jason Gregory (3rd Ed., Cap. 13.1) / DICE Frostbite | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-366** | Arquitectura / ECS | Reusable Studio Lighting Rig & Infinite Pedestal Environment Component (`StudioBackdropComponent` / `StudioEnvironmentSystem`) | Jason Gregory (3rd Ed., Cap. 10 & 14) / Colin Barré-Brisebois (DICE) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-367** | Arquitectura / RHI | Universal Sky & Environmental Dome Subsystem (`SkyboxComponent` & `SkyboxRenderPass`) | Jason Gregory (3rd Ed., Cap. 10.3) / Lengyel / UE5 SkyLight | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-368** | Shaders / RHI | Environment Map Texture Streaming & Seamless CubeMap Filtering Hardware Array (`EnvironmentProbeComponent`) | Jason Gregory (3rd Ed., Cap. 10.3 & 14.1) / Brian Karis (UE4) / DICE | **PENDIENTE'
+| **OPT-367** | Arquitectura / RHI | Universal Sky & Environmental Dome Subsystem (`SkyboxComponent` & `SkyboxRenderPass`) | Jason Gregory (3rd Ed., Cap. 10.3) / Lengyel / UE5 SkyLight | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-368** | Shaders / RHI | Environment Map Texture Streaming & Seamless CubeMap Filtering Hardware Array (`EnvironmentProbeComponent`) | Jason Gregory (3rd Ed., Cap. 10.3 & 14.1) / Brian Karis (UE4) / DICE | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-369** | Arquitectura Motor | Descomposici�n en Librer�as Est�ticas Modulares (`engine_core`, `engine_physics`, `engine_audio`, `engine_input`, `engine_graphics`, `engine_framework`) | Jason Gregory (Cap. 1 & 14) / Frostbite | **IMPLEMENTADO** | Hito 119 (2 Nov 2026) |
 | **OPT-370** | Arquitectura Motor / Silicio | Framework de Escena Base 3D Reusable (`GameScene3D`) con Ciclo de Vida RAII de Silicio Latte GX2 (`GX2DepthBuffer` D24S8 + `GX2ContextState` @ 256B) | Jason Gregory (Cap. 14) / AMD Latte Spec | **IMPLEMENTADO** | Hito 119 (2 Nov 2026) |
 | **OPT-371** | Gráficos / Debug Silicio | Subsistema Universal de Renderizado Inmediato de Depuración 3D (`DebugDraw3D`) con Guarda de Recorte de Plano Cercano y Cero Alocaciones a 60 FPS | Jason Gregory (Cap. 13 & 15) / Render2DGX2 | **IMPLEMENTADO** | Hito 119 (2 Nov 2026) |
 | **OPT-372** | Gráficos / Matemática | Recorte Analítico de Segmentos de Línea 3D contra el Plano de Corte Anterior (Analytical Homogeneous Near-Plane Line Clipping) | James Blinn (1991) / Christer Ericson | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-373** | Concurrencia / Debug | Emisión Concurrente de Geometría de Depuración desde Core 2 vía Cola Circular Lock-Free (Multi-Threaded Debug Line Batching) | Christian Gyrling (Naughty Dog) / Gregory | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-374** | Cinemática / Locomoción | Camera-Relative Kinematic Locomotion Decoupling (KinematicLocomotionComponent & CameraRelativeMovementSystem) | Jason Gregory (3rd Ed., Cap. 11 & 14) | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-374** | Cinemática / Locomoción | Camera-Relative Kinematic Locomotion Decoupling (KinematicLocomotionComponent & CameraRelativeMovementSystem) | Jason Gregory (3rd Ed., Cap. 11 & 14) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-375** | Gráficos / RHI GX2 | Dynamic Vertex Fetch Shader Layout Generator (DynamicFetchShaderDescriptor & RHIFetchShaderCache) | AMD Latte R700 ISA / Jason Gregory (Cap. 13) | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-376** | Animación / Silicio GX2 | Skinned Mesh Hardware Resource Wrapper (SkinnedMesh RAII Container) | Jason Gregory (3rd Ed., Cap. 12 & 14) | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-377** | IA / Arquitectura | Librería Modular engine_ai & Arquitectura de Navegación Espacial Desacoplada (NavGraph) en C++20 Puro | Jason Gregory (3rd Ed., Cap. 19.1) | **IMPLEMENTADO** | Hito 121 (5 Nov 2026) |
@@ -394,8 +394,8 @@
 | **OPT-382** | IA / Navegación 3D | Malla de Navegación Dinámica (NavMesh) Poligonal 3D y Algoritmo Funnel (String Pulling) | Mikko Mononen (Recast Navigation) / Gregory (Cap. 19.3) | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-383** | IA / Dirección | Comportamientos de Dirección Basados en Contexto (Danger & Interest Maps) | Andrew Fray (2013) / Dave Mark | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-384** | IA / Concurrencia | Planificación de Rutas Jerárquica (HPA*) y Búsqueda Asíncrona en Core 2 de Espresso | Adi Botea (2004) / Christian Gyrling (Naughty Dog) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-385** | IA / Arquitectura | Data-Driven Behavior Tree Engine Subsystem (BehaviorTreeComponent & BehaviorTreeRunner) | Jason Gregory (Cap. 19.2.3) / Damian Isla (Halo 2 GDC 05) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-386** | IA / Percepción | Sensory Blackboard & Multi-Stimulus Perception Subsystem (AIPerceptionComponent & PerceptionSystem) | Jason Gregory (Cap. 19.3) / Unreal Engine AIPerception | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-385** | IA / Arquitectura | Data-Driven Behavior Tree Engine Subsystem (BehaviorTreeComponent & BehaviorTreeRunner) | Jason Gregory (Cap. 19.2.3) / Damian Isla (Halo 2 GDC 05) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-386** | IA / Percepción | Sensory Blackboard & Multi-Stimulus Perception Subsystem (AIPerceptionComponent & PerceptionSystem) | Jason Gregory (Cap. 19.3) / Unreal Engine AIPerception | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-387** | Motor / Matemáticas | Generador de Números Pseudoaleatorios Determinista PCG32 Desacoplado y Libre de Sesgo | Melissa O'Neill (2014) / Jason Gregory (Cap. 4.6) | **IMPLEMENTADO** | Hito 123 (5 Nov 2026) |
 | **OPT-388** | Motor / Matemáticas | Muestreo Geométrico Analítico y Distribuciones Multidimensionales 2D/3D sin Distorsión Polar | Jason Gregory (Cap. 4.6.4) / PBRT | **IMPLEMENTADO** | Hito 123 (5 Nov 2026) |
 | **OPT-389** | Motor / Gráficos GX2 | Erradicación de `std::rand()` Global y Renderizado de Partículas por Lotes Single Draw Call GPU | Jason Gregory (Cap. 4.6) / Render2DGX2 | **IMPLEMENTADO** | Hito 123 (5 Nov 2026) |
@@ -404,13 +404,13 @@
 | **OPT-392** | Motor / Configuraci�n | Subsistema Can�nico de Configuraci�n Tipada y Persistencia INI (`EngineConfig`, `engine_config.ini`) | Jason Gregory (Cap. 5.3) | **IMPLEMENTADO** | Hito 124 (6 Nov 2026) |
 | **OPT-393** | Motor / GUI Consola | Men� de Opciones Interactivo de 4 Pesta�as y Modal Universal de Pausa (`SceneOptions`, `SceneManager`) | Jason Gregory (Cap. 14.5) / Touch HIG | **IMPLEMENTADO** | Hito 124 (6 Nov 2026) |
 | **OPT-394** | Motor / Silicio GX2 | Sincronizaci�n Bidireccional de Modo de Sombreado (Clay) y Filtrado TMU entre Escenas 3D | Jason Gregory (Cap. 13) / AMD Latte R700 | **IMPLEMENTADO** | Hito 124 (6 Nov 2026) |
-| **OPT-395** | Motor / Configuraci�n | Dynamic Console Variable (CVar) Reflection & In-Game Developer Terminal Subsystem | Jason Gregory (Cap. 5.3.2) / Quake / Valve Source | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-395** | Motor / Configuraci�n | Dynamic Console Variable (CVar) Reflection & In-Game Developer Terminal Subsystem | Jason Gregory (Cap. 5.3.2) / Quake / Valve Source | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-396** | Motor / Persistencia | Storage Abstraction Layer (SAL) & Atomic Save-Data Shadow Copying | Nintendo Cafe OS / Switch `nn::fs` / Lot Check | **IMPLEMENTADO** | Hito 125 (7 Nov 2026) |
-| **OPT-397** | Motor / Concurrencia | Asynchronous Non-Blocking Save-Data Worker on Core 2 (Job System Double-Buffering) | Jason Gregory (Cap. 5.2.3) / Naughty Dog GDC 15 | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-398** | Motor / Seguridad | Cryptographic HMAC-SHA256 Integrity Verification & Anti-Tampering for Save Data | Nintendo Lot Check / Gregory (Cap. 5.3.4) | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-399** | Motor / VFS | Virtual File System (VFS) Asynchronous Content Package Mount Architecture (`content:/`) | Jason Gregory (Cap. 5.2.2) / CryEngine VFS | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-400** | Motor / Entrada | Hierarchical Context-Sensitive Input Action Router & Priority Layer Stack | Jason Gregory (Cap. 8.3 & 8.5) / Unreal Enhanced Input | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-401** | Motor / Entrada | Asynchronous HID Disconnection Invalidation & Auto-Pause Guard | Nintendo TRC / Gregory (Cap. 8.1) | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-397** | Motor / Concurrencia | Asynchronous Non-Blocking Save-Data Worker on Core 2 (Job System Double-Buffering) | Jason Gregory (Cap. 5.2.3) / Naughty Dog GDC 15 | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-398** | Motor / Seguridad | Cryptographic HMAC-SHA256 Integrity Verification & Anti-Tampering for Save Data | Nintendo Lot Check / Gregory (Cap. 5.3.4) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-399** | Motor / VFS | Virtual File System (VFS) Asynchronous Content Package Mount Architecture (`content:/`) | Jason Gregory (Cap. 5.2.2) / CryEngine VFS | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-400** | Motor / Entrada | Hierarchical Context-Sensitive Input Action Router & Priority Layer Stack | Jason Gregory (Cap. 8.3 & 8.5) / Unreal Enhanced Input | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-401** | Motor / Entrada | Asynchronous HID Disconnection Invalidation & Auto-Pause Guard | Nintendo TRC / Gregory (Cap. 8.1) | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-402** | Motor / Hápticos | L1/L2 Cache-Aligned Sustained Haptic Waveform Streaming Buffer for Cafe OS VPAD & WPAD | Nintendo Cafe OS SDK / Gregory (Cap. 8.2) | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-403** | Motor / Entrada | Non-Linear Ergonomic Power-Curve Exponential Mapping for Dual-Stick Controllers | Jason Gregory (Cap. 8.2.2) / Mick West (2008) | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-404** | Motor / Concurrencia | Asynchronous Sub-Frame Input Polling & High-Frequency IMU Gyro-Blending on Core 2 | Nintendo EAD (CEDEC 2017) / Gregory (Cap. 8.4) | **PENDIENTE** | Backlog Fase 3 |
@@ -439,10 +439,23 @@
 | **OPT-427** | Concurrencia SMP / Clean Code | DTO Inmutable por Cuadro para Jobs BVH en Core 2 (`BVHFrameBuildInput` / `BVHFrameBuildOutput`) | Tony Albrecht / Jason Gregory (Cap. 7.6) | **PENDIENTE** | Propuesta Backlog |
 | **OPT-428** | Entrada / Ciclo de Vida OS | Bombeo Continuo de Eventos Cafe OS (`ProcUIProcessMessages`), Soporte del Menú HOME y Cierre Limpio | Cafe OS ProcUI / SDL2 WiiU / Jason Gregory (Cap. 8) | **IMPLEMENTADO** | Hito 136 (14 Nov 2026) |
 | **OPT-429** | Gráficos GX2 / Multihilo | Desacoplamiento de Carga Multihilo en Core 2 (Zero-GX2 Staging) y Viewport Fullscreen 16:9 en Modelos Estáticos | Jason Gregory (Cap. 7) / GX2 Thread-Safety Rules | **IMPLEMENTADO** | Hito 137 (14 Nov 2026) |
+| **OPT-430** | Gráficos GX2 / Silicio | Introspección Dinámica de Atributos GX2 en `ForwardRendererGX2` y Zero-GX2 Async Staging en HID | AMD R700 ISA / Jason Gregory (Cap. 8 & 14) | **IMPLEMENTADO** | Hito 138 (14 Nov 2026) |
+| **OPT-431** | Gráficos GX2 / Silicio | Erradicación Global de `WHBGfxLoadGFDShaderGroup` (Direct GFD), Blindaje de Sampler y Endian Swap | Cafe OS GFD / AMD R700 / Jason Gregory (Cap. 12 & 14) | **IMPLEMENTADO** | Hito 139 (14 Nov 2026) |
+| **OPT-432** | Concurrencia / Silicio | Sincronización Acotada en Cafe OS (`OSWaitEventWithTimeout`) y Blindaje de Aislamiento GX2/SDL2 | Cafe OS ProcUI / Jason Gregory (Cap. 7 & 14) | **IMPLEMENTADO** | Hito 140 (17 Nov 2026) |
+| **OPT-433** | Arquitectura / DIP | Desacoplamiento de `EngineConfig` vía Inversión de Dependencias y Registro de Observadores sin Heap | Jason Gregory (3rd Ed., Cap. 5.3) / Clean Architecture | **IMPLEMENTADO** | Hito 141 (17 Nov 2026) |
+| **OPT-434** | UI / Rendimiento | Interfaz `SceneOptions` Zero-Alloc a 60 FPS y Navegación Multi-Mando (D-Pad / Sticks / Botones) | Jason Gregory (Cap. 8 & 14) / Robert Nystrom | **IMPLEMENTADO** | Hito 141 (17 Nov 2026) |
+| **OPT-435** | Gráficos / Audio | Conexión Real de Samplers GX2 (`SetTextureFilterMode`), Control SFX en `AudioManager` y OSD Telemetría | AMD Latte GX2 / SDL2 Audio / ResourceMonitor | **IMPLEMENTADO** | Hito 141 (17 Nov 2026) |
+| **OPT-436** | Hápticos / Silicio | Secuenciador PWM Paced de 160 ms en `RumbleManager` y Calibración de Intensidades en GamePad DRC | Cafe OS VPAD / Jason Gregory (Cap. 8.2) | **IMPLEMENTADO** | Hito 141 (17 Nov 2026) |
+| **OPT-437** | Audio / Concurrencia | Atomic Parameter Bus y Swap de Buffers sin Heap bajo `SDL_LockAudio` | Ross Bencina (Real-Time Audio) / Jason Gregory (Cap. 15) | **IMPLEMENTADO** | Hito 141 (17 Nov 2026) |
+| **OPT-438** | Gráficos GX2 / Silicio | Inicialización Inmune de Samplers en `ForwardRendererGX2`, Fallback de Textura Neutral y Soporte de Índices U32 | AMD Latte R700 / Cafe OS GX2 | **IMPLEMENTADO** | Hito 141 (17 Nov 2026) |
+| **OPT-439** | Entrada / Multi-Consola | Detección Multi-Mando Universal sin Símbolos Hardware en Escenas y Soporte de Desarrollo PC | Nintendo TRC / SDL2 Multiplatform | **IMPLEMENTADO** | Hito 141 (17 Nov 2026) |
+| **OPT-440** | Concurrencia / DOD | Stateless Stack-Bitset Broadphase Queries (32B L1D) & Epoch-Safe Async Job Slots (`jobCounter == 0`) | Christer Ericson / Mike Acton / Jason Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
+| **OPT-441** | Higiene Motor / Silicio & Concurrencia | Auditoría Integral Deep-Clean (51 Hallazgos + 3 Micro-Fixes): Cola MPMC Vyukov, WAV Big-Endian, CubeMap `depth=6`, DAG Acíclico 7 Librerías, VFS Anti-ABA & `-fno-finite-math-only` | Dmitry Vyukov / AMD Latte GX2 / C++20 Core Guidelines | **IMPLEMENTADO** | Hito 143 (19 Nov 2026) |
+| **OPT-442** | Plataforma Nativa Wii U / Cero SDL2 | Migración Completa Wii U 100% Nativo (GX2 Swapchain + ProcUI + `Render2DGX2` Triple-Buffer + `sndcore2` AX 48 kHz + Resampler 48.16) y Encapsulación SDL2 Multiplataforma | Cafe OS WUT / AMD Latte GX2 / sndcore2 DSP | **IMPLEMENTADO** | Hito 144 (19 Nov 2026) |
 
 ---
 
-## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-429`)
+## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-442`)
 
 ### [OPT-01] Multiprocesamiento Simétrico en 2 Cores (Cores 1 y 2)
 - **Implementado en:** [Hito 24](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md#L669) (6 de Octubre de 2026).
@@ -2628,7 +2641,7 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 | **OPT-201** | Shaders / Iluminación Atmosférica | Precomputed Atmospheric Single Scattering LUT in eDRAM | Eric Bruneton / Nintendo EAD | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-202** | Geometría GPU / Terreno | Continuous Perimeter Skirt Mesh Stitching for Terrain Quad-Tree LOD | Peter Lindstrom / Hugues Hoppe | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-203** | Shaders / Transparencias | Screen-Space Stochastic Alpha Dithering via 4x4 Bayer Matrix on Latte TMUs | Eric Enderton / AMD GPUOpen | **PENDIENTE** | Backlog Fase 3 |
-| **OPT-204** | Entrada / Arquitectura Motor | Multi-Peripheral Unified Action Mapping & Input Context Stack (Contextual Input Architecture) | Jason Gregory / Unreal Engine 5 / Nystrom | **PENDIENTE** | Backlog Fase 3 |
+| **OPT-204** | Entrada / Arquitectura Motor | Multi-Peripheral Unified Action Mapping & Input Context Stack (Contextual Input Architecture) | Jason Gregory / Unreal Engine 5 / Nystrom | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-205** | Cinemática / Arquitectura Cámara | Modular Orbit-Pan-Dolly Camera Controller with Analytical Exponential Damping & Ground-Frustum Collision Sweeping | Mark Haigh-Hutchinson / Ericson / Gregory | **PENDIENTE** | Backlog Fase 3 |
 | **OPT-206** | Memoria / GPU / Silicio | Handle-Based Unified VBO/IBO Geometry Buffer Sub-Allocator (Virtual Buffer Pool) | Wunkolo / Christer Ericson / DICE Frostbite | **PENDIENTE** | Backlog Fase 3 |
 ```
@@ -4681,34 +4694,21 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 
 
 ### [OPT-392] Subsistema Canónico de Configuración Tipada y Persistencia INI (`EngineConfig`)
-- **Implementado en:** [Hito 124](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md) (6 de Noviembre de 2026).
-- **Problema Resuelto:** Subcapítulo 5.3 de Jason Gregory ("Engine Configuration"). El motor carecía de una fuente de verdad única para configuraciones de renderizado, audio, cámara y depuración; las opciones estaban fragmentadas y replicadas localmente en variables estáticas dentro de cada escena individual.
-- **Solución:**
-  1. **Arquitectura Tipada:** Clase `EngineConfig` (Meyers Singleton con Regla de 5 estricta) dividida en 4 categorías POD: `GraphicsConfig` (resolución, filtro de textura TMU, modo de sombreado, calidad de sombras, pedestal), `AudioConfig` (volumen maestro, BGM y SFX), `CameraConfig` (sensibilidad, inversión de ejes) y `DebugConfig` (colisionadores, triggers, telemetría, navgraph, conos de visión de IA).
-  2. **Persistencia INI sin Dependencias:** Serialización y deserialización estándar C (`std::fopen`, `std::fgets`, `std::fprintf`) en `engine_config.ini` con buffers de pila y sin librerías externas ni alocaciones dinámicas.
-  3. **Reactividad:** Callbacks `RegisterChangeCallback` y método de propagación `ApplyToSubsystems()` con protección contra reentrancia.
+- **Implementado en:** [Hito 124](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md) (6 de Noviembre de 2026) — *Reconciliado en Hito 141 por [OPT-433]*.
+- **Problema Resuelto:** Subcapítulo 5.3 de Jason Gregory ("Engine Configuration"). El motor carecía de una fuente de verdad única para configuraciones de renderizado, audio, cámara y depuración.
+- **Evolución:** Refactorizado en Hito 141 (`OPT-433`) eliminando dependencias circulares con `engine_audio`/`engine_framework`, purgando opciones de escenas archivadas y estableciendo observadores sin alocación dinámica en heap.
 - **Grado de Reusabilidad para el Framework:** **10/10**.
-- **Resultado:** Configuración unificada persistente entre reinicios y cambios de escena, cero alocaciones en runtime.
 
-### [OPT-393] Menú de Opciones Interactivo de 4 Pestañas y Modal Universal de Pausa (`SceneOptions`, `SceneManager`)
-- **Implementado en:** [Hito 124](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md) (6 de Noviembre de 2026).
-- **Problema Resuelto:** Necesidad de una interfaz de usuario visual ergonómica para ajustar las opciones del motor en caliente, y acceso universal a los ajustes desde cualquier escena en ejecución.
-- **Solución:**
-  1. **Menú `SceneOptions`:** 4 pestañas interactivas (`GRAFICOS`, `AUDIO`, `CONTROL`, `DEPURACION`), 5 filas de controles con steppers/sliders, botones de guardado (`[GUARDAR CONFIG]`) y reseteo de fábrica (`[VALORES POR DEFECTO]`), mensaje de feedback en tiempo real.
-  2. **Retorno Polimórfico:** Constructor con callback inyectado `std::function<void()> onBackCallback`, permitiendo volver limpiamente a la escena llamadora o menú anterior.
-  3. **Modal Universal de Pausa:** Integración de un tercer botón `* CONFIGURACION (BOTON - / X / TACTIL)` en `SceneManager::RenderPauseModal`, permitiendo pausar cualquier escena y acceder inmediatamente a la configuración global.
+### [OPT-393] Menú de Opciones Interactivo y Modal Universal de Pausa (`SceneOptions`, `SceneManager`)
+- **Implementado en:** [Hito 124](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md) (6 de Noviembre de 2026) — *Reconciliado en Hito 141 por [OPT-434]*.
+- **Problema Resuelto:** Interfaz ergonómica para configuración global en caliente.
+- **Evolución:** Refactorizado en Hito 141 (`OPT-434`) a 3 pestañas limpias de motor (`GRAFICOS`, `AUDIO`, `CONTROL & HW`), cero alocaciones en caliente y navegación completa por mando físico (D-Pad, Sticks, A, X, +, L, R) y táctil.
 - **Grado de Reusabilidad para el Framework:** **10/10**.
-- **Resultado:** Control ergonómico táctil y físico (GamePad DRC / Pro Controller) sin alocaciones dinámicas en el bucle a 60 FPS.
 
 ### [OPT-394] Sincronización Bidireccional de Modo de Sombreado (Clay) y Filtrado TMU entre Escenas 3D
-- **Implementado en:** [Hito 124](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md) (6 de Noviembre de 2026).
-- **Problema Resuelto:** Barras superiores saturadas de botones redundantes de bajo nivel (resolución, modo arcilla, filtro) y falta de coherencia visual al cambiar entre escenas de modelos 3D y esqueletos.
-- **Solución:**
-  1. En `SceneStaticModelsGX2`: Se reemplazaron `s_btnRes`, `s_btnFilt` y `s_btnModo` por un único botón `[OPCIONES]` que abre `SceneOptions`; el filtro anisotrópico en las 8 TMUs de Latte GX2 se actualiza deterministamente en `OnEnter()` vía `UpdateSamplerFilter()`.
-  2. En `SceneShowcaseGX2`, `SceneBirdAnimationGX2` y `SceneSkeletalAnimationGX2`: El modo Arcilla (Clay) se sincroniza bidireccionalmente con `EngineConfig::Get().graphics.renderMode`.
-  3. En `SceneCollisionTriggerDemoGX2` y `SceneAIDemoGX2`: Las banderas de visualización de debug se inicializan y sincronizan con `EngineConfig::Get().debug`.
-- **Grado de Reusabilidad para el Framework:** **9/10**.
-- **Resultado:** Interfaces de escena limpias y coherentes, con persistencia global en todo el ciclo de vida del motor.
+- **Implementado en:** [Hito 124](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md) (6 de Noviembre de 2026) — *Reconciliado en Hito 141 por [OPT-435]*.
+- **Evolución:** Las opciones acopladas a escenas individuales específicas (modo arcilla, pedestal) fueron archivadas con dichas escenas en `archive/scenes/`. El filtrado TMU GX2 fue promovido a ajuste global del motor en `ForwardRendererGX2` (`OPT-435`).
+- **Grado de Reusabilidad para el Framework:** **10/10**.
 
 ### [OPT-395] Dynamic Console Variable (CVar) Reflection & In-Game Developer Terminal Subsystem
 - **Área:** Motor / Configuración / Backlog Fase 3.
@@ -5132,6 +5132,133 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **PROS:** Cero cuelgues al cerrar la aplicación, estabilidad absoluta en Core 2, renderizado fluido a 60 FPS fijos sin artefactos visuales y protección total de la GPU.
 - **CONTRAS:** Ninguno.
 - **Recomendación Técnica:** Mantener obligatoriamente tiempos de espera acotados (`WithTimeout`) en todas las primitivas de sincronización de Cafe OS en hilos secundarios.
+
+### [OPT-433] Desacoplamiento de `EngineConfig` vía Inversión de Dependencias y Registro de Observadores sin Heap
+- **Área:** Arquitectura de Motor / Principio de Inversión de Dependencias (DIP) / C++20 (`engine_core`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 141 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 5.3 "Engine Configuration"); Robert C. Martin (*Clean Architecture* - Dependency Inversion Principle).
+- **Problema Diagnosticado:** `EngineConfig.cpp` en `engine_core` incluía directamente cabeceras de `engine_audio` (`AudioManager.hpp`) y `engine_framework` (`SceneManager.hpp`), rompiendo el DAG de librerías estáticas en CMake y dependiendo del flag de enlace `-Wl,--start-group`. Además, el registro de callbacks con `std::vector<std::function>` carecía de mecanismo de desregistro y arriesgaba alocaciones en heap.
+- **Mecanismo Implementado:** Erradicación de dependencias circulares en `engine_core`. Se implementó un pool de observadores estático de 16 slots `ObserverSlot` que recibe punteros de función C `ConfigChangeCallback` con `userData`, generando IDs de suscripción deterministas y permitiendo desregistro seguro (`UnregisterChangeCallback`) con cero alocaciones dinámicas. Los subsistemas de alto nivel se suscriben limpiamente desde `Engine::Init()` y se desregistran en `Engine::Shutdown()`.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Permite compilar y reutilizar `engine_core` de forma completamente autónoma en cualquier consola o herramienta externa.
+- **PROS:** Cero dependencias circulares, cero alocaciones en heap, desacoplamiento absoluto de capas.
+- **CONTRAS:** Ninguno.
+
+### [OPT-434] Interfaz `SceneOptions` Zero-Alloc a 60 FPS y Navegación Multi-Mando (D-Pad / Sticks / Botones)
+- **Área:** UI / Ergonomía / Rendimiento en Caliente (`engine_graphics` + `SceneOptions`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 141 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (Cap. 8 "Input System" & Cap. 14 "User Interface"); TRC Nintendo Wii U / Switch (*Non-Touchpad Controller Accessibility*).
+- **Problema Diagnosticado:** En `SceneOptions`, `m_statusMessage` (`std::string`), `UIButton::SetLabel` y `UISlider::Render` realizaban alocaciones dinámicas en heap superando el límite SSO (15 bytes), violando la regla de *Zero Hot Allocations*. Además, el menú solo aceptaba eventos táctiles, impidiendo su uso en TV con mandos convencionales (Wii U Pro Controller, Classic Controller).
+- **Mecanismo Implementado:**
+  1. `UIButton::m_label` migrado a buffer plano contiguo `char m_label[96]`, `UISlider::m_label` a `char m_label[64]` con formateo `snprintf` sin heap en renderizado, y `m_statusMessage` a `const char*` con literales de solo lectura, eliminando al 100% las alocaciones dinámicas en caliente.
+  2. Navegación completa por mando físico: D-Pad y Sticks analógicos arriba/abajo con histéresis y temporizador de repetición (`m_stickRepeatTimer`), cursor visual resaltado en amarillo, botón `A` o toque táctil para accionar, `L`/`R`/`ZL`/`ZR` para alternar pestañas, `+` para guardar y `X` para restablecer valores de fábrica. Retorno seguro con guarda inmediata en `B`. Soporte universal para todos los mandos conectados en `0..MAX_PLAYERS-1`.
+- **Grado de Reusabilidad para el Framework:** **10/10**.
+- **PROS:** Cero alocaciones dinámicas a 60 FPS, navegación universal por TV y GamePad DRC.
+- **CONTRAS:** Ninguno.
+
+### [OPT-435] Conexión Real de Samplers GX2 (`SetTextureFilterMode`), Control SFX en `AudioManager` y OSD Telemetría
+- **Área:** Gráficos GX2 / Audio / Hardware Latte R700 (`engine_graphics` + `engine_audio` + `engine_framework`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 141 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD Latte GX2 Architecture Guide (`GX2InitSamplerXYFilter`); Jason Gregory (Cap. 10 & 14).
+- **Problema Diagnosticado:** Las opciones de filtrado TMU, control SFX y telemetría OSD eran placebo: `ForwardRendererGX2` mantenía el sampler fijo en Aniso 4x, `AudioManager` carecía de métodos `SetSFXEnabled`/`SetSFXVolume` con control de concurrencia y `ResourceMonitor` no se sincronizaba bidireccionalmente con `EngineConfig::graphics.showOSDTelemetry`. Además, existía un valor bicúbico inválido en hardware en `TextureFilterMode`.
+- **Mecanismo Implementado:**
+  1. Erradicación del valor inexistente en silicio `Bicubic`. `ForwardRendererGX2::SetTextureFilterMode` mapea los 6 modos reales soportados por el hardware (Point, Bilinear, Aniso 2x..16x) directamente a los registros de silicio `GX2InitSamplerXYFilter` y `GX2InitSamplerZMFilter`.
+  2. `AudioManager::SetSFXEnabled` y `SetSFXVolume` condicionan la mezcla de audio con exclusión mutua de audio (`SDL_LockAudio`/`SDL_UnlockAudio`), `AudioEngine3D::SetBusVolume` y `PlayClick()`.
+  3. Sincronización bidireccional de `ResourceMonitor::SetVisible` con `graphics.showOSDTelemetry` en `Engine::Init()`, `Engine::Update()` (botón `-`) y `SceneOptions`.
+- **Grado de Reusabilidad para el Framework:** **10/10**.
+- **PROS:** Todas las opciones del menú surten efecto físico inmediato en el hardware.
+- **CONTRAS:** Ninguno.
+
+### [OPT-436] Secuenciador PWM Paced de 160 ms en `RumbleManager` y Calibración de Intensidades en GamePad DRC
+- **Área:** Entrada / Hápticos / Silicio GamePad DRC (`engine_input`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 141 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** Nintendo Cafe OS SDK (`vpad/input.h` / `VPADControlMotor`); Jason Gregory (Cap. 8.2).
+- **Problema Diagnosticado:** `RumbleManager::Update` llamaba a `SetHardwareRumble` en cada fotograma a 60 Hz (>1000 Hz con VSync OFF), saturando la cola IPC inalámbrica hacia el GamePad DRC y reiniciando el patrón cada 16 ms. Además, en Cafe OS `VPADControlMotor` espera la longitud del patrón en bits (no en bytes), provocando longitudes incorrectas, y las intensidades no generaban potencias PWM diferenciadas (`0x55` y `0xAA` comparten un 50% de ciclo de trabajo).
+- **Mecanismo Implementado:**
+  1. Paso estricto de longitud en bits a Cafe OS: `sizeof(pattern) * 8` (32 bits).
+  2. Patrones PWM diferenciados por ciclo de trabajo real: `0x11` (25% duty cycle - vibración suave al 30%), `0xEE` (75% duty cycle - vibración media al 70%) y `0xFF` (100% duty cycle - vibración continua al 100%).
+  3. Control de período de refresco paced `pulseInterval = 0.16f`, evitando saturación IPC y apagado prematuro de motores DRC si otros canales continúan activos (`shouldStopDRC()`). En PC, uso correcto de `SDL_GameControllerFromPlayerIndex`.
+- **Grado de Reusabilidad para el Framework:** **10/10**.
+- **PROS:** Cero saturación IPC, retroalimentación háptica suave y calibrada en el GamePad DRC.
+- **CONTRAS:** Ninguno.
+
+### [OPT-437] Atomic Parameter Bus y Swap de Buffers sin Heap bajo `SDL_LockAudio`
+- **Área:** Audio / Concurrencia en Tiempo Real (`engine_audio`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 141 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** Ross Bencina (*Real-Time Audio Programming 101: Time Waits for Nothing*); Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 15).
+- **Problema Diagnosticado:** Variables de estado escalar (`m_masterVolume`, `m_sfxVolume`, `m_sfxEnabled`, `m_bgmVolume`, `m_bgmPlaying`, `m_musicEnabled`, `m_audioOpened`) eran leídas/escritas concurrentemente entre el hilo principal, el worker de carga asíncrona y `AudioCallback` sin atomicidad ni exclusión mutua, generando condiciones de carrera. Además, la carga y síntesis de fallbacks WAV ejecutaban liberaciones y alocaciones dinámicas (`std::move`, `resize`, `sin()`) dentro de `SDL_LockAudio()`, provocando potenciales underruns en el hilo de audio DMA.
+- **Mecanismo Implementado:**
+  1. Migración de todas las variables de estado escalar de audio a `std::atomic<float>` y `std::atomic<bool>` con semántica relaxed en el callback y acquire/release en setters y getters públicos sin locks.
+  2. Aislamiento total de alocaciones en heap fuera de la sección crítica: los buffers de audio se cargan o sintetizan completamente en hilos secundarios antes de entrar a `SDL_LockAudio()`, donde únicamente se ejecuta un intercambio $\mathcal{O}(1)$ de punteros (`std::swap`), liberando los búferes sustituidos tras `SDL_UnlockAudio()`.
+- **Grado de Reusabilidad para el Framework:** **10/10**. Patrón estándar de audio portable a Nintendo Switch y PC.
+- **PROS:** Cero *priority inversion*, cero alocaciones en el hilo de audio real-time y getters libres de bloqueos.
+- **CONTRAS:** Ninguno.
+
+### [OPT-438] Inicialización Inmune de Samplers en `ForwardRendererGX2`, Fallback de Textura Neutral y Soporte de Índices U32
+- **Área:** Gráficos GX2 / Silicio AMD Latte R700 (`engine_graphics`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 141 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD Latte GX2 Architecture Guide (`GX2InitSamplerXYFilter`, `GX2InitSamplerZMFilter`); Jason Gregory (Cap. 10 & 14).
+- **Problema Diagnosticado:** En `ForwardRendererGX2::Initialize()`, `SetTextureFilterMode()` se invocaba cuando `m_initialized` aún era `false`, descartando silenciosamente la configuración inicial de filtrado de texturas de `engine_config.ini` (atascando el sampler en Bilineal). Además, `RenderMeshBuffers()` omitía la vinculación de `m_defaultNeutralTex` cuando `diffuseTexture == nullptr`, arriesgando stalls en la TMU de Latte, y forzaba índices `U16` ignorando mallas con índices de 32 bits.
+- **Mecanismo Implementado:**
+  1. Reordenamiento estricto en `Initialize()`: `m_initialized = true` se fija antes de llamar a `SetTextureFilterMode()`, eliminando la llamada redundante que pisaba el filtro ZM.
+  2. En `RenderMeshBuffers()`, asignación automática de `m_defaultNeutralTex` si `diffuseTexture` es nulo y soporte nativo de `GX2_INDEX_TYPE_U32` controlado por parámetro `use32BitIndices`.
+  3. Activación explícita de `GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER)` al inicio de `BeginFrame()`.
+- **Grado de Reusabilidad para el Framework:** **10/10**.
+- **PROS:** Filtrado de texturas aplicado fielmente desde el arranque, protección total de la GPU Latte ante mallas sin textura y soporte transparente de mallas con más de 65,535 vértices.
+- **CONTRAS:** Ninguno.
+
+### [OPT-439] Detección Multi-Mando Universal sin Símbolos Hardware en Escenas y Soporte de Desarrollo PC
+- **Área:** Entrada / HAL Multiplataforma (`engine_input` + `engine_framework`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 141 - 17 de Noviembre de 2026).
+- **Referencia de Literatura:** Nintendo TRC Guidelines; SDL2 GameController API; Robert Nystrom (*Game Programming Patterns*).
+- **Problema Diagnosticado:** En `SceneManager` y `SceneMenu`, las comprobaciones de botones físicos invocaban `IsButtonTriggered` con constantes propietarias de hardware (`VPAD_BUTTON_*`, `WPAD_PRO_BUTTON_*`), provocando discrepancias de máscaras contra `VirtualButton` y rompiendo la portabilidad hacia PC y Switch. Asimismo, el backend SDL2 en PC nunca activaba `m_gamepads[0].isConnected = true`, deshabilitando la navegación por mando y teclado en entornos de desarrollo.
+- **Mecanismo Implementado:**
+  1. Activación de `pad0.isConnected = true` y tipo `ControllerType::KeyboardMouse` / `GenericSDL` en el backend SDL2 de PC.
+  2. Sustitución de constantes propietarias por consultas de `VirtualGamepad` (`pad.WasJustPressed(VirtualButton::X)`, `VirtualButton::A`, etc.) iterando de manera universal sobre todos los mandos conectados (`0..MAX_PLAYERS-1`).
+  3. Erradicación de asignaciones dinámicas `std::string` a 60 FPS en `SceneManager::RenderTransitionScreen()` migrando a `std::string_view`.
+- **Grado de Reusabilidad para el Framework:** **10/10**.
+- **PROS:** Compatibilidad 100% homogénea entre Wii U, PC y Switch; cero dependencias de SDK propietario en la lógica de escenas.
+- **CONTRAS:** Ninguno.
+
+### [OPT-440] Hito 142: Suite Integral de 20 Optimizaciones de Prioridad ALTA en el Motor + Stack-Bitset Broadphase y Epoch-Safe Async Slots
+- **Área:** Arquitectura Completa del Motor (`engine_core`, `engine_input`, `engine_audio`, `engine_physics`, `engine_ai`, `engine_graphics`, `engine_framework`, `CMakeLists.txt`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 142 - 19 de Noviembre de 2026).
+- **IDs Cerrados en Hito 142 (50 IDs + `OPT-440`):** `OPT-13`, `OPT-20`, `OPT-21`, `OPT-26`, `OPT-27`, `OPT-30`, `OPT-39`, `OPT-47`, `OPT-50`, `OPT-61`, `OPT-104`, `OPT-126`, `OPT-130`, `OPT-134`, `OPT-136`, `OPT-141`, `OPT-143`, `OPT-144`, `OPT-152`, `OPT-161`, `OPT-204`, `OPT-210`, `OPT-212`, `OPT-216`, `OPT-224`, `OPT-233`, `OPT-247`, `OPT-249`, `OPT-260`, `OPT-261`, `OPT-267`, `OPT-274`, `OPT-275`, `OPT-319`, `OPT-327`, `OPT-343`, `OPT-344`, `OPT-351`, `OPT-355`, `OPT-365`, `OPT-367`, `OPT-374`, `OPT-385`, `OPT-386`, `OPT-395`, `OPT-397`, `OPT-398`, `OPT-399`, `OPT-400`, `OPT-401`, `OPT-440`.
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed.); Christer Ericson (*Real-Time Collision Detection*, Cap. 7.1.3); Mike Acton (*Data-Oriented Design*, CppCon 14); AMD R700 / Latte GX2 ISA; Nintendo TRC / Lot Check.
+- **Capacidades Integradas Directamente en las 7 Librerías Estáticas:**
+  1. **`engine_core`:** `VirtualFileSystem` (`content:/`, `save:/`, 256B aligned Zero-Copy + `DCFlushRange` + pool asíncrono en Core 2 con invariante `jobCounter == 0` libre de carreras), `CVarRegistry` (64 CVars tipadas sin UB `int32_t`, FNV-1a, consola `get/set/toggle/reset/list`), `CryptoHMAC` (FIPS 180-4 SHA-256 + RFC 2104 HMAC-SHA256) y `StorageManager::SaveFileAsync` / `SaveFileVerifiedAtomic` drenado antes de `JobSystem::Shutdown()`, `ApplicationLifecycle` (ALSM desacoplada), y `SkyboxComponent` (puntero RHI opaco `void*`, `0` fugas `<gx2/*.h>` en `include/Core/`).
+  2. **`engine_input`:** `InputContextStack` (enrutamiento jerárquico con prioridad y bloqueo de propagación) y guardia de desconexión HID con invalidación de estado, `StopRumble`, auto-pausa y callback.
+  3. **`engine_audio`:** Streaming BGM ping-pong de doble búfer ($\le 256$ KB) en `AudioManager` con orden `acquire` seguro para PowerPC weak memory model y swap de heap fuera de `SDL_LockAudio()`, más `AudioEngine3D` escalado a 128 voces virtuales / 32 físicas con *priority culling* y *Acoustic LOD sleep*.
+  4. **`engine_physics`:** `SpatialHashGrid` broadphase Zero-Alloc con bitset local de 32B (1 línea L1D) en pila para queries `const` 100% reentrantes y thread-safe, integrado en `CollisionSystem` y `RigidBodyPhysicsSystem`; `KCCLocomotionState` FSM + *coyote time*; `CameraRelativeMovementSystem`.
+  5. **`engine_ai`:** `BehaviorTree` + `BehaviorTreeComponent` + `BehaviorTreeSystem` data-driven y `SensoryBlackboard` + `AIPerceptionComponent` + `AIPerceptionSystem`.
+  6. **`engine_graphics` & CafeGLSL:** `MaterialSystem` (`MaterialUBOData` 256B, `LightBlockUBO` 256B, `MaterialRegistry` lock-free), `RenderQueue` 64-bit + `MeshRenderSystem` (Early-Z Depth Pre-Pass con Null PS $\to$ Opacos `RHI_COMPARE_EQUAL` $\to$ `SkyboxRenderPass` $\to$ Transparentes Back-to-Front por posición mundial), Hardware Geometry Instancing (`instanced_mesh_gx2.gsh` verificado `6 GPRs`, `0 nstack`, 3-frame Multi-Frame Ring Buffer de 3072 matrices + `GX2R_RESOURCE_DISABLE_CPU_INVALIDATE`), `ShadowMapRendererGX2` (PCF 2×2, Null PS, `GX2SetPolygonOffset`, orden canónico Hi-Z y barrera `GX2DrawDone`), y `RHIRenderPass` / `GameScene3D` con Hi-Z y Fast-Clear seguros.
+  7. **`engine_framework` & `CMakeLists.txt`:** `ModalStack` seguro frente a auto-cierre en `Update()`, fachada pública `include/WiiUEngine.hpp` actualizada y dependencias automáticas de assets (`GLOB_RECURSE CONFIGURE_DEPENDS`) para regeneración determinista de `.wuhb`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Aplicable de forma nativa a cualquier videojuego externo que enlace `engine_*` con `-DWIIU_ENGINE_BUILD_DEMOS=OFF`.
+- **PROS:** Eleva el motor a arquitectura de producción AAA Zero-Alloc multi-consola con 0 deadlocks, 0 data races y 0 fugas de silicio en `Core`.
+- **CONTRAS:** Ninguno.
+
+### [OPT-441] Hito 143: Limpieza Profunda y Endurecimiento Integral de las 7 Librerías del Motor (51 Hallazgos + 3 Micro-Correcciones)
+- **Área:** Silicio GX2/Espresso, Concurrencia Lock-Free, Memoria Determinista y Arquitectura DAG (`engine_core`, `engine_input`, `engine_audio`, `engine_physics`, `engine_ai`, `engine_graphics`, `engine_framework`, `CMakeLists.txt`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 143 - 19 de Noviembre de 2026).
+- **Referencia de Literatura:** Dmitry Vyukov (*Bounded MPMC Queue*, 1024cores); AMD Latte R700 / GX2 Hardware Guide; IBM PowerPC 750CL Big-Endian & Weak Memory Model; C++20 Core Guidelines; Nintendo Cafe OS ProcUI TRC.
+- **Problemas Diagnosticados y Resueltos en Auditoría Dual (19 gráficos + 32 arquitectura/concurrencia + 3 micro-correcciones Ciclo 2):**
+  1. **Silicio AMD Latte GX2 & Ciclo de Vida ProcUI:** `TextureLoaderGX2` corrige `surface.depth = 6` antes de `GX2CalcSurfaceSizeAndAlignment` en CubeMaps + guardas de límites; `Engine::Shutdown()` ejecuta `GX2DrawDone()` con guarda `ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown()` antes del teardown de renderizadores e invoca `Render2DGX2::Instance().Shutdown()` (erradicando *Static Destruction Order Fiasco*); `ShadowMapRendererGX2` y `ForwardRendererGX2` eliminan pixel shaders muertos en pases Null PS, validan retornos `GFDGet*` con rollback parcial, enlazan `m_defaultNeutralCubeMap` en las 5 rutas de dibujo, soportan `U32` en `RenderSkydome()` y fijan `GX2SetAlphaTest(FALSE, ...)`; `RHIRenderPass` enlaza targets/viewport e invalida `RHIPipelineCache` también con `LoadAction != Clear`; `RHIFullscreenShader` elimina código muerto WHB y corrige `0xFF -> 0x00`; `Render2DGX2` usa invalidación granular por `byteSize` + `GX2R_RESOURCE_DISABLE_CPU_INVALIDATE`.
+  2. **Concurrencia, Endianness y Memoria Zero-Alloc:** `JobSystem` migra a cola acotada MPMC lock-free de Dmitry Vyukov con resta modular sin signo (`static_cast<int32_t>(seq - pos)`) sin UB de *signed overflow*; `VirtualFileSystem::TakeCompletedBuffer()` blinda `generation == handle.generation && status == Completed` + incremento de generación bajo `m_allocLock` (eliminando ABA/TOCTOU); `AudioManager::LoadWAVProgressive` lee/escribe cabeceras RIFF/WAVE Little-Endian con `ReadLE32`/`WriteLE32` seguro en PowerPC Big-Endian, agrega rama anti-stall en `AudioCallback` y reemplaza *busy-yield* por `JobSystem::Wait`; `Engine::Run()` reinicia `LinearFrameArena::Reset()` cada cuadro; `MemoryManager` agrega validación potencia de 2/overflow, contadores atómicos lock-free y `O(1)` swap-and-pop; `ResourcePool` elimina `std::vector` en favor de `std::array` + `std::launder`; `ApplicationLifecycle` usa bucle CAS rechazando salidas desde `Exiting`.
+  3. **DAG Acíclico de 7 Librerías, Portabilidad y Precisión Numérica:** Rotas las 4 dependencias circulares ocultas (`engine_core` $\to$ `audio`/`physics`/`graphics`/`input`, `engine_input` $\to$ `audio`, `engine_physics` $\to$ `audio`) mediante callbacks DIP registrados en `Engine::Init()` y traslado de `OrbitCameraSystem.cpp` a `engine_framework`; añadido `-fno-finite-math-only` en `CMakeLists.txt` + guarda IEEE-754 por bits en `RenderQueue`; corregido signo canónico de yaw `fwdX = -std::sin(yaw)` en `AIPerceptionSystem`; `ResourceMonitor` omite muestreo cuando `!m_visible`; `ModalStack` seguro frente a reentrancia; `StorageManager` preserva `.tmp` en fallo de `rename`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Código base de producción verificado con `APROBACIÓN FINAL` en Fase 1 y Fase 2, `0` warnings `-Wall -Wextra`, `0` fugas GX2 en `include/Core/` y `0 CRLF`.
+- **PROS:** Erradica fallos latentes de silicio, carreras ABA/TOCTOU, endianness PowerPC y ciclos de enlace entre librerías estáticas.
+- **CONTRAS:** Ninguno.
+
+### [OPT-442] Hito 144: Migración Completa a Wii U 100% Nativo (GX2 + ProcUI + `sndcore2` AX, Cero SDL2)
+- **Área:** Núcleo Multiplataforma, Renderizado 2D/3D GX2, Entrada/ProcUI, Audio DSP y Build System (`Window`, `Engine`, `Render2D`, `Render2DGX2`, `AudioManager`, `AudioEngine3D`, `InputManager`, `AssetManager`, `CMakeLists.txt`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 144 - 19 de Noviembre de 2026).
+- **Referencia de Literatura:** Nintendo Cafe OS WUT SDK (`gx2`, `proc_ui`, `coreinit`, `sndcore2`); AMD Latte R700 Swapchain & MEM1/Foreground Heaps; IBM Espresso PPC750CL Memory Model & Cache Coherency.
+- **Arquitectura Implementada (Fases 1–3 + Auditoría Dual 3 Ciclos):**
+  1. **Fase 1 (Desacoplamiento Gráfico 2D/UI/Escenas):** Eliminación total de `<SDL2/SDL.h>`, `SDL_Renderer*` y `GX2StateHelper.hpp` de todas las escenas, `Render2D`, `UIComponents`, `Color` (`uint8_t`), `Light` (`uint8_t`), `HUDOverlay`, `Starfield3D`, `ModalStack`, `ResourceMonitor` y `SceneManager`. `Render2DGX2` incorpora triple-buffering (`BUFFER_SLOTS = 3`) con sub-rangos de vértices por pase (`m_bufferVertexOffset`, `NextFrame()`, barrera `GX2DrawDone()` en wrap excepcional) y `Render2D::Begin()` re-vincula defensivamente `Window::GetActiveNativeContextState()` / `GetActiveNativeColorBuffer()`. Añadido `IScene::ClearsFramebuffer()` evitando doble clear eDRAM en `GameScene3D`.
+  2. **Fase 2 (Núcleo Nativo GX2 + ProcUI + E/S + Temporización):** `Window` gestiona `GX2Init`, pool de comandos de 4 MB, heaps MEM1 y Foreground (`AcquireForeground`/`ReleaseForeground` con `std::atomic<bool> s_hasForeground` acquire/release, `GX2DrawDone()`, apagado seguro de TV/DRC previo a destruir heaps, scanbuffers TV adaptativos y DRC `854x480`), `GX2RSetAllocator` en MEM2 sobreviviente al Menú HOME, `SetSwapInterval()` + compuerta VSync `GX2GetSwapStatus` + `GX2WaitForVsync()` en `Present()`. `InputManager::PollPlatformEvents()` bombea `ProcUIProcessMessages(TRUE)` directamente en `__WIIU__`. `Engine` usa `OSTimerClockSpeed` / `OSGetSystemTime()`, `ProcUIShutdown()`, verifica `Render2DGX2::Init()` y ejecuta `MemoryManager::AssertNoLeaks()` al final de `Engine::Shutdown()`. `AssetManager` opera íntegramente sobre `std::FILE`.
+  3. **Fase 3 (Audio DSP `sndcore2` / AX 48 kHz + CMake Limpio):** `AudioManager` implementa doble voz mono L/R en `AX_VOICE_FORMAT_LPCM16` con arranque sincronizado (`m_axVoicesStarted`), mezcla directa al anillo DMA MEM2 alineado a 64B (`AXFrameCallbackStatic` con `OSFastMutex_TryLock`, silencio automático en `!Window::HasForeground()`, umbral de underrun por margen `lead`, y `DCFlushRange`), teardown determinista (`AXQuit()` previo a `FreeAligned`), `LockAudioDevice()`/`UnlockAudioDevice()` multiplataforma, parser RIFF/WAVE nativo PCM16/PCM8 endian-safe + resampleador 48.16 `44100 -> 48000 Hz`. Eliminadas rutas y enlace `SDL2` en `if(WUT)` de `CMakeLists.txt` (`0` símbolos `SDL_` en `build/wiiu_demos.elf`; `SDL2` aislado bajo `#if !defined(__WIIU__)`).
+- **Grado de Reusabilidad para el Framework:** **10/10** — Doble **APROBACIÓN FINAL** (`graphics_code_reviewer` Ciclo 2 y `engine_clean_code_reviewer` Ciclo 3), `0` errores, `0` warnings en compilación dual (`build/` + `build_lib/`), `SYNTAX_OK` en `WiiUEngine.hpp` sin rutas SDL2, `0` símbolos `SDL_` en `wiiu_demos.elf` (`wiiu_demos.rpx` reducido de `855 KB` a `348 KB`) y `0 CRLF`.
+- **PROS:** Elimina sobrecarga de capas intermedias SDL2 en consola real, erradica conflictos de `GX2ContextState`/entrada táctil VPAD y prepara backends limpios por plataforma (`#if !defined(__WIIU__)`).
+- **CONTRAS:** Ninguno.
 
 ---
 

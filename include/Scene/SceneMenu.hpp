@@ -3,7 +3,6 @@
 #include "Scene/IScene.hpp"
 #include "Scene/Starfield3D.hpp"
 #include "Graphics/UIComponents.hpp"
-#include <SDL2/SDL.h>
 #include <vector>
 #include <string>
 #include <functional>
@@ -16,7 +15,7 @@ public:
 
     void OnEnter() override;
     void Update(float dt) override;
-    void Render(SDL_Renderer* renderer) override;
+    void Render() override;
 
     [[nodiscard]] std::string GetSceneName() const override {
         return "Menu Principal";

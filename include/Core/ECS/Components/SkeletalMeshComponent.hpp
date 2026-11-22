@@ -86,8 +86,9 @@ struct SkeletalMeshComponent {
         return *this;
     }
 
-    explicit SkeletalMeshComponent(const Skeleton* skel) noexcept
-        : skeleton(skel), jointCount(skel ? skel->jointCount : 0),
+    explicit SkeletalMeshComponent(const Skeleton* skel)
+        : skeleton(skel),
+          jointCount(skel ? (skel->jointCount > MAX_SKELETON_JOINTS ? MAX_SKELETON_JOINTS : skel->jointCount) : 0),
           poseData(std::make_unique<SkeletalPoseData>()) {
         SyncPointers();
         if (skel && poseData) {
@@ -107,7 +108,8 @@ struct SkeletalMeshComponent {
      */
     void RecomputeWorldAndSkinningMatrices() noexcept {
         if (!IsValid()) return;
-        for (uint32_t i = 0; i < jointCount; ++i) {
+        const uint32_t safeCount = (jointCount > MAX_SKELETON_JOINTS) ? MAX_SKELETON_JOINTS : jointCount;
+        for (uint32_t i = 0; i < safeCount; ++i) {
             const int16_t parentIdx = skeleton->joints[i].parentIndex;
             if (parentIdx >= 0 && parentIdx < static_cast<int16_t>(i)) {
                 worldPoses[i] = worldPoses[parentIdx] * localPoses[i];

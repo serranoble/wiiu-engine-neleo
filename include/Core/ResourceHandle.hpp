@@ -5,9 +5,7 @@
 #include <new>
 #include <utility>
 #include <array>
-#include <vector>
 #include <mutex>
-#include <type_traits>
 
 namespace WiiU {
 
@@ -69,14 +67,14 @@ public:
     static_assert(Capacity <= 0xFFFF, "ResourcePool Capacity no puede exceder 65535 ranuras (16 bits).");
     static_assert(Capacity > 0, "ResourcePool Capacity debe ser mayor que cero.");
 
-    ResourcePool() {
-        m_freeIndices.reserve(Capacity);
+    ResourcePool() noexcept {
         for (size_t i = 0; i < Capacity; ++i) {
             // Empezamos las generaciones en 1 para que id = 0 nunca colisione con un handle válido
             m_slots[i].generation = 1;
             m_slots[i].isAlive = false;
-            m_freeIndices.push_back(static_cast<uint16_t>(Capacity - 1 - i));
+            m_freeIndices[i] = static_cast<uint16_t>(Capacity - 1 - i);
         }
+        m_freeCount = Capacity;
     }
 
     ~ResourcePool() {
@@ -85,6 +83,8 @@ public:
 
     ResourcePool(const ResourcePool&) = delete;
     ResourcePool& operator=(const ResourcePool&) = delete;
+    ResourcePool(ResourcePool&&) = delete;
+    ResourcePool& operator=(ResourcePool&&) = delete;
 
     /**
      * @brief Construye un nuevo objeto T en una ranura libre y retorna su handle generacional.
@@ -93,15 +93,14 @@ public:
     [[nodiscard]] ResourceHandle<T> Emplace(Args&&... args) {
         std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (m_freeIndices.empty()) {
+        if (m_freeCount == 0) {
             return ResourceHandle<T>(); // Pool saturado, retorna handle inválido
         }
 
-        uint16_t index = m_freeIndices.back();
-        m_freeIndices.pop_back();
-
+        const uint16_t index = m_freeIndices[m_freeCount - 1];
         Slot& slot = m_slots[index];
         new (slot.storage) T(std::forward<Args>(args)...);
+        --m_freeCount;
         slot.isAlive = true;
         ++m_activeCount;
 
@@ -125,7 +124,7 @@ public:
             return nullptr; // Handle obsoleto (Use-After-Free prevenido deterministamente)
         }
 
-        return reinterpret_cast<T*>(slot.storage);
+        return std::launder(reinterpret_cast<T*>(slot.storage));
     }
 
     /**
@@ -144,7 +143,7 @@ public:
             return nullptr;
         }
 
-        return reinterpret_cast<const T*>(slot.storage);
+        return std::launder(reinterpret_cast<const T*>(slot.storage));
     }
 
     /**
@@ -161,7 +160,7 @@ public:
         Slot& slot = m_slots[index];
 
         if (slot.isAlive && slot.generation == handle.GetGeneration()) {
-            reinterpret_cast<T*>(slot.storage)->~T();
+            std::launder(reinterpret_cast<T*>(slot.storage))->~T();
             slot.isAlive = false;
 
             // Incremento de generación: Toda copia previa del handle queda invalidada instantáneamente
@@ -170,7 +169,9 @@ public:
                 slot.generation = 1; // Evitar que generation quede en 0
             }
 
-            m_freeIndices.push_back(index);
+            if (m_freeCount < Capacity) {
+                m_freeIndices[m_freeCount++] = index;
+            }
             if (m_activeCount > 0) {
                 --m_activeCount;
             }
@@ -196,17 +197,15 @@ public:
         for (size_t i = 0; i < Capacity; ++i) {
             Slot& slot = m_slots[i];
             if (slot.isAlive) {
-                reinterpret_cast<T*>(slot.storage)->~T();
+                std::launder(reinterpret_cast<T*>(slot.storage))->~T();
                 slot.isAlive = false;
                 slot.generation++;
                 if (slot.generation == 0) slot.generation = 1;
             }
+            m_freeIndices[i] = static_cast<uint16_t>(Capacity - 1 - i);
         }
 
-        m_freeIndices.clear();
-        for (size_t i = 0; i < Capacity; ++i) {
-            m_freeIndices.push_back(static_cast<uint16_t>(Capacity - 1 - i));
-        }
+        m_freeCount = Capacity;
         m_activeCount = 0;
     }
 
@@ -220,7 +219,7 @@ public:
         std::lock_guard<std::mutex> lock(m_mutex);
         for (size_t i = 0; i < Capacity; ++i) {
             if (m_slots[i].isAlive) {
-                fn(*reinterpret_cast<T*>(m_slots[i].storage));
+                fn(*std::launder(reinterpret_cast<T*>(m_slots[i].storage)));
             }
         }
     }
@@ -237,8 +236,9 @@ private:
     };
 
     mutable std::mutex m_mutex;
-    std::array<Slot, Capacity> m_slots;
-    std::vector<uint16_t> m_freeIndices;
+    std::array<Slot, Capacity> m_slots{};
+    std::array<uint16_t, Capacity> m_freeIndices{};
+    size_t m_freeCount{0};
     size_t m_activeCount{0};
 };
 

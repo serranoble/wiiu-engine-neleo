@@ -1,12 +1,17 @@
 #include "Input/InputManager.hpp"
 #include "Core/Config/EngineConfig.hpp"
-#include "Audio/AudioManager.hpp"
+#include "Core/Config/CVarRegistry.hpp"
+#if defined(__WIIU__) || defined(__wiiu__)
+#include "Core/Window.hpp"
+#endif
 #include <cmath>
 #include <algorithm>
 
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <proc_ui/procui.h>
 #include <coreinit/systeminfo.h>
+#include <coreinit/thread.h>
+#include <coreinit/time.h>
 
 static uint32_t HomeButtonDeniedCallback(void*) {
     // Cuando Cafe OS deniega el Menú HOME (ej. ejecutando desde Homebrew Launcher),
@@ -30,10 +35,6 @@ void InputManager::Init() {
 
     // Registrar callback de respaldo si el Menú HOME está deshabilitado/denegado por el entorno
     ProcUIRegisterCallback(PROCUI_CALLBACK_HOME_BUTTON_DENIED, HomeButtonDeniedCallback, nullptr, 100);
-
-    // Deshabilitar eventos de joystick en SDL2 para garantizar que WIIU_JoystickUpdate
-    // no drene el búfer de VPADRead ni anule la pantalla táctil del GamePad
-    SDL_JoystickEventState(SDL_IGNORE);
 #endif
     RumbleManager::Instance().Init();
 #if !defined(__WIIU__) && !defined(__wiiu__)
@@ -41,14 +42,42 @@ void InputManager::Init() {
 #endif
 }
 
+InputManager::~InputManager() {
+    CloseConnectedControllers();
+}
+
+void InputManager::CloseConnectedControllers() noexcept {
+#if !defined(__WIIU__) && !defined(__wiiu__)
+    for (size_t i = 0; i < MAX_PLAYERS; ++i) {
+        if (m_sdlControllers[i]) {
+            SDL_GameControllerClose(m_sdlControllers[i]);
+            m_sdlControllers[i] = nullptr;
+        }
+        if (m_sdlJoysticks[i]) {
+            SDL_JoystickClose(m_sdlJoysticks[i]);
+            m_sdlJoysticks[i] = nullptr;
+        }
+    }
+#endif
+}
+
 void InputManager::OpenConnectedControllers() {
 #if !defined(__WIIU__) && !defined(__wiiu__)
-    int numJoysticks = SDL_NumJoysticks();
-    for (int i = 0; i < numJoysticks; ++i) {
+    CloseConnectedControllers();
+    const int numJoysticks = SDL_NumJoysticks();
+    for (int i = 0; i < numJoysticks && i < static_cast<int>(MAX_PLAYERS); ++i) {
         if (SDL_IsGameController(i)) {
-            SDL_GameControllerOpen(i);
+            m_sdlControllers[i] = SDL_GameControllerOpen(i);
+            if (m_sdlControllers[i]) {
+                m_gamepads[i].isConnected = true;
+                m_gamepads[i].type = ControllerType::GenericSDL;
+            }
         } else {
-            SDL_JoystickOpen(i);
+            m_sdlJoysticks[i] = SDL_JoystickOpen(i);
+            if (m_sdlJoysticks[i]) {
+                m_gamepads[i].isConnected = true;
+                m_gamepads[i].type = ControllerType::GenericSDL;
+            }
         }
     }
 #endif
@@ -68,7 +97,9 @@ void InputManager::TriggerAction(const std::string& sourceName) {
     if (m_actionTriggeredThisFrame) return;
     m_actionTriggeredThisFrame = true;
 
-    AudioManager::Instance().PlayClick();
+    if (m_actionSoundCallback) {
+        m_actionSoundCallback(m_actionSoundUserData);
+    }
     m_buttonPressCount++;
     m_lastButtonName = sourceName;
     m_flashTimer = 0.5f;
@@ -78,19 +109,18 @@ void InputManager::TriggerAction(const std::string& sourceName) {
 }
 
 void InputManager::Update(bool& outRunning, float dt) {
-    // 1. Bombear eventos SDL en todas las plataformas.
-    // En Wii U, SDL_PollEvent invoca internamente WIIU_PumpEvents(), el cual llama a
-    // ProcUIProcessMessages() para gestionar transiciones de Cafe OS (Menú HOME y salida).
-    PollSDLEvents(outRunning);
+    // 1. Bombear eventos de sistema/plataforma (ProcUI directo en Wii U o SDL_PollEvent en PC).
+    PollPlatformEvents(outRunning);
 
-    if (m_exitRequested) {
+    if (m_exitRequested.load(std::memory_order_acquire)) {
         outRunning = false;
     }
 
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (ProcUIInShutdown() || !ProcUIIsRunning() || !ProcUIInForeground()) {
+    if (ProcUIInShutdown() || !ProcUIIsRunning() || Window::IsExitingProcUI() ||
+        !Window::HasForeground() || !ProcUIInForeground()) {
         RumbleManager::Instance().StopAll();
-        if (ProcUIInShutdown() || !ProcUIIsRunning()) {
+        if (ProcUIInShutdown() || !ProcUIIsRunning() || Window::IsExitingProcUI()) {
             outRunning = false;
         }
         return;
@@ -98,6 +128,8 @@ void InputManager::Update(bool& outRunning, float dt) {
 #endif
 
     m_actionTriggeredThisFrame = false;
+    m_controllerDisconnectedThisFrame = false;
+    m_contextStack.ResetFrameConsumptions();
     m_buttonHeld = false;
     m_backRequested = false;
     m_pauseRequested = false;
@@ -135,6 +167,34 @@ void InputManager::Update(bool& outRunning, float dt) {
     PollSDLHardware(outRunning);
 #endif
 
+    // 4.5 [OPT-401] Guardia de desconexion HID asincrona e invalidacion limpia
+    for (size_t i = 0; i < MAX_PLAYERS; ++i) {
+        auto& pad = m_gamepads[i];
+        if (m_prevConnected[i] && !pad.isConnected) {
+            pad.buttonsHold = 0;
+            pad.buttonsTrigger = 0;
+            pad.buttonsRelease = 0;
+            pad.leftStick = {};
+            pad.rightStick = {};
+            pad.triggers = {};
+            pad.touch = {};
+            pad.type = ControllerType::Disconnected;
+
+            m_controllerDisconnectedThisFrame = true;
+            m_lastDisconnectedPlayer = i;
+            RumbleManager::Instance().StopRumble(static_cast<PlayerIndex>(i));
+
+            const bool cvarAutoPause = CVarRegistry::Instance().GetBool("input.autopause_disconnect", true);
+            if (m_autoPauseOnDisconnect && cvarAutoPause) {
+                m_pauseRequested = true;
+            }
+            if (m_disconnectCallback) {
+                m_disconnectCallback(i, m_disconnectUserData);
+            }
+        }
+        m_prevConnected[i] = pad.isConnected;
+    }
+
     // 5. Consolidar estado primario en Player 1 y variables heredadas
     const auto& pad0 = m_gamepads[0];
     m_buttonsHold = pad0.buttonsHold;
@@ -159,10 +219,12 @@ void InputManager::Update(bool& outRunning, float dt) {
         if (pad.WasJustPressed(VirtualButton::Minus)) {
             m_resourceMonitorRequested = true;
         }
+#if !defined(__WIIU__) && !defined(__wiiu__)
         if (pad.WasJustPressed(VirtualButton::Home)) {
             m_exitRequested = true;
             outRunning = false;
         }
+#endif
     }
 }
 
@@ -251,6 +313,7 @@ void InputManager::PollWiiUHardware(float dt) {
         // [AUDITORÍA SILICIO]: Desconexión real de GamePad DRC - Invalidar estado analógico y flags
         if (m_gamepads[0].type == ControllerType::GamePadDRC) {
             m_gamepads[0].isConnected = false;
+            m_gamepads[0].type = ControllerType::Disconnected;
             m_gamepads[0].buttonsHold = 0;
             m_gamepads[0].leftStick = {};
             m_gamepads[0].rightStick = {};
@@ -266,9 +329,12 @@ void InputManager::PollWiiUHardware(float dt) {
         KPADStatus kpadStatus[8];
         KPADError kpadErr = KPAD_ERROR_UNINITIALIZED;
         uint32_t kread = KPADReadEx(static_cast<KPADChan>(chan), kpadStatus, 8, &kpadErr);
-        size_t slot = (m_gamepads[0].isConnected && m_gamepads[0].type == ControllerType::GamePadDRC)
-                      ? std::min<size_t>(chan + 1, MAX_PLAYERS - 1)
-                      : static_cast<size_t>(chan);
+        const size_t slot = (m_gamepads[0].isConnected && m_gamepads[0].type == ControllerType::GamePadDRC)
+                            ? static_cast<size_t>(chan + 1)
+                            : static_cast<size_t>(chan);
+        if (slot >= MAX_PLAYERS) {
+            continue;
+        }
 
         if (kread > 0 && kpadErr == KPAD_ERROR_OK) {
             const auto& latestKpad = kpadStatus[kread - 1];
@@ -400,14 +466,51 @@ void InputManager::PollWiiUHardware(float dt) {
 #endif
 }
 
-void InputManager::PollSDLEvents(bool& outRunning) {
+void InputManager::PollPlatformEvents(bool& outRunning) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!ProcUIIsRunning() || Window::IsExitingProcUI()) {
+        m_exitRequested.store(true, std::memory_order_release);
+        outRunning = false;
+        return;
+    }
+
+    ProcUIStatus status = ProcUIProcessMessages(TRUE);
+    while (status == PROCUI_STATUS_RELEASE_FOREGROUND || status == PROCUI_STATUS_IN_BACKGROUND) {
+        if (status == PROCUI_STATUS_RELEASE_FOREGROUND) {
+            RumbleManager::Instance().StopAll();
+            Window::ReleaseForeground();
+            ProcUIDrawDoneRelease();
+        } else {
+            OSSleepTicks(OSMillisecondsToTicks(16));
+        }
+
+        if (!ProcUIIsRunning()) {
+            Window::NotifyExitingProcUI();
+            m_exitRequested.store(true, std::memory_order_release);
+            outRunning = false;
+            return;
+        }
+        // Siguiente llamada obligatoria a ProcUIProcessMessages(TRUE) para completar transición HOME Menu
+        status = ProcUIProcessMessages(TRUE);
+    }
+
+    if (status == PROCUI_STATUS_EXITING) {
+        Window::NotifyExitingProcUI();
+        m_exitRequested.store(true, std::memory_order_release);
+        outRunning = false;
+        return;
+    }
+
+    if (status == PROCUI_STATUS_IN_FOREGROUND && !Window::HasForeground()) {
+        Window::AcquireForeground();
+    }
+#else
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
             m_exitRequested = true;
             outRunning = false;
         }
-#if !defined(__WIIU__) && !defined(__wiiu__)
         if (event.type == SDL_CONTROLLERDEVICEADDED || event.type == SDL_JOYDEVICEADDED) {
             OpenConnectedControllers();
         }
@@ -477,14 +580,18 @@ void InputManager::PollSDLEvents(bool& outRunning) {
             pad0.leftStick = ApplyRadialDeadzone(lx, ly, deadzone);
             pad0.rightStick = ApplyRadialDeadzone(rx, ry, deadzone);
         }
-#endif
     }
+#endif
 }
 
 void InputManager::PollSDLHardware(bool& outRunning) {
     (void)outRunning;
 #if !defined(__WIIU__) && !defined(__wiiu__)
     auto& pad0 = m_gamepads[0];
+    pad0.isConnected = true;
+    if (pad0.type == ControllerType::Disconnected) {
+        pad0.type = ControllerType::KeyboardMouse;
+    }
 
     // =========================================================================
     // RATÓN PC (SDL2)
@@ -521,14 +628,18 @@ void InputManager::PollSDLHardware(bool& outRunning) {
         if (keyState[SDL_SCANCODE_A]) kLeftX -= 1.0f;
         if (keyState[SDL_SCANCODE_W]) kLeftY += 1.0f;
         if (keyState[SDL_SCANCODE_S]) kLeftY -= 1.0f;
-        pad0.leftStick = ApplyRadialDeadzone(kLeftX, kLeftY, 0.0f);
+        if (kLeftX != 0.0f || kLeftY != 0.0f || pad0.type == ControllerType::KeyboardMouse) {
+            pad0.leftStick = ApplyRadialDeadzone(kLeftX, kLeftY, 0.0f);
+        }
 
         float kRightX = 0.0f, kRightY = 0.0f;
         if (keyState[SDL_SCANCODE_RIGHT] || keyState[SDL_SCANCODE_L]) kRightX += 1.0f;
         if (keyState[SDL_SCANCODE_LEFT]  || keyState[SDL_SCANCODE_J]) kRightX -= 1.0f;
         if (keyState[SDL_SCANCODE_UP]    || keyState[SDL_SCANCODE_I]) kRightY += 1.0f;
         if (keyState[SDL_SCANCODE_DOWN]  || keyState[SDL_SCANCODE_K]) kRightY -= 1.0f;
-        pad0.rightStick = ApplyRadialDeadzone(kRightX, kRightY, 0.0f);
+        if (kRightX != 0.0f || kRightY != 0.0f || pad0.type == ControllerType::KeyboardMouse) {
+            pad0.rightStick = ApplyRadialDeadzone(kRightX, kRightY, 0.0f);
+        }
 
         if (keyState[SDL_SCANCODE_Q] || keyState[SDL_SCANCODE_Z]) {
             pad0.buttonsHold |= static_cast<uint32_t>(VirtualButton::ZL);

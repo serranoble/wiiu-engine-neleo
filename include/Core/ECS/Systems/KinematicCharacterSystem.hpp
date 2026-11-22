@@ -45,10 +45,21 @@ public:
         1.25f
     };
 
+    using FootstepCallback = void(*)(const Point3D& position, void* userData);
+    static void SetFootstepCallback(FootstepCallback cb, void* userData = nullptr) noexcept;
+
     /**
      * @brief Actualiza la cinemática de todas las entidades con (TransformComponent, KinematicCharacterComponent).
      */
     static void Update(ECSWorld& world, float dt);
+
+    /**
+     * @brief [OPT-274] Evalua y actualiza las transiciones de la KCC-FSM (Idle/Walk/Run/Jump/Fall/Slide/Land).
+     */
+    static void UpdateLocomotionFSM(KinematicCharacterComponent& kcc,
+                                    bool wasGrounded,
+                                    bool onSteepSlope,
+                                    float dt) noexcept;
 
     /**
      * @brief Evalúa la elevación analítica continua del mapa de alturas del terreno en (x, z).

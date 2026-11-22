@@ -137,8 +137,7 @@ private:
             m_toasts[i] = m_toasts[i - 1];
         }
         GameplayToast& top = m_toasts[0];
-        std::strncpy(top.message.data(), text, top.message.size() - 1);
-        top.message[top.message.size() - 1] = '\0';
+        std::snprintf(top.message.data(), top.message.size(), "%s", text ? text : "");
         top.colorRGBA = colorRGBA;
         top.timeRemaining = std::clamp(durationSec, 0.1f, 10.0f);
     }

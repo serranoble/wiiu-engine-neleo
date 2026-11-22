@@ -27,7 +27,7 @@ uint32_t PRNG::NextUInt32() noexcept {
     // Permutación XSH-RR (xorshift high, random rotate)
     const uint32_t xorshifted = static_cast<uint32_t>(((oldstate >> 18u) ^ oldstate) >> 27u);
     const uint32_t rot = static_cast<uint32_t>(oldstate >> 59u);
-    return (xorshifted >> rot) | (xorshifted << ((-rot) & 31u));
+    return (xorshifted >> rot) | (xorshifted << ((32u - rot) & 31u));
 }
 
 uint32_t PRNG::NextUInt32(uint32_t maxExclusive) noexcept {
@@ -39,7 +39,7 @@ uint32_t PRNG::NextUInt32(uint32_t maxExclusive) noexcept {
     uint32_t l = static_cast<uint32_t>(m);
 
     if (l < maxExclusive) {
-        uint32_t t = -maxExclusive;
+        uint32_t t = 0u - maxExclusive;
         if (t >= maxExclusive) {
             t -= maxExclusive;
             if (t >= maxExclusive) {
@@ -57,8 +57,12 @@ uint32_t PRNG::NextUInt32(uint32_t maxExclusive) noexcept {
 
 int32_t PRNG::NextIntRange(int32_t minInclusive, int32_t maxInclusive) noexcept {
     if (minInclusive >= maxInclusive) return minInclusive;
-    const uint32_t range = static_cast<uint32_t>(maxInclusive - minInclusive + 1);
-    return minInclusive + static_cast<int32_t>(NextUInt32(range));
+    const uint64_t span = static_cast<uint64_t>(static_cast<int64_t>(maxInclusive) - static_cast<int64_t>(minInclusive)) + 1ULL;
+    if (span >= 0x100000000ULL) {
+        return static_cast<int32_t>(NextUInt32());
+    }
+    const int64_t res = static_cast<int64_t>(minInclusive) + static_cast<int64_t>(NextUInt32(static_cast<uint32_t>(span)));
+    return static_cast<int32_t>(res);
 }
 
 uint64_t PRNG::NextUInt64() noexcept {

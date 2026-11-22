@@ -1,6 +1,5 @@
 #include "Core/AI/AStarPathfinder.hpp"
 #include <cmath>
-#include <algorithm>
 
 namespace WiiU {
 

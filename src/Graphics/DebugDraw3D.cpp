@@ -68,6 +68,7 @@ bool DebugDraw3D::ProjectToScreen(const Point3D& worldPos, float& outScreenX, fl
 }
 
 void DebugDraw3D::DrawLine(const Point3D& a, const Point3D& b, float width, const ColorRGBA& color) noexcept {
+    if (width <= 0.0f) return;
     // -------------------------------------------------------------------------
     // ALGORITMO: Recorte de Segmentos contra el Plano Anterior (Near-Plane Line Clipping)
     // Fuente: James Blinn (1991), "A Trip Down the Graphics Pipeline: Line Clipping"

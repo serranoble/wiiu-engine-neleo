@@ -38,7 +38,9 @@ void ShadowSystem::ComputeCascades(const ShadowCameraDesc& camera,
     const float tanHalfFovX = tanHalfFovY * camera.aspectRatio;
 
     const Point3D camForward = (camera.target - camera.position).Normalized();
-    const Point3D camRight = Point3D::Cross(camForward, camera.up).Normalized();
+    const Point3D safeUp = (std::abs(Point3D::Dot(camForward, camera.up.Normalized())) > 0.98f)
+                           ? Point3D{0.0f, 0.0f, 1.0f} : camera.up;
+    const Point3D camRight = Point3D::Cross(camForward, safeUp).Normalized();
     const Point3D camUp = Point3D::Cross(camRight, camForward);
 
     Point3D lDir = lightDir.Normalized();

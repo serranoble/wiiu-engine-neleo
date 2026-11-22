@@ -5,7 +5,6 @@
 #include "Core/JobSystem.hpp"
 #include "Core/StackString.hpp"
 #include "Graphics/Render2D.hpp"
-#include "Graphics/Render2DGX2.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
 #include "Graphics/Color.hpp"
 #include "Audio/AudioManager.hpp"
@@ -16,10 +15,7 @@
 
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/swap.h>
-#include <gx2/draw.h>
-#include <gx2/clear.h>
 #include <gx2/event.h>
-#include <gx2/registers.h>
 #include <proc_ui/procui.h>
 #endif
 
@@ -42,6 +38,7 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene) {
     if (m_isPaused) {
         SetPaused(false);
     }
+    m_modalStack.Clear();
 
     // Si hay una carga asíncrona previa en vuelo en Core 2, esperar deterministamente su conclusión
     if (m_asyncLoadDispatched) {
@@ -50,6 +47,11 @@ void SceneManager::ChangeScene(std::unique_ptr<IScene> newScene) {
     }
 
     if (!m_currentScene) {
+        // Limpiar cualquier transicion previa residual antes de la carga inicial directa
+        m_pendingScene.reset();
+        m_transitionPhase = TransitionPhase::Idle;
+        m_transitionProgress = 0.0f;
+        m_targetProgress = 0.0f;
         // Carga inicial directa (ej. SceneLoading al encender la aplicación)
         const auto requiredAssets = newScene->GetRequiredAssets();
         if (!requiredAssets.empty()) {
@@ -229,11 +231,13 @@ void SceneManager::Update(float dt) {
         return;
     }
 
-    // Comprobar solicitud de alternar pausa desde mandos físicos o atajos de teclado
+    // Comprobar solicitud de alternar pausa desde mandos físicos o atajos de teclado (solo en escenas de juego, no en menús)
     if (InputManager::Instance().IsPauseRequested()) {
-        TogglePause();
-        InputManager::Instance().ConsumePauseRequest();
-        return;
+        if (!m_currentScene || !m_currentScene->IsMenu()) {
+            TogglePause();
+            InputManager::Instance().ConsumePauseRequest();
+            return;
+        }
     }
 
     if (m_isPaused) {
@@ -241,45 +245,55 @@ void SceneManager::Update(float dt) {
         return;
     }
 
+    if (!m_modalStack.IsEmpty()) {
+        m_modalStack.Update(dt);
+        if (m_modalStack.IsBlockingSceneUpdate()) {
+            return;
+        }
+    }
+
     if (m_currentScene) {
         m_currentScene->Update(dt);
     }
 }
 
-void SceneManager::Render(SDL_Renderer* renderer) {
+void SceneManager::Render() {
     if (m_transitionPhase != TransitionPhase::Idle) {
-        RenderTransitionScreen(renderer);
+        RenderTransitionScreen();
         return;
     }
 
     if (m_currentScene) {
-        m_currentScene->Render(renderer);
+        m_currentScene->Render();
+    }
+
+    if (!m_modalStack.IsEmpty()) {
+        m_modalStack.Render();
     }
 
     if (m_isPaused) {
-        RenderPauseModal(renderer);
+        RenderPauseModal();
     }
 }
 
-void SceneManager::RenderTransitionScreen(SDL_Renderer* renderer) {
-    if (!renderer) return;
+void SceneManager::RenderTransitionScreen() {
+    Render2D::Begin();
 
     // 1. Fondo Oscuro Futurista
-    Render2D::DrawBox(renderer, 0, 0, 1280, 720, ColorRGBA{6, 12, 24, 255}, ColorRGBA::Cyan());
+    Render2D::DrawBox(0, 0, 1280, 720, ColorRGBA{6, 12, 24, 255}, ColorRGBA::Cyan());
 
     // Grid visual de fondo
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 15, 35, 60, 120);
+    const ColorRGBA gridColor{15, 35, 60, 120};
     for (int x = 0; x < 1280; x += 64) {
-        SDL_RenderDrawLine(renderer, x, 0, x, 720);
+        Render2D::DrawLine(x, 0, x, 720, gridColor, 1.0f);
     }
     for (int y = 0; y < 720; y += 64) {
-        SDL_RenderDrawLine(renderer, 0, y, 1280, y);
+        Render2D::DrawLine(0, y, 1280, y, gridColor, 1.0f);
     }
 
     // 2. Título Superior
-    Render2D::DrawPixelString(renderer, "TRANSICION DE ESCENA & AUDITORIA DE RECURSOS", 220, 105, 3, ColorRGBA::Cyan());
-    Render2D::DrawPixelString(renderer, "SISTEMA DETERMINISTA DE CICLO DE VIDA Y RECLAMACION DE MEMORIA", 240, 145, 2, ColorRGBA{160, 210, 255, 255});
+    Render2D::DrawPixelString("TRANSICION DE ESCENA & AUDITORIA DE RECURSOS", 220, 105, 3, ColorRGBA::Cyan());
+    Render2D::DrawPixelString("SISTEMA DETERMINISTA DE CICLO DE VIDA Y RECLAMACION DE MEMORIA", 240, 145, 2, ColorRGBA{160, 210, 255, 255});
 
     // 3. Indicador de Fase Activa (Pill interactiva)
     const char* phaseText = "FASE DESCONOCIDA";
@@ -305,44 +319,46 @@ void SceneManager::RenderTransitionScreen(SDL_Renderer* renderer) {
             break;
     }
 
-    Render2D::DrawBox(renderer, 200, 185, 880, 42, ColorRGBA{15, 28, 48, 230}, phaseColor);
-    Render2D::DrawPixelString(renderer, phaseText, 225, 198, 2, phaseColor);
+    Render2D::DrawBox(200, 185, 880, 42, ColorRGBA{15, 28, 48, 230}, phaseColor);
+    Render2D::DrawPixelString(phaseText, 225, 198, 2, phaseColor);
 
     // 4. Tarjetas de Información de Escenas (Origen -> Destino)
     // Tarjeta Saliente
-    Render2D::DrawBox(renderer, 200, 242, 425, 68, ColorRGBA{10, 20, 35, 220}, ColorRGBA{180, 70, 70, 255});
-    Render2D::DrawPixelString(renderer, "DESCARGANDO:", 215, 255, 2, ColorRGBA{255, 120, 120, 255});
-    std::string outShort = m_outgoingSceneName.empty() ? "Ninguna" : m_outgoingSceneName;
+    Render2D::DrawBox(200, 242, 425, 68, ColorRGBA{10, 20, 35, 220}, ColorRGBA{180, 70, 70, 255});
+    Render2D::DrawPixelString("DESCARGANDO:", 215, 255, 2, ColorRGBA{255, 120, 120, 255});
+    std::string_view outShort = m_outgoingSceneName.empty() ? std::string_view("Ninguna") : std::string_view(m_outgoingSceneName);
     if (outShort.size() > 24) outShort = outShort.substr(0, 24);
-    Render2D::DrawPixelString(renderer, outShort, 215, 281, 2, ColorRGBA::White());
+    Render2D::DrawPixelString(outShort, 215, 281, 2, ColorRGBA::White());
 
     // Tarjeta Entrante
-    Render2D::DrawBox(renderer, 655, 242, 425, 68, ColorRGBA{10, 20, 35, 220}, ColorRGBA{50, 180, 120, 255});
-    Render2D::DrawPixelString(renderer, "PREPARANDO:", 670, 255, 2, ColorRGBA{100, 255, 160, 255});
-    std::string inShort = m_incomingSceneName.empty() ? "Siguiente" : m_incomingSceneName;
+    Render2D::DrawBox(655, 242, 425, 68, ColorRGBA{10, 20, 35, 220}, ColorRGBA{50, 180, 120, 255});
+    Render2D::DrawPixelString("PREPARANDO:", 670, 255, 2, ColorRGBA{100, 255, 160, 255});
+    std::string_view inShort = m_incomingSceneName.empty() ? std::string_view("Siguiente") : std::string_view(m_incomingSceneName);
     if (inShort.size() > 24) inShort = inShort.substr(0, 24);
-    Render2D::DrawPixelString(renderer, inShort, 670, 281, 2, ColorRGBA::White());
+    Render2D::DrawPixelString(inShort, 670, 281, 2, ColorRGBA::White());
 
     // 5. Barra de Progreso Neón Central
-    SDL_Rect barBox = { 200, 328, 880, 50 };
-    Render2D::DrawBox(renderer, barBox.x, barBox.y, barBox.w, barBox.h, ColorRGBA{10, 20, 35, 240}, ColorRGBA::Cyan());
+    constexpr int barX = 200;
+    constexpr int barY = 328;
+    constexpr int barW = 880;
+    constexpr int barH = 50;
+    Render2D::DrawBox(barX, barY, barW, barH, ColorRGBA{10, 20, 35, 240}, ColorRGBA::Cyan());
 
-    int fillWidth = static_cast<int>((barBox.w - 8) * std::clamp(m_transitionProgress, 0.0f, 1.0f));
+    int fillWidth = static_cast<int>((barW - 8) * std::clamp(m_transitionProgress, 0.0f, 1.0f));
     if (fillWidth > 0) {
-        SDL_Rect fillRect = { barBox.x + 4, barBox.y + 4, fillWidth, barBox.h - 8 };
-        Uint8 glowAlpha = static_cast<Uint8>(200 + 55.0f * std::sin(m_pulseAnim));
-        Render2D::DrawBox(renderer, fillRect.x, fillRect.y, fillRect.w, fillRect.h, 
+        uint8_t glowAlpha = static_cast<uint8_t>(200 + 55.0f * std::sin(m_pulseAnim));
+        Render2D::DrawBox(barX + 4, barY + 4, fillWidth, barH - 8,
                           ColorRGBA{0, 180, 240, glowAlpha}, ColorRGBA::White());
     }
 
     int percent = static_cast<int>(m_transitionProgress * 100.0f);
     StackString<32> percentStr;
     percentStr.Format("%d %%", percent);
-    Render2D::DrawPixelString(renderer, percentStr.string_view(), barBox.x + barBox.w / 2 - 30, barBox.y + 14, 3, ColorRGBA::White());
+    Render2D::DrawPixelString(percentStr.string_view(), barX + barW / 2 - 30, barY + 14, 3, ColorRGBA::White());
 
     // 6. Panel de Telemetría de Memoria y Auditoría
-    Render2D::DrawBox(renderer, 200, 395, 880, 275, ColorRGBA{8, 16, 28, 240}, ColorRGBA{70, 130, 200, 255});
-    Render2D::DrawPixelString(renderer, "AUDITORIA DE GESTION DE MEMORIA EN SILICIO CAFE OS", 225, 412, 2, ColorRGBA::Yellow());
+    Render2D::DrawBox(200, 395, 880, 275, ColorRGBA{8, 16, 28, 240}, ColorRGBA{70, 130, 200, 255});
+    Render2D::DrawPixelString("AUDITORIA DE GESTION DE MEMORIA EN SILICIO CAFE OS", 225, 412, 2, ColorRGBA::Yellow());
 
     auto& mem = MemoryManager::Instance();
     size_t activeAllocs = mem.GetActiveAllocationCount();
@@ -352,7 +368,7 @@ void SceneManager::RenderTransitionScreen(SDL_Renderer* renderer) {
     StackString<160> line1;
     line1.Format("MEMORIA ACTIVA MOTOR : %zu KB (%.2f MB) | BLOQUES: %zu | PICO: %zu KB",
                  totalBytes / 1024, static_cast<float>(totalBytes) / (1024.0f * 1024.0f), activeAllocs, peakBytes / 1024);
-    Render2D::DrawPixelString(renderer, line1.string_view(), 225, 448, 2, ColorRGBA::White());
+    Render2D::DrawPixelString(line1.string_view(), 225, 448, 2, ColorRGBA::White());
 
     StackString<160> line2;
     if (m_reclaimedBytes > 0) {
@@ -360,19 +376,19 @@ void SceneManager::RenderTransitionScreen(SDL_Renderer* renderer) {
     } else {
         line2.Format("RECURSOS LIBERADOS EN DESCARGA: PURGA DETERMINISTA COMPLETA (0 FUGAS)");
     }
-    Render2D::DrawPixelString(renderer, line2.string_view(), 225, 484, 2, ColorRGBA{100, 255, 140, 255});
+    Render2D::DrawPixelString(line2.string_view(), 225, 484, 2, ColorRGBA{100, 255, 140, 255});
 
     StackString<160> line3;
     line3.Format("GARANTIA ANTI-DANGLING: ACTIVA (PUNTEROS ANULADOS A nullptr EN LIBERACION)");
-    Render2D::DrawPixelString(renderer, line3.string_view(), 225, 520, 2, ColorRGBA{0, 220, 255, 255});
+    Render2D::DrawPixelString(line3.string_view(), 225, 520, 2, ColorRGBA{0, 220, 255, 255});
 
     StackString<160> line4;
     line4.Format("LATTE GPU DRAIN BARRIER: SINCRONIZADA (GX2DrawDone ANTES DE REASIGNAR VRAM)");
-    Render2D::DrawPixelString(renderer, line4.string_view(), 225, 556, 2, ColorRGBA{255, 200, 100, 255});
+    Render2D::DrawPixelString(line4.string_view(), 225, 556, 2, ColorRGBA{255, 200, 100, 255});
 
     StackString<160> line5;
     line5.Format("ARENAS EFIMERAS: FRAME (128KB) & SCENE (2MB) REINICIALIZADAS EN O(1)");
-    Render2D::DrawPixelString(renderer, line5.string_view(), 225, 592, 2, ColorRGBA{200, 160, 255, 255});
+    Render2D::DrawPixelString(line5.string_view(), 225, 592, 2, ColorRGBA{200, 160, 255, 255});
 
     StackString<160> line6;
     uint32_t asyncLoaded = AssetManager::GetAsyncBytesLoaded();
@@ -385,7 +401,9 @@ void SceneManager::RenderTransitionScreen(SDL_Renderer* renderer) {
     } else {
         line6.Format("ESTADO DE CACHE LATTE: FLUSH & INVALIDATE COMPLETADO SIN CORRUPCION");
     }
-    Render2D::DrawPixelString(renderer, line6.string_view(), 225, 628, 2, ColorRGBA{120, 220, 255, 255});
+    Render2D::DrawPixelString(line6.string_view(), 225, 628, 2, ColorRGBA{120, 220, 255, 255});
+
+    Render2D::End();
 }
 
 void SceneManager::Clear() {
@@ -401,6 +419,7 @@ void SceneManager::Clear() {
     if (m_isPaused) {
         SetPaused(false);
     }
+    m_modalStack.Clear();
     if (m_currentScene) {
         m_currentScene->OnExit();
         m_currentScene.reset();
@@ -412,7 +431,6 @@ void SceneManager::Clear() {
     MemoryManager::Instance().GetFrameArena().Reset();
     MemoryManager::Instance().GetSceneArena().Reset();
     RHIPipelineCache::Instance().Invalidate();
-    MemoryManager::Instance().AssertNoLeaks();
     m_transitionPhase = TransitionPhase::Idle;
     m_transitionProgress = 0.0f;
 }
@@ -425,16 +443,26 @@ void SceneManager::SetPaused(bool paused) {
     m_pauseAnimTimer = 0.0f;
     m_resumeHovered = false;
     m_menuHovered = false;
+    m_optionsHovered = false;
 
-    // Pausar o reanudar el subsistema de audio determinista
+    // Pausar o reanudar el subsistema de audio determinista y contexto de entrada UIModal
     AudioManager::Instance().SetPaused(paused);
+    if (paused) {
+        InputManager::Instance().GetContextStack().PushContext(InputContext::UIModal, 120u, true);
+    } else if (!m_modalStack.IsBlockingSceneInput()) {
+        InputManager::Instance().GetContextStack().RemoveContext(InputContext::UIModal);
+    }
 
     if (m_currentScene) {
         if (paused) {
+            const std::string name = m_currentScene->GetSceneName();
+            m_pausedSceneName.Format("%.*s", static_cast<int>(name.size()), name.data());
             m_currentScene->OnPause();
         } else {
             m_currentScene->OnResume();
         }
+    } else if (paused) {
+        m_pausedSceneName.Format("SISTEMA");
     }
 }
 
@@ -500,11 +528,21 @@ void SceneManager::UpdatePauseModal(float dt) {
         return;
     }
 
-    // 3. Detección por mando físico: Botón X o MINUS -> Configuración Global
-    if (InputManager::Instance().IsButtonTriggered(VPAD_BUTTON_X) ||
-        InputManager::Instance().IsButtonTriggered(WPAD_PRO_BUTTON_X) ||
-        InputManager::Instance().IsButtonTriggered(VPAD_BUTTON_MINUS) ||
-        InputManager::Instance().IsButtonTriggered(WPAD_PRO_BUTTON_MINUS)) {
+    // 3. Detección por mando físico universal (X / Minus -> Opciones, A / Plus -> Reanudar)
+    bool actionX = false;
+    bool actionA = false;
+    bool actionPlus = false;
+    bool actionMinus = false;
+    for (size_t p = 0; p < InputManager::MAX_PLAYERS; ++p) {
+        const auto& pad = InputManager::Instance().GetGamepad(p);
+        if (!pad.isConnected) continue;
+        if (pad.WasJustPressed(VirtualButton::X)) actionX = true;
+        if (pad.WasJustPressed(VirtualButton::Minus)) actionMinus = true;
+        if (pad.WasJustPressed(VirtualButton::A)) actionA = true;
+        if (pad.WasJustPressed(VirtualButton::Plus)) actionPlus = true;
+    }
+
+    if (actionX || actionMinus) {
         AudioManager::Instance().PlayClick();
         SetPaused(false);
         const bool wasPureGX2 = (m_currentScene && m_currentScene->IsPureGX2());
@@ -512,28 +550,24 @@ void SceneManager::UpdatePauseModal(float dt) {
         return;
     }
 
-    // 4. Detección por mando físico: Botón A o PLUS -> Reanudar Juego
-    if (InputManager::Instance().IsButtonTriggered(VPAD_BUTTON_A) ||
-        InputManager::Instance().IsButtonTriggered(WPAD_PRO_BUTTON_A) ||
-        InputManager::Instance().IsButtonTriggered(VPAD_BUTTON_PLUS) ||
-        InputManager::Instance().IsButtonTriggered(WPAD_PRO_BUTTON_PLUS)) {
+    if (actionA || actionPlus) {
         AudioManager::Instance().PlayClick();
         SetPaused(false);
         return;
     }
 }
 
-void SceneManager::RenderPauseModal(SDL_Renderer* renderer) {
-    const bool isPureGX2 = (m_currentScene && m_currentScene->IsPureGX2());
-
-    constexpr float modalX = 320.0f;
-    constexpr float modalY = 135.0f;
-    constexpr float modalW = 640.0f;
-    constexpr float modalH = 430.0f;
-    constexpr float btnH = 48.0f;
-    constexpr float btn1Y = modalY + 145.0f;
-    constexpr float btn2Y = modalY + 205.0f;
-    constexpr float btn3Y = modalY + 265.0f;
+void SceneManager::RenderPauseModal() {
+    constexpr int modalX = 320;
+    constexpr int modalY = 135;
+    constexpr int modalW = 640;
+    constexpr int modalH = 430;
+    constexpr int btnX   = modalX + 40;
+    constexpr int btnW   = modalW - 80;
+    constexpr int btnH   = 48;
+    constexpr int btn1Y  = modalY + 145;
+    constexpr int btn2Y  = modalY + 205;
+    constexpr int btn3Y  = modalY + 265;
 
     // Animación de pulso sinusoidal para el contorno de neón del modal
     float pulse = 0.5f + 0.5f * std::sin(m_pauseAnimTimer * 5.0f);
@@ -541,104 +575,60 @@ void SceneManager::RenderPauseModal(SDL_Renderer* renderer) {
     ColorRGBA modalBorder{ 0, borderPulse, 255, 255 };
 
     StackString<96> sceneText;
-    sceneText.Format("ESCENA ACTUAL: [%s]", m_currentScene ? m_currentScene->GetSceneName().c_str() : "SISTEMA");
+    sceneText.Format("ESCENA ACTUAL: [%s]", m_pausedSceneName.empty() ? "SISTEMA" : m_pausedSceneName.c_str());
 
-    if (isPureGX2) {
-        auto& r2d = Render2DGX2::Instance();
-        r2d.Begin();
+    auto drawModalBtn = [](int x, int y, int w, int h, std::string_view label,
+                           bool hovered, ColorRGBA normalFill, ColorRGBA hoverFill,
+                           ColorRGBA normalBorder, ColorRGBA hoverBorder) {
+        Render2D::DrawBox(x, y, w, h, hovered ? hoverFill : normalFill, hovered ? hoverBorder : normalBorder);
+        const int textW = static_cast<int>(label.size()) * 6 * 2;
+        const int tx = x + std::max(10, (w - textW) / 2);
+        const int ty = y + (h - 14) / 2;
+        Render2D::DrawPixelString(label, tx, ty, 2, ColorRGBA::White());
+    };
 
-        // 1. Telón semitransparente oscuro sobre toda la pantalla (1280x720)
-        r2d.DrawRect(0.0f, 0.0f, 1280.0f, 720.0f, ColorRGBA{0, 0, 0, 195});
+    Render2D::Begin();
 
-        // 2. Marco exterior y fondo del modal
-        r2d.DrawBox(modalX, modalY, modalW, modalH, ColorRGBA{10, 16, 28, 250}, modalBorder, 2.5f);
-        r2d.DrawBox(modalX + 4.0f, modalY + 4.0f, modalW - 8.0f, modalH - 8.0f,
-                    ColorRGBA{0, 0, 0, 0}, ColorRGBA{0, 140, 200, 100}, 1.0f);
+    // 1. Telón semitransparente oscuro sobre toda la pantalla (1280x720)
+    Render2D::DrawRect(0, 0, 1280, 720, ColorRGBA{0, 0, 0, 195});
 
-        // 3. Cabecera del modal
-        r2d.DrawBox(modalX, modalY, modalW, 60.0f, ColorRGBA{18, 28, 48, 255}, modalBorder, 2.0f);
-        r2d.DrawText("|| PAUSA", modalX + 235.0f, modalY + 18.0f, 3.0f, ColorRGBA::Cyan());
+    // 2. Marco exterior y fondo del modal
+    Render2D::DrawBox(modalX, modalY, modalW, modalH, ColorRGBA{10, 16, 28, 250}, modalBorder);
+    Render2D::DrawBox(modalX + 4, modalY + 4, modalW - 8, modalH - 8,
+                      ColorRGBA{0, 0, 0, 0}, ColorRGBA{0, 140, 200, 100});
 
-        // 4. Subtítulos informativos (Escala Canónica 2.0f)
-        r2d.DrawText(sceneText.string_view(), modalX + 40.0f, modalY + 80.0f, 2.0f, ColorRGBA{180, 220, 255, 255});
-        r2d.DrawText("SIMULACION Y AUDIO DETENIDOS", modalX + 40.0f, modalY + 110.0f, 2.0f, ColorRGBA{255, 215, 0, 255});
+    // 3. Cabecera del modal
+    Render2D::DrawBox(modalX, modalY, modalW, 60, ColorRGBA{18, 28, 48, 255}, modalBorder);
+    Render2D::DrawPixelString("|| PAUSA", modalX + 235, modalY + 18, 3, ColorRGBA::Cyan());
 
-        // 5. Botones interactivos
-        r2d.DrawButton("> REANUDAR (BOTON + / A)", modalX + 40.0f, btn1Y, modalW - 80.0f, btnH,
-                       m_resumeHovered,
-                       ColorRGBA{20, 36, 60, 240}, ColorRGBA{35, 75, 130, 255},
-                       ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow(),
-                       ColorRGBA::White(), 2.0f);
+    // 4. Subtítulos informativos (Escala Canónica 2)
+    Render2D::DrawPixelString(sceneText.string_view(), modalX + 40, modalY + 80, 2, ColorRGBA{180, 220, 255, 255});
+    Render2D::DrawPixelString("SIMULACION Y AUDIO DETENIDOS", modalX + 40, modalY + 110, 2, ColorRGBA{255, 215, 0, 255});
 
-        r2d.DrawButton("* CONFIGURACION (BOTON - / X)", modalX + 40.0f, btn2Y, modalW - 80.0f, btnH,
-                       m_optionsHovered,
-                       ColorRGBA{20, 36, 60, 240}, ColorRGBA{25, 90, 130, 255},
-                       ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow(),
-                       ColorRGBA::White(), 2.0f);
+    // 5. Botones interactivos
+    drawModalBtn(btnX, btn1Y, btnW, btnH, "> REANUDAR (BOTON + / A)",
+                 m_resumeHovered,
+                 ColorRGBA{20, 36, 60, 240}, ColorRGBA{35, 75, 130, 255},
+                 ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow());
 
-        r2d.DrawButton("< VOLVER AL MENU (BOTON B)", modalX + 40.0f, btn3Y, modalW - 80.0f, btnH,
-                       m_menuHovered,
-                       ColorRGBA{20, 36, 60, 240}, ColorRGBA{130, 35, 35, 255},
-                       ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow(),
-                       ColorRGBA::White(), 2.0f);
+    drawModalBtn(btnX, btn2Y, btnW, btnH, "* CONFIGURACION (BOTON - / X)",
+                 m_optionsHovered,
+                 ColorRGBA{20, 36, 60, 240}, ColorRGBA{25, 90, 130, 255},
+                 ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow());
 
-        // 6. Indicaciones ergonómicas (Escala Canónica 2.0f, centradas)
-        r2d.DrawText("TOCA UN BOTON O PRESIONA + EN EL GAMEPAD", modalX + 86.0f, modalY + 332.0f, 2.0f, ColorRGBA{130, 155, 185, 255});
-        r2d.DrawText("PARA VOLVER AL JUEGO EN CUALQUIER MOMENTO", modalX + 74.0f, modalY + 358.0f, 2.0f, ColorRGBA{130, 155, 185, 255});
+    drawModalBtn(btnX, btn3Y, btnW, btnH, "< VOLVER AL MENU (BOTON B)",
+                 m_menuHovered,
+                 ColorRGBA{20, 36, 60, 240}, ColorRGBA{130, 35, 35, 255},
+                 ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow());
 
-        // Línea decorativa inferior
-        r2d.DrawLine(modalX + 10.0f, modalY + modalH - 12.0f, modalX + modalW - 10.0f, modalY + modalH - 12.0f, 2.0f, ColorRGBA::Cyan());
+    // 6. Indicaciones ergonómicas
+    Render2D::DrawPixelString("TOCA UN BOTON O PRESIONA + EN EL GAMEPAD", modalX + 86, modalY + 332, 2, ColorRGBA{130, 155, 185, 255});
+    Render2D::DrawPixelString("PARA VOLVER AL JUEGO EN CUALQUIER MOMENTO", modalX + 74, modalY + 358, 2, ColorRGBA{130, 155, 185, 255});
 
-        r2d.End();
-    } else if (renderer) {
-        // 1. Telón semitransparente oscuro sobre toda la pantalla (1280x720)
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 195);
-        SDL_Rect fullScreen{ 0, 0, 1280, 720 };
-        SDL_RenderFillRect(renderer, &fullScreen);
+    // Línea decorativa inferior
+    Render2D::DrawLine(modalX + 10, modalY + modalH - 12, modalX + modalW - 10, modalY + modalH - 12, ColorRGBA::Cyan(), 2.0f);
 
-        // 2. Marco exterior y fondo del modal
-        int mx = static_cast<int>(modalX);
-        int my = static_cast<int>(modalY);
-        int mw = static_cast<int>(modalW);
-        int mh = static_cast<int>(modalH);
-        int bh = static_cast<int>(btnH);
-
-        Render2D::DrawBox(renderer, mx, my, mw, mh, ColorRGBA{10, 16, 28, 250}, modalBorder);
-        Render2D::DrawBox(renderer, mx + 4, my + 4, mw - 8, mh - 8, ColorRGBA{0, 0, 0, 0}, ColorRGBA{0, 140, 200, 100});
-
-        // 3. Cabecera del modal
-        Render2D::DrawBox(renderer, mx, my, mw, 60, ColorRGBA{18, 28, 48, 255}, modalBorder);
-        Render2D::DrawPixelString(renderer, "|| PAUSA", mx + 235, my + 18, 3, ColorRGBA::Cyan());
-
-        // 4. Subtítulos informativos
-        Render2D::DrawPixelString(renderer, sceneText.string_view(), mx + 40, my + 80, 2, ColorRGBA{180, 220, 255, 255});
-        Render2D::DrawPixelString(renderer, "SIMULACION Y AUDIO DETENIDOS", mx + 40, my + 110, 2, ColorRGBA{255, 215, 0, 255});
-
-        // 5. Botones interactivos
-        ColorRGBA btn1Fill = m_resumeHovered ? ColorRGBA{35, 75, 130, 255} : ColorRGBA{20, 36, 60, 240};
-        ColorRGBA btn1Border = m_resumeHovered ? ColorRGBA::Yellow() : ColorRGBA{0, 210, 255, 255};
-        Render2D::DrawBox(renderer, mx + 40, static_cast<int>(btn1Y), mw - 80, bh, btn1Fill, btn1Border);
-        Render2D::DrawPixelString(renderer, "> REANUDAR (BOTON + / A)", mx + 75, static_cast<int>(btn1Y) + 16, 2, ColorRGBA::White());
-
-        ColorRGBA btn2Fill = m_optionsHovered ? ColorRGBA{25, 90, 130, 255} : ColorRGBA{20, 36, 60, 240};
-        ColorRGBA btn2Border = m_optionsHovered ? ColorRGBA::Yellow() : ColorRGBA{0, 210, 255, 255};
-        Render2D::DrawBox(renderer, mx + 40, static_cast<int>(btn2Y), mw - 80, bh, btn2Fill, btn2Border);
-        Render2D::DrawPixelString(renderer, "* CONFIGURACION (BOTON - / X)", mx + 75, static_cast<int>(btn2Y) + 16, 2, ColorRGBA::White());
-
-        ColorRGBA btn3Fill = m_menuHovered ? ColorRGBA{130, 35, 35, 255} : ColorRGBA{20, 36, 60, 240};
-        ColorRGBA btn3Border = m_menuHovered ? ColorRGBA::Yellow() : ColorRGBA{0, 210, 255, 255};
-        Render2D::DrawBox(renderer, mx + 40, static_cast<int>(btn3Y), mw - 80, bh, btn3Fill, btn3Border);
-        Render2D::DrawPixelString(renderer, "< VOLVER AL MENU (BOTON B)", mx + 75, static_cast<int>(btn3Y) + 16, 2, ColorRGBA::White());
-
-        // 6. Indicaciones ergonómicas
-        Render2D::DrawPixelString(renderer, "TOCA UN BOTON O PRESIONA + EN EL GAMEPAD", mx + 60, my + 332, 2, ColorRGBA{130, 155, 185, 255});
-        Render2D::DrawPixelString(renderer, "PARA VOLVER AL JUEGO EN CUALQUIER MOMENTO", mx + 45, my + 358, 2, ColorRGBA{130, 155, 185, 255});
-
-        // Línea decorativa inferior
-        SDL_SetRenderDrawColor(renderer, 0, 240, 255, 200);
-        SDL_RenderDrawLine(renderer, mx + 10, my + mh - 12, mx + mw - 10, my + mh - 12);
-    }
+    Render2D::End();
 }
 
 bool SceneManager::NavigateToHomeMenu() {

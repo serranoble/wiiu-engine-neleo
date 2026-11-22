@@ -1,6 +1,5 @@
 #pragma once
 
-#include <SDL2/SDL.h>
 #include <vector>
 #include <string>
 
@@ -17,7 +16,7 @@ public:
     virtual void OnPause() {}
     virtual void OnResume() {}
     virtual void Update(float dt) = 0;
-    virtual void Render(SDL_Renderer* renderer) = 0;
+    virtual void Render() = 0;
 
     // Retorna la lista de assets requeridos para la escena (por defecto lista vacía).
     [[nodiscard]] virtual std::vector<std::string> GetRequiredAssets() const {
@@ -29,8 +28,13 @@ public:
         return "Escena";
     }
 
-    // Retorna si la escena es 100% GX2 puro (para evitar que SDL2 limpie o interfiera)
-    [[nodiscard]] virtual bool IsPureGX2() const {
+    // Todas las escenas renderizan de forma nativa sobre GX2 en Wii U
+    [[nodiscard]] virtual bool IsPureGX2() const noexcept {
+        return true;
+    }
+
+    // Indica si la escena limpia por sí misma el ColorBuffer principal (evita doble Clear en eDRAM)
+    [[nodiscard]] virtual bool ClearsFramebuffer() const noexcept {
         return false;
     }
 

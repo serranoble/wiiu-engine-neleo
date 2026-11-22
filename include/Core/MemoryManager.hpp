@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -77,6 +78,8 @@ public:
 
     LinearFrameArena(const LinearFrameArena&) = delete;
     LinearFrameArena& operator=(const LinearFrameArena&) = delete;
+    LinearFrameArena(LinearFrameArena&&) = delete;
+    LinearFrameArena& operator=(LinearFrameArena&&) = delete;
 
     void* Alloc(size_t bytes, size_t alignment = 8) noexcept;
 
@@ -126,6 +129,8 @@ public:
 
     SceneArena(const SceneArena&) = delete;
     SceneArena& operator=(const SceneArena&) = delete;
+    SceneArena(SceneArena&&) = delete;
+    SceneArena& operator=(SceneArena&&) = delete;
 
     void* Alloc(size_t bytes, size_t alignment = 32) noexcept;
 
@@ -229,12 +234,15 @@ private:
 
     MemoryManager(const MemoryManager&) = delete;
     MemoryManager& operator=(const MemoryManager&) = delete;
+    MemoryManager(MemoryManager&&) = delete;
+    MemoryManager& operator=(MemoryManager&&) = delete;
 
     mutable std::mutex m_mutex;
     std::vector<MemoryRecord> m_records;
-    size_t m_totalAllocatedBytes{0};
-    size_t m_peakAllocatedBytes{0};
-    size_t m_bytesByTag[static_cast<size_t>(MemoryTag::Count)]{0};
+    std::atomic<size_t> m_activeAllocationCount{0};
+    std::atomic<size_t> m_totalAllocatedBytes{0};
+    std::atomic<size_t> m_peakAllocatedBytes{0};
+    std::atomic<size_t> m_bytesByTag[static_cast<size_t>(MemoryTag::Count)]{};
 
     LinearFrameArena m_frameArena;
     SceneArena m_sceneArena;

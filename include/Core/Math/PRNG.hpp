@@ -162,7 +162,8 @@ public:
     [[nodiscard]] uint64_t GetInc() const noexcept { return m_inc; }
     void SetState(uint64_t state, uint64_t inc) noexcept {
         m_state = state;
-        m_inc = (inc << 1u) | 1u;
+        m_inc = inc | 1u;
+        m_hasCachedGaussian = false;
     }
 
     [[nodiscard]] uint64_t GetCallCount() const noexcept { return m_callCount; }

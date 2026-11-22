@@ -96,7 +96,13 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
     uint8_t* dstImage = static_cast<uint8_t*>(outTex.surface.image);
     const uint32_t pitchBytes0 = outTex.surface.pitch * blockBytes;
     const uint32_t rowBytes0 = blocksW0 * blockBytes;
+    if (rowBytes0 > pitchBytes0 ||
+        static_cast<size_t>(blocksH0) * static_cast<size_t>(pitchBytes0) > outTex.surface.imageSize) {
+        DestroyTexture(outTex);
+        return false;
+    }
 
+    std::memset(dstImage, 0, outTex.surface.imageSize);
     for (uint32_t y = 0; y < blocksH0; ++y) {
         std::memcpy(dstImage + y * pitchBytes0, srcCursor + y * rowBytes0, rowBytes0);
     }
@@ -221,7 +227,7 @@ bool LoadCookedCubeMapFromMemory(const uint8_t* data,
     outTex.surface.dim = GX2_SURFACE_DIM_TEXTURE_CUBE;
     outTex.surface.width = faceSize;
     outTex.surface.height = faceSize;
-    outTex.surface.depth = 1;
+    outTex.surface.depth = 6;
     outTex.surface.mipLevels = 1;
     outTex.surface.format = GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8;
     outTex.surface.aa = GX2_AA_MODE1X;
@@ -231,10 +237,11 @@ bool LoadCookedCubeMapFromMemory(const uint8_t* data,
     GX2CalcSurfaceSizeAndAlignment(&outTex.surface);
 
     const uint32_t facePitchBytes = outTex.surface.pitch * 4u;
+    const uint32_t faceRowBytes = faceSize * 4u;
     const uint32_t faceSliceBytes = facePitchBytes * faceSize;
-    const uint32_t totalRequiredBytes = faceSliceBytes * 6u;
-    if (outTex.surface.imageSize < totalRequiredBytes) {
-        outTex.surface.imageSize = totalRequiredBytes;
+    if (faceRowBytes > facePitchBytes ||
+        static_cast<size_t>(faceSliceBytes) * 6u > outTex.surface.imageSize) {
+        return false;
     }
 
     const uint32_t align = outTex.surface.alignment > 256 ? outTex.surface.alignment : 256;
@@ -250,10 +257,11 @@ bool LoadCookedCubeMapFromMemory(const uint8_t* data,
 
     const uint8_t* srcPtr = data + 32;
     uint8_t* dstPtr = static_cast<uint8_t*>(outTex.surface.image);
-    const uint32_t faceRowBytes = faceSize * 4u;
+    std::memset(dstPtr, 0, outTex.surface.imageSize);
+    const uint32_t hwSliceBytes = outTex.surface.imageSize / 6u;
 
     for (uint32_t face = 0; face < 6; ++face) {
-        uint8_t* faceDst = dstPtr + face * faceSliceBytes;
+        uint8_t* faceDst = dstPtr + face * hwSliceBytes;
         const uint8_t* faceSrc = srcPtr + face * faceRawBytes;
         for (uint32_t y = 0; y < faceSize; ++y) {
             std::memcpy(faceDst + y * facePitchBytes, faceSrc + y * faceRowBytes, faceRowBytes);

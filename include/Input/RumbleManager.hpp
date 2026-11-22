@@ -49,6 +49,7 @@ public:
     void Init();
     void Update(float dt);
     void StopAll() noexcept;
+    void Shutdown() noexcept;
 
     /**
      * @brief Dispara vibración háptica en el jugador o dispositivo indicado.
@@ -72,12 +73,13 @@ public:
 
 private:
     RumbleManager() = default;
-    ~RumbleManager() { StopAll(); }
+    ~RumbleManager() = default;
 
-    void SetHardwareRumble(PlayerIndex player, float intensity, bool active);
+    void SetHardwareRumble(PlayerIndex player, float intensity, bool active) noexcept;
 
     struct RumbleChannel {
         float remainingTime{0.0f};
+        float pulseInterval{0.0f};
         float intensity{0.0f};
         bool isActuatorOn{false};
     };

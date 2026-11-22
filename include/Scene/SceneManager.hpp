@@ -1,7 +1,8 @@
 #pragma once
 
 #include "Scene/IScene.hpp"
-#include <SDL2/SDL.h>
+#include "Scene/ModalStack.hpp"
+#include "Core/StackString.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -46,12 +47,12 @@ public:
     void SetOptionsSceneFactory(OptionsSceneFactoryFn factory) { m_optionsSceneFactory = std::move(factory); }
 
     bool NavigateToHomeMenu();
-    bool NavigateToParentMenu(bool fromPureGX2);
-    bool NavigateToOptions(bool fromPureGX2);
+    bool NavigateToParentMenu(bool fromPureGX2 = false);
+    bool NavigateToOptions(bool fromPureGX2 = false);
 
     void ChangeScene(std::unique_ptr<IScene> newScene);
     void Update(float dt);
-    void Render(SDL_Renderer* renderer);
+    void Render();
 
     [[nodiscard]] IScene* GetCurrentScene() const noexcept { return m_currentScene.get(); }
     [[nodiscard]] bool IsTransitioning() const noexcept { return m_transitionPhase != TransitionPhase::Idle; }
@@ -67,6 +68,12 @@ public:
     void SetPaused(bool paused);
     void TogglePause();
 
+    // [OPT-233 / OPT-314] Pila de Modales y Overlays Compositados
+    [[nodiscard]] ModalStack& GetModalStack() noexcept { return m_modalStack; }
+    [[nodiscard]] const ModalStack& GetModalStack() const noexcept { return m_modalStack; }
+    bool PushOverlay(std::unique_ptr<ISceneOverlay> overlay) { return m_modalStack.Push(std::move(overlay)); }
+    bool PopOverlay() { return m_modalStack.Pop(); }
+
     void Clear();
 
 private:
@@ -75,12 +82,14 @@ private:
 
     SceneManager(const SceneManager&) = delete;
     SceneManager& operator=(const SceneManager&) = delete;
+    SceneManager(SceneManager&&) = delete;
+    SceneManager& operator=(SceneManager&&) = delete;
 
     void UpdateTransition(float dt);
-    void RenderTransitionScreen(SDL_Renderer* renderer);
+    void RenderTransitionScreen();
 
     void UpdatePauseModal(float dt);
-    void RenderPauseModal(SDL_Renderer* renderer);
+    void RenderPauseModal();
 
     std::unique_ptr<IScene> m_currentScene{nullptr};
     std::unique_ptr<IScene> m_pendingScene{nullptr};
@@ -110,10 +119,12 @@ private:
     bool m_resumeHovered{false};
     bool m_optionsHovered{false};
     bool m_menuHovered{false};
+    StackString<64> m_pausedSceneName{};
 
     SceneFactoryFn m_homeMenuFactory{};
     SceneFactoryFn m_modelsMenuFactory{};
     OptionsSceneFactoryFn m_optionsSceneFactory{};
+    ModalStack m_modalStack{};
 };
 
 } // namespace WiiU

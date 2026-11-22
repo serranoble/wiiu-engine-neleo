@@ -12,7 +12,12 @@
 #define WIIU_FREEALIGNED(ptr) free(ptr)
 #else
 #include <cstdlib>
-#define WIIU_MEMALIGN(align, size) std::malloc(size)
+static inline void* WiiUAlignedAllocFallback(size_t align, size_t size) noexcept {
+    const size_t safeAlign = (align < sizeof(void*) || (align & (align - 1)) != 0) ? sizeof(void*) : align;
+    const size_t roundedSize = (size + safeAlign - 1) & ~(safeAlign - 1);
+    return std::aligned_alloc(safeAlign, roundedSize);
+}
+#define WIIU_MEMALIGN(align, size) WiiUAlignedAllocFallback(align, size)
 #define WIIU_FREEALIGNED(ptr) std::free(ptr)
 #endif
 
@@ -43,19 +48,20 @@ LinearFrameArena::~LinearFrameArena() {
 }
 
 void* LinearFrameArena::Alloc(size_t bytes, size_t alignment) noexcept {
-    if (!m_buffer || bytes == 0) return nullptr;
+    if (!m_buffer || bytes == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0) return nullptr;
 
-    // Calcular alineación hacia arriba
-    uintptr_t currentAddr = reinterpret_cast<uintptr_t>(m_buffer + m_offset);
-    uintptr_t alignedAddr = (currentAddr + (alignment - 1)) & ~(static_cast<uintptr_t>(alignment - 1));
-    size_t newOffset = static_cast<size_t>(alignedAddr - reinterpret_cast<uintptr_t>(m_buffer)) + bytes;
-
-    if (newOffset > m_capacity) {
-        // Arena saturada en este fotograma
+    // Calcular alineación hacia arriba con protección anti-overflow
+    const uintptr_t baseAddr = reinterpret_cast<uintptr_t>(m_buffer);
+    const uintptr_t currentAddr = baseAddr + m_offset;
+    const uintptr_t mask = static_cast<uintptr_t>(alignment - 1);
+    if (currentAddr > UINTPTR_MAX - mask) return nullptr;
+    const uintptr_t alignedAddr = (currentAddr + mask) & ~mask;
+    const size_t alignedOffset = static_cast<size_t>(alignedAddr - baseAddr);
+    if (alignedOffset > m_capacity || bytes > m_capacity - alignedOffset) {
         return nullptr;
     }
 
-    m_offset = newOffset;
+    m_offset = alignedOffset + bytes;
     if (m_offset > m_peakUsed) {
         m_peakUsed = m_offset;
     }
@@ -93,18 +99,19 @@ SceneArena::~SceneArena() {
 }
 
 void* SceneArena::Alloc(size_t bytes, size_t alignment) noexcept {
-    if (!m_buffer || bytes == 0) return nullptr;
+    if (!m_buffer || bytes == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0) return nullptr;
 
-    uintptr_t currentAddr = reinterpret_cast<uintptr_t>(m_buffer + m_offset);
-    uintptr_t alignedAddr = (currentAddr + (alignment - 1)) & ~(static_cast<uintptr_t>(alignment - 1));
-    size_t newOffset = static_cast<size_t>(alignedAddr - reinterpret_cast<uintptr_t>(m_buffer)) + bytes;
-
-    if (newOffset > m_capacity) {
-        // Arena de nivel saturada
+    const uintptr_t baseAddr = reinterpret_cast<uintptr_t>(m_buffer);
+    const uintptr_t currentAddr = baseAddr + m_offset;
+    const uintptr_t mask = static_cast<uintptr_t>(alignment - 1);
+    if (currentAddr > UINTPTR_MAX - mask) return nullptr;
+    const uintptr_t alignedAddr = (currentAddr + mask) & ~mask;
+    const size_t alignedOffset = static_cast<size_t>(alignedAddr - baseAddr);
+    if (alignedOffset > m_capacity || bytes > m_capacity - alignedOffset) {
         return nullptr;
     }
 
-    m_offset = newOffset;
+    m_offset = alignedOffset + bytes;
     if (m_offset > m_peakUsed) {
         m_peakUsed = m_offset;
     }
@@ -122,12 +129,15 @@ void SceneArena::Reset() noexcept {
 // ============================================================================
 
 MemoryManager::MemoryManager()
-    : m_totalAllocatedBytes(0)
+    : m_activeAllocationCount(0)
+    , m_totalAllocatedBytes(0)
     , m_peakAllocatedBytes(0)
     , m_frameArena(LinearFrameArena::DEFAULT_CAPACITY)
     , m_sceneArena(SceneArena::DEFAULT_CAPACITY)
 {
-    std::memset(m_bytesByTag, 0, sizeof(m_bytesByTag));
+    for (auto& b : m_bytesByTag) {
+        b.store(0, std::memory_order_relaxed);
+    }
     m_records.reserve(256);
 }
 
@@ -152,11 +162,16 @@ void* MemoryManager::Alloc(size_t size, MemoryTag tag, const char* label) {
     record.isAligned = false;
 
     m_records.push_back(record);
-    m_totalAllocatedBytes += size;
-    if (m_totalAllocatedBytes > m_peakAllocatedBytes) {
-        m_peakAllocatedBytes = m_totalAllocatedBytes;
+    m_activeAllocationCount.store(m_records.size(), std::memory_order_relaxed);
+    const size_t newTotal = m_totalAllocatedBytes.load(std::memory_order_relaxed) + size;
+    m_totalAllocatedBytes.store(newTotal, std::memory_order_relaxed);
+    if (newTotal > m_peakAllocatedBytes.load(std::memory_order_relaxed)) {
+        m_peakAllocatedBytes.store(newTotal, std::memory_order_relaxed);
     }
-    m_bytesByTag[static_cast<size_t>(tag)] += size;
+    const size_t tagIdx = static_cast<size_t>(tag);
+    if (tagIdx < static_cast<size_t>(MemoryTag::Count)) {
+        m_bytesByTag[tagIdx].fetch_add(size, std::memory_order_relaxed);
+    }
 
     return ptr;
 }
@@ -170,9 +185,17 @@ void MemoryManager::Free(void*& ptr) {
         [ptr](const MemoryRecord& rec) { return rec.address == ptr; });
 
     if (it != m_records.end()) {
-        m_totalAllocatedBytes -= it->size;
-        m_bytesByTag[static_cast<size_t>(it->tag)] -= it->size;
-        m_records.erase(it);
+        const size_t sz = it->size;
+        const size_t tagIdx = static_cast<size_t>(it->tag);
+        const size_t curTotal = m_totalAllocatedBytes.load(std::memory_order_relaxed);
+        m_totalAllocatedBytes.store((curTotal >= sz) ? (curTotal - sz) : 0, std::memory_order_relaxed);
+        if (tagIdx < static_cast<size_t>(MemoryTag::Count)) {
+            const size_t curTag = m_bytesByTag[tagIdx].load(std::memory_order_relaxed);
+            m_bytesByTag[tagIdx].store((curTag >= sz) ? (curTag - sz) : 0, std::memory_order_relaxed);
+        }
+        *it = m_records.back();
+        m_records.pop_back();
+        m_activeAllocationCount.store(m_records.size(), std::memory_order_relaxed);
     }
 
     std::free(ptr);
@@ -196,11 +219,16 @@ void* MemoryManager::AllocAligned(size_t alignment, size_t size, MemoryTag tag, 
     record.isAligned = true;
 
     m_records.push_back(record);
-    m_totalAllocatedBytes += size;
-    if (m_totalAllocatedBytes > m_peakAllocatedBytes) {
-        m_peakAllocatedBytes = m_totalAllocatedBytes;
+    m_activeAllocationCount.store(m_records.size(), std::memory_order_relaxed);
+    const size_t newTotal = m_totalAllocatedBytes.load(std::memory_order_relaxed) + size;
+    m_totalAllocatedBytes.store(newTotal, std::memory_order_relaxed);
+    if (newTotal > m_peakAllocatedBytes.load(std::memory_order_relaxed)) {
+        m_peakAllocatedBytes.store(newTotal, std::memory_order_relaxed);
     }
-    m_bytesByTag[static_cast<size_t>(tag)] += size;
+    const size_t tagIdx = static_cast<size_t>(tag);
+    if (tagIdx < static_cast<size_t>(MemoryTag::Count)) {
+        m_bytesByTag[tagIdx].fetch_add(size, std::memory_order_relaxed);
+    }
 
     return ptr;
 }
@@ -214,9 +242,17 @@ void MemoryManager::FreeAligned(void*& ptr) {
         [ptr](const MemoryRecord& rec) { return rec.address == ptr; });
 
     if (it != m_records.end()) {
-        m_totalAllocatedBytes -= it->size;
-        m_bytesByTag[static_cast<size_t>(it->tag)] -= it->size;
-        m_records.erase(it);
+        const size_t sz = it->size;
+        const size_t tagIdx = static_cast<size_t>(it->tag);
+        const size_t curTotal = m_totalAllocatedBytes.load(std::memory_order_relaxed);
+        m_totalAllocatedBytes.store((curTotal >= sz) ? (curTotal - sz) : 0, std::memory_order_relaxed);
+        if (tagIdx < static_cast<size_t>(MemoryTag::Count)) {
+            const size_t curTag = m_bytesByTag[tagIdx].load(std::memory_order_relaxed);
+            m_bytesByTag[tagIdx].store((curTag >= sz) ? (curTag - sz) : 0, std::memory_order_relaxed);
+        }
+        *it = m_records.back();
+        m_records.pop_back();
+        m_activeAllocationCount.store(m_records.size(), std::memory_order_relaxed);
     }
 
     WIIU_FREEALIGNED(ptr);
@@ -237,11 +273,16 @@ void MemoryManager::RegisterGX2Resource(const void* handle, size_t bytes, Memory
     record.isAligned = true;
 
     m_records.push_back(record);
-    m_totalAllocatedBytes += bytes;
-    if (m_totalAllocatedBytes > m_peakAllocatedBytes) {
-        m_peakAllocatedBytes = m_totalAllocatedBytes;
+    m_activeAllocationCount.store(m_records.size(), std::memory_order_relaxed);
+    const size_t newTotal = m_totalAllocatedBytes.load(std::memory_order_relaxed) + bytes;
+    m_totalAllocatedBytes.store(newTotal, std::memory_order_relaxed);
+    if (newTotal > m_peakAllocatedBytes.load(std::memory_order_relaxed)) {
+        m_peakAllocatedBytes.store(newTotal, std::memory_order_relaxed);
     }
-    m_bytesByTag[static_cast<size_t>(tag)] += bytes;
+    const size_t tagIdx = static_cast<size_t>(tag);
+    if (tagIdx < static_cast<size_t>(MemoryTag::Count)) {
+        m_bytesByTag[tagIdx].fetch_add(bytes, std::memory_order_relaxed);
+    }
 }
 
 void MemoryManager::UnregisterGX2Resource(const void* handle) {
@@ -253,32 +294,36 @@ void MemoryManager::UnregisterGX2Resource(const void* handle) {
         [handle](const MemoryRecord& rec) { return rec.address == handle; });
 
     if (it != m_records.end()) {
-        m_totalAllocatedBytes -= it->size;
-        m_bytesByTag[static_cast<size_t>(it->tag)] -= it->size;
-        m_records.erase(it);
+        const size_t sz = it->size;
+        const size_t tagIdx = static_cast<size_t>(it->tag);
+        const size_t curTotal = m_totalAllocatedBytes.load(std::memory_order_relaxed);
+        m_totalAllocatedBytes.store((curTotal >= sz) ? (curTotal - sz) : 0, std::memory_order_relaxed);
+        if (tagIdx < static_cast<size_t>(MemoryTag::Count)) {
+            const size_t curTag = m_bytesByTag[tagIdx].load(std::memory_order_relaxed);
+            m_bytesByTag[tagIdx].store((curTag >= sz) ? (curTag - sz) : 0, std::memory_order_relaxed);
+        }
+        *it = m_records.back();
+        m_records.pop_back();
+        m_activeAllocationCount.store(m_records.size(), std::memory_order_relaxed);
     }
 }
 
 size_t MemoryManager::GetActiveAllocationCount() const noexcept {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_records.size();
+    return m_activeAllocationCount.load(std::memory_order_relaxed);
 }
 
 size_t MemoryManager::GetTotalAllocatedBytes() const noexcept {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_totalAllocatedBytes;
+    return m_totalAllocatedBytes.load(std::memory_order_relaxed);
 }
 
 size_t MemoryManager::GetPeakAllocatedBytes() const noexcept {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_peakAllocatedBytes;
+    return m_peakAllocatedBytes.load(std::memory_order_relaxed);
 }
 
 size_t MemoryManager::GetAllocatedBytesByTag(MemoryTag tag) const noexcept {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    size_t idx = static_cast<size_t>(tag);
+    const size_t idx = static_cast<size_t>(tag);
     if (idx < static_cast<size_t>(MemoryTag::Count)) {
-        return m_bytesByTag[idx];
+        return m_bytesByTag[idx].load(std::memory_order_relaxed);
     }
     return 0;
 }
@@ -315,7 +360,7 @@ void MemoryManager::AssertNoLeaks() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (!m_records.empty()) {
         std::printf("[MemoryManager] AVISO: Al cerrar el motor existen %zu asignaciones activas (%zu bytes).\n",
-                    m_records.size(), m_totalAllocatedBytes);
+                    m_records.size(), m_totalAllocatedBytes.load(std::memory_order_relaxed));
     }
 }
 

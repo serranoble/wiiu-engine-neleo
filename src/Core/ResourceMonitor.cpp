@@ -3,25 +3,61 @@
 #include "Core/StackString.hpp"
 #include "Audio/AudioEngine3D.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
-#include "Graphics/Render2DGX2.hpp"
 #include "Graphics/Render2D.hpp"
-#include "Graphics/UI/UIToolkit.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
+
+#if defined(__WIIU__) || defined(__wiiu__)
+#include <coreinit/systeminfo.h>
+#include <coreinit/time.h>
+#else
+#include <SDL2/SDL.h>
+#endif
 
 namespace WiiU {
 
+namespace {
+
+inline uint64_t GetPlatformCounterFreq() noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+    const uint64_t freq = static_cast<uint64_t>(OSTimerClockSpeed);
+    return (freq > 0u) ? freq : 1u;
+#else
+    const uint64_t freq = static_cast<uint64_t>(SDL_GetPerformanceFrequency());
+    return (freq > 0u) ? freq : 1u;
+#endif
+}
+
+inline uint64_t GetPlatformCounterValue() noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+    return static_cast<uint64_t>(OSGetSystemTime());
+#else
+    return static_cast<uint64_t>(SDL_GetPerformanceCounter());
+#endif
+}
+
+} // namespace
+
 ResourceMonitor::ResourceMonitor() noexcept {
-    m_perfFreq = SDL_GetPerformanceFrequency();
-    if (m_perfFreq == 0) m_perfFreq = 1;
+    m_perfFreq = GetPlatformCounterFreq();
+}
+
+void ResourceMonitor::SetVisible(bool visible) noexcept {
+    const bool becomingVisible = (!m_visible && visible);
+    m_visible = visible;
+    if (becomingVisible) {
+        m_sampleTimer = 0.0f;
+        SampleMetrics();
+    }
 }
 
 void ResourceMonitor::BeginFrame() {
-    m_frameStartCounter = SDL_GetPerformanceCounter();
+    m_frameStartCounter = GetPlatformCounterValue();
 }
 
 void ResourceMonitor::MarkCPUEnd() {
-    m_cpuEndCounter = SDL_GetPerformanceCounter();
+    m_cpuEndCounter = GetPlatformCounterValue();
     if (m_frameStartCounter != 0 && m_cpuEndCounter >= m_frameStartCounter) {
         float instCpuMs = static_cast<float>(m_cpuEndCounter - m_frameStartCounter) * 1000.0f / static_cast<float>(m_perfFreq);
         if (instCpuMs > 100.0f) instCpuMs = 100.0f;
@@ -30,7 +66,7 @@ void ResourceMonitor::MarkCPUEnd() {
 }
 
 void ResourceMonitor::MarkGPUEnd() {
-    m_gpuEndCounter = SDL_GetPerformanceCounter();
+    m_gpuEndCounter = GetPlatformCounterValue();
     if (m_cpuEndCounter != 0 && m_gpuEndCounter >= m_cpuEndCounter) {
         float instGpuMs = static_cast<float>(m_gpuEndCounter - m_cpuEndCounter) * 1000.0f / static_cast<float>(m_perfFreq);
         if (instGpuMs > 100.0f) instGpuMs = 100.0f;
@@ -45,8 +81,12 @@ void ResourceMonitor::Update(float dt) {
     }
     m_pulseAnim += dt * 4.0f;
 
+    if (!m_visible) {
+        return;
+    }
+
     m_sampleTimer += dt;
-    if (m_sampleTimer >= 0.05f) { // Muestrear cada 50 ms
+    if (m_sampleTimer >= 0.05f) { // Muestrear cada 50 ms solo cuando el OSD es visible
         m_sampleTimer = 0.0f;
         SampleMetrics();
     }
@@ -106,15 +146,15 @@ void ResourceMonitor::SampleMetrics() {
         : 100.0f;
 }
 
-void ResourceMonitor::Render(SDL_Renderer* renderer, bool isPureGX2) {
+void ResourceMonitor::Render() {
     if (!m_visible) return;
 
-    constexpr float panelX = 890.0f;
-    constexpr float panelY = 16.0f;
-    constexpr float panelW = 370.0f;
-    constexpr float panelH = 345.0f;
-    constexpr float barW   = 330.0f;
-    constexpr float barH   = 5.0f;
+    constexpr int panelX = 890;
+    constexpr int panelY = 16;
+    constexpr int panelW = 370;
+    constexpr int panelH = 345;
+    constexpr int barW   = 330;
+    constexpr int barH   = 5;
 
     float pulse = 0.5f + 0.5f * std::sin(m_pulseAnim);
     uint8_t borderAlpha = static_cast<uint8_t>(200.0f + pulse * 55.0f);
@@ -132,118 +172,50 @@ void ResourceMonitor::Render(SDL_Renderer* renderer, bool isPureGX2) {
         return ColorRGBA{255, 140, 40, 255};
     };
 
-    if (isPureGX2) {
-        auto& r2d = Render2DGX2::Instance();
-        r2d.Begin();
+    struct MetricRow {
+        StackString<64> label{};
+        float percent{0.0f};
+        ColorRGBA color{};
+    };
+    std::array<MetricRow, 8> rows{};
+    rows[0].label.Format("CPU:   %4.1f%% (%4.1f ms)", static_cast<double>(m_metrics.cpuPercent), static_cast<double>(m_metrics.cpuTimeMs));
+    rows[0].percent = m_metrics.cpuPercent; rows[0].color = getUsageColor(m_metrics.cpuPercent);
+    rows[1].label.Format("GPU:   %4.1f%% (%4.1f ms)", static_cast<double>(m_metrics.gpuPercent), static_cast<double>(m_metrics.gpuTimeMs));
+    rows[1].percent = m_metrics.gpuPercent; rows[1].color = getUsageColor(m_metrics.gpuPercent);
+    rows[2].label.Format("MEM1:  %4.1f%% (%4.1f MB)", static_cast<double>(m_metrics.mem1Percent), static_cast<double>(m_metrics.mem1Bytes) / (1024.0 * 1024.0));
+    rows[2].percent = m_metrics.mem1Percent; rows[2].color = getUsageColor(m_metrics.mem1Percent);
+    rows[3].label.Format("MEM2:  %4.1f%% (%4.1f MB)", static_cast<double>(m_metrics.mem2Percent), static_cast<double>(m_metrics.mem2Bytes) / (1024.0 * 1024.0));
+    rows[3].percent = m_metrics.mem2Percent; rows[3].color = getUsageColor(m_metrics.mem2Percent);
+    rows[4].label.Format("SCENE: %4.1f%% (%zu KB)", static_cast<double>(m_metrics.sceneArenaPercent), m_metrics.sceneArenaBytes / 1024);
+    rows[4].percent = m_metrics.sceneArenaPercent; rows[4].color = getUsageColor(m_metrics.sceneArenaPercent);
+    rows[5].label.Format("FRAME: %4.1f%% (%zu KB)", static_cast<double>(m_metrics.frameArenaPercent), m_metrics.frameArenaBytes / 1024);
+    rows[5].percent = m_metrics.frameArenaPercent; rows[5].color = getUsageColor(m_metrics.frameArenaPercent);
+    rows[6].label.Format("AUDIO: %4.1f%% (%u/32 V)", static_cast<double>(m_metrics.audioPercent), m_metrics.activeVoices);
+    rows[6].percent = m_metrics.audioPercent; rows[6].color = getUsageColor(m_metrics.audioPercent);
+    rows[7].label.Format("BYPASS:%4.1f%% (%u ev)", static_cast<double>(m_metrics.rhiBypassPercent), m_metrics.rhiBypasses);
+    rows[7].percent = m_metrics.rhiBypassPercent; rows[7].color = getBypassColor(m_metrics.rhiBypassPercent);
 
-        // 1. Fondo del panel cyberpunk
-        r2d.DrawBox(panelX, panelY, panelW, panelH, ColorRGBA{8, 14, 26, 238}, borderColor, 2.0f);
+    StackString<64> footerStr;
+    footerStr.Format("FPS: %4.1f | [-] OCULTAR", static_cast<double>(m_metrics.fps));
 
-        // 2. Cabecera
-        r2d.DrawBox(panelX, panelY, panelW, 32.0f, ColorRGBA{15, 30, 52, 250}, borderColor, 1.5f);
-        r2d.DrawText("TELEMETRIA RECURSOS [-]", panelX + 35.0f, panelY + 9.0f, 2.0f, ColorRGBA{255, 220, 40, 255});
+    Render2D::Begin();
+    Render2D::DrawBox(panelX, panelY, panelW, panelH, ColorRGBA{8, 14, 26, 238}, borderColor);
+    Render2D::DrawBox(panelX, panelY, panelW, 32, ColorRGBA{15, 30, 52, 250}, borderColor);
+    Render2D::DrawPixelString("TELEMETRIA RECURSOS [-]", panelX + 35, panelY + 9, 2, ColorRGBA{255, 220, 40, 255});
 
-        float rowY = panelY + 38.0f;
-
-        auto drawRowGX2 = [&](std::string_view label, float percent, ColorRGBA col) {
-            r2d.DrawText(label, panelX + 16.0f, rowY, 2.0f, ColorRGBA::White());
-            r2d.DrawRect(panelX + 16.0f, rowY + 16.0f, barW, barH, ColorRGBA{20, 35, 55, 200});
-            float fillW = barW * std::clamp(percent / 100.0f, 0.0f, 1.0f);
-            if (fillW > 0.0f) {
-                r2d.DrawRect(panelX + 16.0f, rowY + 16.0f, fillW, barH, col);
-            }
-            rowY += 28.0f;
-        };
-
-        StackString<64> s1; s1.Format("CPU:   %4.1f%% (%4.1f ms)", m_metrics.cpuPercent, m_metrics.cpuTimeMs);
-        drawRowGX2(s1.string_view(), m_metrics.cpuPercent, getUsageColor(m_metrics.cpuPercent));
-
-        StackString<64> s2; s2.Format("GPU:   %4.1f%% (%4.1f ms)", m_metrics.gpuPercent, m_metrics.gpuTimeMs);
-        drawRowGX2(s2.string_view(), m_metrics.gpuPercent, getUsageColor(m_metrics.gpuPercent));
-
-        StackString<64> s3; s3.Format("MEM1:  %4.1f%% (%4.1f MB)", m_metrics.mem1Percent, static_cast<float>(m_metrics.mem1Bytes) / (1024.0f * 1024.0f));
-        drawRowGX2(s3.string_view(), m_metrics.mem1Percent, getUsageColor(m_metrics.mem1Percent));
-
-        StackString<64> s4; s4.Format("MEM2:  %4.1f%% (%4.1f MB)", m_metrics.mem2Percent, static_cast<float>(m_metrics.mem2Bytes) / (1024.0f * 1024.0f));
-        drawRowGX2(s4.string_view(), m_metrics.mem2Percent, getUsageColor(m_metrics.mem2Percent));
-
-        StackString<64> s5; s5.Format("SCENE: %4.1f%% (%zu KB)", m_metrics.sceneArenaPercent, m_metrics.sceneArenaBytes / 1024);
-        drawRowGX2(s5.string_view(), m_metrics.sceneArenaPercent, getUsageColor(m_metrics.sceneArenaPercent));
-
-        StackString<64> s6; s6.Format("FRAME: %4.1f%% (%zu KB)", m_metrics.frameArenaPercent, m_metrics.frameArenaBytes / 1024);
-        drawRowGX2(s6.string_view(), m_metrics.frameArenaPercent, getUsageColor(m_metrics.frameArenaPercent));
-
-        StackString<64> s7; s7.Format("AUDIO: %4.1f%% (%u/32 V)", m_metrics.audioPercent, m_metrics.activeVoices);
-        drawRowGX2(s7.string_view(), m_metrics.audioPercent, getUsageColor(m_metrics.audioPercent));
-
-        StackString<64> s8; s8.Format("BYPASS:%4.1f%% (%u ev)", m_metrics.rhiBypassPercent, m_metrics.rhiBypasses);
-        drawRowGX2(s8.string_view(), m_metrics.rhiBypassPercent, getBypassColor(m_metrics.rhiBypassPercent));
-
-        // Pie de información y FPS
-        StackString<64> footerStr;
-        footerStr.Format("FPS: %4.1f | [-] OCULTAR", m_metrics.fps);
-        r2d.DrawText(footerStr.string_view(), panelX + 50.0f, panelY + panelH - 20.0f, 2.0f, ColorRGBA{0, 220, 255, 255});
-
-        r2d.End();
-    } else if (renderer) {
-        // Renderizado SDL2 para escenas de software y menús
-        int px = static_cast<int>(panelX);
-        int py = static_cast<int>(panelY);
-        int pw = static_cast<int>(panelW);
-        int ph = static_cast<int>(panelH);
-        int bw = static_cast<int>(barW);
-        int bh = static_cast<int>(barH);
-
-        // Fondo y borde
-        Render2D::drawBox(renderer, px, py, pw, ph, ColorRGBA{8, 14, 26, 238}, borderColor);
-        Render2D::drawBox(renderer, px, py, pw, 32, ColorRGBA{15, 30, 52, 250}, borderColor);
-        Render2D::drawPixelString(renderer, "TELEMETRIA RECURSOS [-]", px + 35, py + 9, 2, ColorRGBA{255, 220, 40, 255});
-
-        int rowY = py + 38;
-
-        auto drawRowSDL = [&](std::string_view text, float percent, ColorRGBA col) {
-            Render2D::drawPixelString(renderer, text, px + 16, rowY, 2, ColorRGBA::White());
-            SDL_Rect bgRect{px + 16, rowY + 16, bw, bh};
-            SDL_SetRenderDrawColor(renderer, 20, 35, 55, 200);
-            SDL_RenderFillRect(renderer, &bgRect);
-
-            int fillW = static_cast<int>(static_cast<float>(bw) * std::clamp(percent / 100.0f, 0.0f, 1.0f));
-            if (fillW > 0) {
-                SDL_Rect fillRect{px + 16, rowY + 16, fillW, bh};
-                SDL_SetRenderDrawColor(renderer, col.r, col.g, col.b, col.a);
-                SDL_RenderFillRect(renderer, &fillRect);
-            }
-            rowY += 28;
-        };
-
-        StackString<64> s1; s1.Format("CPU:   %4.1f%% (%4.1f ms)", m_metrics.cpuPercent, m_metrics.cpuTimeMs);
-        drawRowSDL(s1.string_view(), m_metrics.cpuPercent, getUsageColor(m_metrics.cpuPercent));
-
-        StackString<64> s2; s2.Format("GPU:   %4.1f%% (%4.1f ms)", m_metrics.gpuPercent, m_metrics.gpuTimeMs);
-        drawRowSDL(s2.string_view(), m_metrics.gpuPercent, getUsageColor(m_metrics.gpuPercent));
-
-        StackString<64> s3; s3.Format("MEM1:  %4.1f%% (%4.1f MB)", m_metrics.mem1Percent, static_cast<float>(m_metrics.mem1Bytes) / (1024.0f * 1024.0f));
-        drawRowSDL(s3.string_view(), m_metrics.mem1Percent, getUsageColor(m_metrics.mem1Percent));
-
-        StackString<64> s4; s4.Format("MEM2:  %4.1f%% (%4.1f MB)", m_metrics.mem2Percent, static_cast<float>(m_metrics.mem2Bytes) / (1024.0f * 1024.0f));
-        drawRowSDL(s4.string_view(), m_metrics.mem2Percent, getUsageColor(m_metrics.mem2Percent));
-
-        StackString<64> s5; s5.Format("SCENE: %4.1f%% (%zu KB)", m_metrics.sceneArenaPercent, m_metrics.sceneArenaBytes / 1024);
-        drawRowSDL(s5.string_view(), m_metrics.sceneArenaPercent, getUsageColor(m_metrics.sceneArenaPercent));
-
-        StackString<64> s6; s6.Format("FRAME: %4.1f%% (%zu KB)", m_metrics.frameArenaPercent, m_metrics.frameArenaBytes / 1024);
-        drawRowSDL(s6.string_view(), m_metrics.frameArenaPercent, getUsageColor(m_metrics.frameArenaPercent));
-
-        StackString<64> s7; s7.Format("AUDIO: %4.1f%% (%u/32 V)", m_metrics.audioPercent, m_metrics.activeVoices);
-        drawRowSDL(s7.string_view(), m_metrics.audioPercent, getUsageColor(m_metrics.audioPercent));
-
-        StackString<64> s8; s8.Format("BYPASS:%4.1f%% (%u ev)", m_metrics.rhiBypassPercent, m_metrics.rhiBypasses);
-        drawRowSDL(s8.string_view(), m_metrics.rhiBypassPercent, getBypassColor(m_metrics.rhiBypassPercent));
-
-        StackString<64> footerStr;
-        footerStr.Format("FPS: %4.1f | [-] OCULTAR", m_metrics.fps);
-        Render2D::drawPixelString(renderer, footerStr.string_view(), px + 50, py + ph - 20, 2, ColorRGBA{0, 220, 255, 255});
+    int rowY = panelY + 38;
+    for (const auto& r : rows) {
+        Render2D::DrawPixelString(r.label.string_view(), panelX + 16, rowY, 2, ColorRGBA::White());
+        Render2D::DrawRect(panelX + 16, rowY + 16, barW, barH, ColorRGBA{20, 35, 55, 200});
+        const int fillW = static_cast<int>(static_cast<float>(barW) * std::clamp(r.percent / 100.0f, 0.0f, 1.0f));
+        if (fillW > 0) {
+            Render2D::DrawRect(panelX + 16, rowY + 16, fillW, barH, r.color);
+        }
+        rowY += 28;
     }
+
+    Render2D::DrawPixelString(footerStr.string_view(), panelX + 50, panelY + panelH - 20, 2, ColorRGBA{0, 220, 255, 255});
+    Render2D::End();
 }
 
 } // namespace WiiU

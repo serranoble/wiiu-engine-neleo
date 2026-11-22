@@ -2,13 +2,20 @@
 #include "Graphics/Mesh/MeshBinaryFormat.hpp"
 #include "Core/MemoryManager.hpp"
 #include "Core/AssetManager.hpp"
+#if defined(__WIIU__) || defined(__wiiu__)
+#include "Core/Window.hpp"
+#endif
 #include "Graphics/SkyboxShaderBinary.hpp"
 #include "Graphics/AdvancedMeshShaderBinary.hpp"
 #include "Graphics/AdvancedSkelShaderBinary.hpp"
+#include "Graphics/InstancedMeshShaderBinary.hpp"
+#include "Graphics/ShadowDepthShaderBinary.hpp"
+#include <algorithm>
 #include <cstring>
 
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/draw.h>
+#include <gx2/event.h>
 #include <gx2/registers.h>
 #include <gx2/mem.h>
 #include <gx2/state.h>
@@ -16,7 +23,7 @@
 #include <gx2/enum.h>
 #include <gx2/utils.h>
 #include <gfd.h>
-#include <coreinit/thread.h>
+#include <proc_ui/procui.h>
 #endif
 
 namespace WiiU {
@@ -30,9 +37,11 @@ bool ForwardRendererGX2::Initialize() {
     if (m_initialized) return true;
 
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (!InitSkyShader()) return false;
-    if (!InitMeshShader()) return false;
-    if (!InitSkinningShader()) return false;
+    if (!InitSkyShader())      { Shutdown(); return false; }
+    if (!InitMeshShader())     { Shutdown(); return false; }
+    if (!InitSkinningShader()) { Shutdown(); return false; }
+    (void)InitInstancedShader();
+    (void)InitDepthPrePassShader();
 
     // Inicializar Samplers GX2
     GX2InitSampler(&m_skySampler, GX2_TEX_CLAMP_MODE_WRAP, GX2_TEX_XY_FILTER_MODE_LINEAR);
@@ -40,9 +49,8 @@ bool ForwardRendererGX2::Initialize() {
     GX2InitSamplerZMFilter(&m_skySampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_LINEAR);
 
     GX2InitSampler(&m_meshSampler, GX2_TEX_CLAMP_MODE_WRAP, GX2_TEX_XY_FILTER_MODE_LINEAR);
-    GX2InitSamplerXYFilter(&m_meshSampler, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_4_TO_1);
-    GX2InitSamplerZMFilter(&m_meshSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_LINEAR);
     GX2InitSamplerLOD(&m_meshSampler, 0.0f, 10.0f, 0.0f);
+    ApplyTextureFilterMode(EngineConfig::Instance().graphics.textureFilter);
 
     GX2InitSampler(&m_cubeSampler, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_LINEAR);
     GX2InitSamplerXYFilter(&m_cubeSampler, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_NONE);
@@ -75,6 +83,32 @@ bool ForwardRendererGX2::Initialize() {
         GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, s_defaultNeutralTexData, m_defaultNeutralTex.surface.imageSize);
         m_defaultTexCreated = true;
     }
+
+    // CubeMap neutro fallback 1x1 (6 caras) en bufer estatico alineado a 256B (0 leaks)
+    alignas(256) static uint8_t s_defaultNeutralCubeData[16384]{};
+    std::memset(&m_defaultNeutralCubeMap, 0, sizeof(m_defaultNeutralCubeMap));
+    m_defaultNeutralCubeMap.surface.dim       = GX2_SURFACE_DIM_TEXTURE_CUBE;
+    m_defaultNeutralCubeMap.surface.width     = 4;
+    m_defaultNeutralCubeMap.surface.height    = 4;
+    m_defaultNeutralCubeMap.surface.depth     = 6;
+    m_defaultNeutralCubeMap.surface.mipLevels = 1;
+    m_defaultNeutralCubeMap.surface.format    = GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8;
+    m_defaultNeutralCubeMap.surface.aa        = GX2_AA_MODE1X;
+    m_defaultNeutralCubeMap.surface.use       = GX2_SURFACE_USE_TEXTURE;
+    m_defaultNeutralCubeMap.surface.tileMode  = GX2_TILE_MODE_LINEAR_ALIGNED;
+    GX2CalcSurfaceSizeAndAlignment(&m_defaultNeutralCubeMap.surface);
+    if (m_defaultNeutralCubeMap.surface.imageSize <= sizeof(s_defaultNeutralCubeData)) {
+        std::memset(s_defaultNeutralCubeData, 0, m_defaultNeutralCubeMap.surface.imageSize);
+        m_defaultNeutralCubeMap.surface.image  = s_defaultNeutralCubeData;
+        m_defaultNeutralCubeMap.viewFirstMip   = 0;
+        m_defaultNeutralCubeMap.viewNumMips    = 1;
+        m_defaultNeutralCubeMap.viewFirstSlice = 0;
+        m_defaultNeutralCubeMap.viewNumSlices  = 6;
+        m_defaultNeutralCubeMap.compMap        = 0x00010203;
+        GX2InitTextureRegs(&m_defaultNeutralCubeMap);
+        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, s_defaultNeutralCubeData, m_defaultNeutralCubeMap.surface.imageSize);
+        m_defaultCubeCreated = true;
+    }
 #endif
 
     m_initialized = true;
@@ -83,37 +117,57 @@ bool ForwardRendererGX2::Initialize() {
 
 void ForwardRendererGX2::Shutdown() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (m_skyShaderLoaded) {
-        if (m_skyVs) { void* raw = static_cast<void*>(m_skyVs); MemoryManager::Instance().Free(raw); m_skyVs = nullptr; }
-        if (m_skyVsProgram) { MemoryManager::Instance().FreeAligned(m_skyVsProgram); m_skyVsProgram = nullptr; }
-        if (m_skyPs) { void* raw = static_cast<void*>(m_skyPs); MemoryManager::Instance().Free(raw); m_skyPs = nullptr; }
-        if (m_skyPsProgram) { MemoryManager::Instance().FreeAligned(m_skyPsProgram); m_skyPsProgram = nullptr; }
-        if (m_skyFsProgram) { MemoryManager::Instance().FreeAligned(m_skyFsProgram); m_skyFsProgram = nullptr; }
-        m_skyShaderLoaded = false;
+    const bool hasGpuResources =
+        m_skyShaderLoaded || m_meshShaderLoaded || m_skelShaderLoaded ||
+        m_instShaderLoaded || m_depthPreShaderLoaded || m_instanceBufferCreated ||
+        m_skyVs || m_meshVs || m_skelVs || m_instVs || m_depthPreVs;
+    if (hasGpuResources && ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+        Window::HasForeground() && !Window::IsExitingProcUI()) {
+        GX2DrawDone();
     }
 
-    if (m_meshShaderLoaded) {
-        if (m_meshVs) { void* raw = static_cast<void*>(m_meshVs); MemoryManager::Instance().Free(raw); m_meshVs = nullptr; }
-        if (m_meshVsProgram) { MemoryManager::Instance().FreeAligned(m_meshVsProgram); m_meshVsProgram = nullptr; }
-        if (m_meshPs) { void* raw = static_cast<void*>(m_meshPs); MemoryManager::Instance().Free(raw); m_meshPs = nullptr; }
-        if (m_meshPsProgram) { MemoryManager::Instance().FreeAligned(m_meshPsProgram); m_meshPsProgram = nullptr; }
-        if (m_meshFsProgram) { MemoryManager::Instance().FreeAligned(m_meshFsProgram); m_meshFsProgram = nullptr; }
-        m_meshShaderLoaded = false;
-    }
+    // Liberacion incondicional de cualquier puntero no nulo (0 leaks ante fallos parciales de Init*)
+    auto freeShaderPtrs = [](GX2VertexShader*& vs, void*& vsPgm, GX2PixelShader*& ps, void*& psPgm, void*& fsPgm) {
+        if (vs)    { void* raw = static_cast<void*>(vs); MemoryManager::Instance().Free(raw); vs = nullptr; }
+        if (vsPgm) { MemoryManager::Instance().FreeAligned(vsPgm); vsPgm = nullptr; }
+        if (ps)    { void* raw = static_cast<void*>(ps); MemoryManager::Instance().Free(raw); ps = nullptr; }
+        if (psPgm) { MemoryManager::Instance().FreeAligned(psPgm); psPgm = nullptr; }
+        if (fsPgm) { MemoryManager::Instance().FreeAligned(fsPgm); fsPgm = nullptr; }
+    };
 
-    if (m_skelShaderLoaded) {
-        if (m_skelVs) { void* raw = static_cast<void*>(m_skelVs); MemoryManager::Instance().Free(raw); m_skelVs = nullptr; }
-        if (m_skelVsProgram) { MemoryManager::Instance().FreeAligned(m_skelVsProgram); m_skelVsProgram = nullptr; }
-        if (m_skelPs) { void* raw = static_cast<void*>(m_skelPs); MemoryManager::Instance().Free(raw); m_skelPs = nullptr; }
-        if (m_skelPsProgram) { MemoryManager::Instance().FreeAligned(m_skelPsProgram); m_skelPsProgram = nullptr; }
-        if (m_skelFsProgram) { MemoryManager::Instance().FreeAligned(m_skelFsProgram); m_skelFsProgram = nullptr; }
-        m_skelShaderLoaded = false;
+    freeShaderPtrs(m_skyVs, m_skyVsProgram, m_skyPs, m_skyPsProgram, m_skyFsProgram);
+    m_skyShaderLoaded = false;
+
+    freeShaderPtrs(m_meshVs, m_meshVsProgram, m_meshPs, m_meshPsProgram, m_meshFsProgram);
+    m_meshShaderLoaded = false;
+
+    freeShaderPtrs(m_skelVs, m_skelVsProgram, m_skelPs, m_skelPsProgram, m_skelFsProgram);
+    m_skelShaderLoaded = false;
+
+    if (m_instanceBufferCreated) {
+        GX2RDestroyBufferEx(&m_instanceMatrixBuffer, GX2R_RESOURCE_BIND_NONE);
+        std::memset(&m_instanceMatrixBuffer, 0, sizeof(m_instanceMatrixBuffer));
+        m_instanceBufferCreated = false;
     }
+    freeShaderPtrs(m_instVs, m_instVsProgram, m_instPs, m_instPsProgram, m_instFsProgram);
+    m_instShaderLoaded = false;
+
+    if (m_depthPreVs)        { void* raw = static_cast<void*>(m_depthPreVs); MemoryManager::Instance().Free(raw); m_depthPreVs = nullptr; }
+    if (m_depthPreVsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreVsProgram); m_depthPreVsProgram = nullptr; }
+    if (m_depthPreFsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreFsProgram); m_depthPreFsProgram = nullptr; }
+    m_depthPreShaderLoaded = false;
+    m_inDepthPrePass = false;
 #endif
     m_initialized = false;
 }
 
 void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& viewMatrix, const Matrix4x4& projMatrix) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
+    // Rotar slice del Multi-Frame Ring Buffer de instancing (0 carreras CPU/GPU entre frames en vuelo)
+    m_instanceFrameSlice = (m_instanceFrameSlice + 1u) % MAX_FRAMES_IN_FLIGHT;
+    m_instanceWriteCursor = 0;
+#endif
     m_camPos = camPos;
     m_viewMatrix = viewMatrix;
     m_projMatrix = projMatrix;
@@ -147,10 +201,11 @@ void ForwardRendererGX2::RenderSkydome(StaticMesh& skydomeMesh, GX2Texture* skyT
     // Depth Test ON, Depth Write OFF (Z=W=1.0)
     RHIPipelineCache::Instance().BindState(RHIPipelineState(true, false, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
 
-    if (skydomeMesh.GetVBO() && skydomeMesh.GetIBO()) {
+    if (skydomeMesh.GetVBO() && skydomeMesh.GetIBO() && skydomeMesh.GetIndexCount() > 0) {
+        const GX2IndexType idxType = (skydomeMesh.GetHeader().indexFormat == 1) ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
         GX2RSetAttributeBuffer(const_cast<GX2RBuffer*>(skydomeMesh.GetVBO()), 0, skydomeMesh.GetHeader().vertexStride, 0);
         GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES, const_cast<GX2RBuffer*>(skydomeMesh.GetIBO()), 
-                        GX2_INDEX_TYPE_U16, skydomeMesh.GetIndexCount(), 0, 0, 1);
+                        idxType, skydomeMesh.GetIndexCount(), 0, 0, 1);
         m_drawCallsCount += 1;
         m_trianglesCount += skydomeMesh.GetIndexCount() / 3;
     }
@@ -180,10 +235,11 @@ void ForwardRendererGX2::RenderStaticMesh(const StaticMesh& mesh,
     std::memcpy(&vsUniforms[16], modelMatrix.m, 16 * sizeof(float));
     GX2SetVertexUniformReg(0, 32, vsUniforms);
 
+    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
     alignas(256) float psParams[16];
     psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f; // uCamPosTime
-    psParams[4] = 0.60f; psParams[5] = 0.55f; psParams[6] = 0.58f; psParams[7] = 1.0f;              // uLightDir
-    psParams[8] = 1.0f; psParams[9] = 0.96f; psParams[10] = 0.88f; psParams[11] = 32.0f;           // uLightColor + shininess
+    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
+    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
     psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;                                                              // uMaterialParams.x
     psParams[13] = normalMapEnabled ? 1.0f : 0.0f;                                                   // uMaterialParams.y
     psParams[14] = bumpScale;                                                                        // uMaterialParams.z
@@ -195,9 +251,12 @@ void ForwardRendererGX2::RenderStaticMesh(const StaticMesh& mesh,
         GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuseTex), 0);
         GX2SetPixelSampler(&m_meshSampler, 0);
     }
-    if (envCubeMap && m_cubeSamplerCreated) {
-        GX2SetPixelTexture(envCubeMap, 1);
-        GX2SetPixelSampler(&m_cubeSampler, 1);
+    if (m_cubeSamplerCreated) {
+        GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
+        if (activeCube) {
+            GX2SetPixelTexture(activeCube, 1);
+            GX2SetPixelSampler(&m_cubeSampler, 1);
+        }
     }
 
     RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
@@ -226,7 +285,12 @@ void ForwardRendererGX2::RenderMeshBuffers(GX2RBuffer& vbo,
                                           float reflectionIntensity,
                                           bool normalMapEnabled,
                                           float bumpScale,
-                                          float ambientIntensity) {
+                                          float ambientIntensity,
+                                          bool use32BitIndices,
+                                          BlendMode blendMode,
+                                          bool depthTest,
+                                          bool depthWrite,
+                                          uint8_t depthCompare) {
 #if defined(__WIIU__) || defined(__wiiu__)
     if (!m_meshShaderLoaded || indexCount == 0) return;
 
@@ -240,35 +304,43 @@ void ForwardRendererGX2::RenderMeshBuffers(GX2RBuffer& vbo,
     std::memcpy(&vsUniforms[16], modelMatrix.m, 16 * sizeof(float));
     GX2SetVertexUniformReg(0, 32, vsUniforms);
 
+    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
     alignas(256) float psParams[16];
     psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
-    psParams[4] = 0.60f; psParams[5] = 0.55f; psParams[6] = 0.58f; psParams[7] = 1.0f;
-    psParams[8] = 1.0f; psParams[9] = 0.96f; psParams[10] = 0.88f; psParams[11] = 32.0f;
+    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
+    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
     psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;
     psParams[13] = normalMapEnabled ? 1.0f : 0.0f;
     psParams[14] = bumpScale;
     psParams[15] = ambientIntensity;
     GX2SetPixelUniformReg(0, 16, psParams);
 
-    if (diffuseTexture) {
-        GX2SetPixelTexture(diffuseTexture, 0);
+    const GX2Texture* activeDiffuseTex = diffuseTexture ? diffuseTexture
+                                      : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
+    if (activeDiffuseTex) {
+        GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuseTex), 0);
         GX2SetPixelSampler(&m_meshSampler, 0);
     }
-    if (envCubeMap && m_cubeSamplerCreated) {
-        GX2SetPixelTexture(envCubeMap, 1);
-        GX2SetPixelSampler(&m_cubeSampler, 1);
+    if (m_cubeSamplerCreated) {
+        GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
+        if (activeCube) {
+            GX2SetPixelTexture(activeCube, 1);
+            GX2SetPixelSampler(&m_cubeSampler, 1);
+        }
     }
 
-    RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
+    RHIPipelineCache::Instance().BindState(RHIPipelineState(depthTest, depthWrite, depthCompare, blendMode, false));
 
     GX2RSetAttributeBuffer(&vbo, 0, vertexStride, 0);
-    GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES, &ibo, GX2_INDEX_TYPE_U16, indexCount, 0, 0, 1);
+    const GX2IndexType idxType = use32BitIndices ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
+    GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES, &ibo, idxType, indexCount, 0, 0, 1);
     m_drawCallsCount += 1;
     m_trianglesCount += indexCount / 3;
 #else
     (void)vbo; (void)ibo; (void)indexCount; (void)vertexStride; (void)modelMatrix;
     (void)diffuseTexture; (void)envCubeMap; (void)reflectionIntensity;
     (void)normalMapEnabled; (void)bumpScale; (void)ambientIntensity;
+    (void)use32BitIndices; (void)blendMode; (void)depthTest; (void)depthWrite; (void)depthCompare;
 #endif
 }
 
@@ -318,7 +390,7 @@ void ForwardRendererGX2::RenderSkinnedMesh(GX2RBuffer& vbo,
                                           bool clayMode,
                                           bool use32BitIndices) {
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (!m_skelShaderLoaded || boneCount == 0 || !boneMatrices) return;
+    if (!m_skelShaderLoaded || indexCount == 0 || boneCount == 0 || !boneMatrices) return;
 
     GX2SetFetchShader(&m_skelFs);
     GX2SetVertexShader(m_skelVs);
@@ -339,10 +411,11 @@ void ForwardRendererGX2::RenderSkinnedMesh(GX2RBuffer& vbo,
     }
     GX2SetVertexUniformReg(0, TOTAL_VS_UNIFORMS, skelVsUniforms);
 
+    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
     alignas(256) float psParams[16];
     psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
-    psParams[4] = 0.60f; psParams[5] = 0.55f; psParams[6] = 0.58f; psParams[7] = 1.0f;
-    psParams[8] = 1.0f; psParams[9] = 0.96f; psParams[10] = 0.88f; psParams[11] = 32.0f;
+    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
+    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
     psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;
     psParams[13] = clayMode ? 1.0f : 0.0f;
     psParams[14] = 2.0f;
@@ -355,9 +428,12 @@ void ForwardRendererGX2::RenderSkinnedMesh(GX2RBuffer& vbo,
         GX2SetPixelTexture(activeDiffuse, 0);
         GX2SetPixelSampler(&m_meshSampler, 0);
     }
-    if (envCubeMap && m_cubeSamplerCreated) {
-        GX2SetPixelTexture(envCubeMap, 1);
-        GX2SetPixelSampler(&m_cubeSampler, 1);
+    if (m_cubeSamplerCreated) {
+        GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
+        if (activeCube) {
+            GX2SetPixelTexture(activeCube, 1);
+            GX2SetPixelSampler(&m_cubeSampler, 1);
+        }
     }
 
     RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
@@ -397,15 +473,18 @@ bool ForwardRendererGX2::InitSkyShader() {
         uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
         uint32_t psHdrSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
         uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+        if (vsHdrSize == 0 || vsProgSize == 0 || psHdrSize == 0 || psProgSize == 0) {
+            return false;
+        }
 
         m_skyVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "Sky_VS_Hdr"));
         m_skyVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "Sky_VS_Prog");
         m_skyPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "Sky_PS_Hdr"));
         m_skyPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "Sky_PS_Prog");
 
-        if (m_skyVs && m_skyVsProgram && m_skyPs && m_skyPsProgram) {
-            GFDGetVertexShader(m_skyVs, m_skyVsProgram, 0, shaderData.data());
-            GFDGetPixelShader(m_skyPs, m_skyPsProgram, 0, shaderData.data());
+        if (m_skyVs && m_skyVsProgram && m_skyPs && m_skyPsProgram &&
+            GFDGetVertexShader(m_skyVs, m_skyVsProgram, 0, shaderData.data()) &&
+            GFDGetPixelShader(m_skyPs, m_skyPsProgram, 0, shaderData.data())) {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skyVsProgram, vsProgSize);
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skyPsProgram, psProgSize);
 
@@ -501,15 +580,18 @@ bool ForwardRendererGX2::InitMeshShader() {
         uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
         uint32_t psHdrSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
         uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+        if (vsHdrSize == 0 || vsProgSize == 0 || psHdrSize == 0 || psProgSize == 0) {
+            return false;
+        }
 
         m_meshVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "Mesh_VS_Hdr"));
         m_meshVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "Mesh_VS_Prog");
         m_meshPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "Mesh_PS_Hdr"));
         m_meshPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "Mesh_PS_Prog");
 
-        if (m_meshVs && m_meshVsProgram && m_meshPs && m_meshPsProgram) {
-            GFDGetVertexShader(m_meshVs, m_meshVsProgram, 0, shaderData.data());
-            GFDGetPixelShader(m_meshPs, m_meshPsProgram, 0, shaderData.data());
+        if (m_meshVs && m_meshVsProgram && m_meshPs && m_meshPsProgram &&
+            GFDGetVertexShader(m_meshVs, m_meshVsProgram, 0, shaderData.data()) &&
+            GFDGetPixelShader(m_meshPs, m_meshPsProgram, 0, shaderData.data())) {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_meshVsProgram, vsProgSize);
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_meshPsProgram, psProgSize);
 
@@ -614,15 +696,18 @@ bool ForwardRendererGX2::InitSkinningShader() {
         uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
         uint32_t psHdrSize = GFDGetPixelShaderHeaderSize(0, shaderData.data());
         uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+        if (vsHdrSize == 0 || vsProgSize == 0 || psHdrSize == 0 || psProgSize == 0) {
+            return false;
+        }
 
         m_skelVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "Skel_VS_Hdr"));
         m_skelVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "Skel_VS_Prog");
         m_skelPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "Skel_PS_Hdr"));
         m_skelPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "Skel_PS_Prog");
 
-        if (m_skelVs && m_skelVsProgram && m_skelPs && m_skelPsProgram) {
-            GFDGetVertexShader(m_skelVs, m_skelVsProgram, 0, shaderData.data());
-            GFDGetPixelShader(m_skelPs, m_skelPsProgram, 0, shaderData.data());
+        if (m_skelVs && m_skelVsProgram && m_skelPs && m_skelPsProgram &&
+            GFDGetVertexShader(m_skelVs, m_skelVsProgram, 0, shaderData.data()) &&
+            GFDGetPixelShader(m_skelPs, m_skelPsProgram, 0, shaderData.data())) {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skelVsProgram, vsProgSize);
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skelPsProgram, psProgSize);
 
@@ -650,7 +735,7 @@ bool ForwardRendererGX2::InitSkinningShader() {
             attrs[4].location = 4; attrs[4].buffer = 0; attrs[4].offset = offsetof(SkinnedMeshVertex, boneIndices);
             attrs[4].format = GX2_ATTRIB_FORMAT_UINT_8_8_8_8; attrs[4].type = GX2_ATTRIB_INDEX_PER_VERTEX;
             attrs[4].aluDivisor = 0; attrs[4].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
-            attrs[4].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+            attrs[4].endianSwap = GX2_ENDIAN_SWAP_NONE;
 
             attrs[5].location = 5; attrs[5].buffer = 0; attrs[5].offset = offsetof(SkinnedMeshVertex, boneWeights);
             attrs[5].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32; attrs[5].type = GX2_ATTRIB_INDEX_PER_VERTEX;
@@ -669,6 +754,474 @@ bool ForwardRendererGX2::InitSkinningShader() {
     }
     return m_skelShaderLoaded;
 }
+
+bool ForwardRendererGX2::InitInstancedShader() {
+    if (m_instShaderLoaded) return true;
+
+    std::vector<uint8_t> shaderData;
+    if (!AssetManager::LoadBinaryFile("shaders/instanced_mesh_gx2.gsh", shaderData) || shaderData.empty()) {
+        shaderData.assign(INSTANCED_MESH_GX2_GSH_DATA, INSTANCED_MESH_GX2_GSH_DATA + INSTANCED_MESH_GX2_GSH_SIZE);
+    }
+    if (shaderData.empty()) return false;
+
+    const uint32_t vsHdrSize  = GFDGetVertexShaderHeaderSize(0, shaderData.data());
+    const uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
+    const uint32_t psHdrSize  = GFDGetPixelShaderHeaderSize(0, shaderData.data());
+    const uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+    if (vsHdrSize == 0 || vsProgSize == 0 || psHdrSize == 0 || psProgSize == 0) {
+        return false;
+    }
+
+    auto cleanupInstPartial = [this]() {
+        if (m_instVs)        { void* p = m_instVs; MemoryManager::Instance().Free(p); m_instVs = nullptr; }
+        if (m_instVsProgram) { MemoryManager::Instance().FreeAligned(m_instVsProgram); m_instVsProgram = nullptr; }
+        if (m_instPs)        { void* p = m_instPs; MemoryManager::Instance().Free(p); m_instPs = nullptr; }
+        if (m_instPsProgram) { MemoryManager::Instance().FreeAligned(m_instPsProgram); m_instPsProgram = nullptr; }
+        if (m_instFsProgram) { MemoryManager::Instance().FreeAligned(m_instFsProgram); m_instFsProgram = nullptr; }
+    };
+
+    m_instVs        = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "Inst_VS_Hdr"));
+    m_instVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "Inst_VS_Prog");
+    m_instPs        = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "Inst_PS_Hdr"));
+    m_instPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "Inst_PS_Prog");
+
+    if (!m_instVs || !m_instVsProgram || !m_instPs || !m_instPsProgram ||
+        !GFDGetVertexShader(m_instVs, m_instVsProgram, 0, shaderData.data()) ||
+        !GFDGetPixelShader(m_instPs, m_instPsProgram, 0, shaderData.data())) {
+        cleanupInstPartial();
+        return false;
+    }
+
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_instVsProgram, vsProgSize);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_instPsProgram, psProgSize);
+
+    // 8 atributos: [0..3] geometria por vertice (buffer 0), [4..7] matriz de modelo por instancia (buffer 1, divisor 1)
+    GX2AttribStream attrs[8]{};
+    attrs[0] = {0, 0, static_cast<uint32_t>(offsetof(MeshVertex, pos)),      GX2_ATTRIB_FORMAT_FLOAT_32_32_32,    GX2_ATTRIB_INDEX_PER_VERTEX,   0, GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1), GX2_ENDIAN_SWAP_DEFAULT};
+    attrs[1] = {1, 0, static_cast<uint32_t>(offsetof(MeshVertex, normal)),   GX2_ATTRIB_FORMAT_FLOAT_32_32_32,    GX2_ATTRIB_INDEX_PER_VERTEX,   0, GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1), GX2_ENDIAN_SWAP_DEFAULT};
+    attrs[2] = {2, 0, static_cast<uint32_t>(offsetof(MeshVertex, texCoord)), GX2_ATTRIB_FORMAT_FLOAT_32_32,       GX2_ATTRIB_INDEX_PER_VERTEX,   0, GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1), GX2_ENDIAN_SWAP_DEFAULT};
+    attrs[3] = {3, 0, static_cast<uint32_t>(offsetof(MeshVertex, color)),    GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32, GX2_ATTRIB_INDEX_PER_VERTEX,   0, GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W), GX2_ENDIAN_SWAP_DEFAULT};
+
+    for (uint32_t col = 0; col < 4; ++col) {
+        attrs[4 + col] = {
+            4u + col, 1u, col * 16u,
+            GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32,
+            GX2_ATTRIB_INDEX_PER_INSTANCE,
+            1u,
+            GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W),
+            GX2_ENDIAN_SWAP_DEFAULT
+        };
+    }
+
+    const uint32_t fsSize = GX2CalcFetchShaderSizeEx(8, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+    m_instFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "Inst_FS_Prog");
+    if (!m_instFsProgram) {
+        cleanupInstPartial();
+        return false;
+    }
+
+    GX2InitFetchShaderEx(&m_instFs, static_cast<uint8_t*>(m_instFsProgram), 8, attrs,
+                         GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_instFsProgram, fsSize);
+
+    // Pre-alojar Multi-Frame Ring Buffer de matrices por instancia (3 frames * 1024 = 3072 matrices = 192 KB, 0 allocs a 60 FPS)
+    std::memset(&m_instanceMatrixBuffer, 0, sizeof(m_instanceMatrixBuffer));
+    m_instanceMatrixBuffer.flags = static_cast<GX2RResourceFlags>(
+        GX2R_RESOURCE_BIND_VERTEX_BUFFER | GX2R_RESOURCE_USAGE_CPU_WRITE | GX2R_RESOURCE_USAGE_GPU_READ);
+    m_instanceMatrixBuffer.elemSize  = sizeof(Matrix4x4);
+    m_instanceMatrixBuffer.elemCount = INSTANCE_RING_CAPACITY;
+    if (GX2RCreateBuffer(&m_instanceMatrixBuffer)) {
+        m_instanceBufferCreated = true;
+    } else {
+        cleanupInstPartial();
+        return false;
+    }
+
+    m_instShaderLoaded = m_instanceBufferCreated;
+    return m_instShaderLoaded;
+}
+
+bool ForwardRendererGX2::InitDepthPrePassShader() {
+    if (m_depthPreShaderLoaded) return true;
+
+    std::vector<uint8_t> shaderData;
+    if (!AssetManager::LoadBinaryFile("shaders/shadow_depth_gx2.gsh", shaderData) || shaderData.empty()) {
+        shaderData.assign(SHADOW_DEPTH_GX2_GSH_DATA, SHADOW_DEPTH_GX2_GSH_DATA + SHADOW_DEPTH_GX2_GSH_SIZE);
+    }
+    if (shaderData.empty()) return false;
+
+    const uint32_t vsHdrSize  = GFDGetVertexShaderHeaderSize(0, shaderData.data());
+    const uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
+    if (vsHdrSize == 0 || vsProgSize == 0) {
+        return false;
+    }
+
+    auto cleanupDepthPartial = [this]() {
+        if (m_depthPreVs)        { void* p = m_depthPreVs; MemoryManager::Instance().Free(p); m_depthPreVs = nullptr; }
+        if (m_depthPreVsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreVsProgram); m_depthPreVsProgram = nullptr; }
+        if (m_depthPreFsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreFsProgram); m_depthPreFsProgram = nullptr; }
+    };
+
+    m_depthPreVs        = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "EarlyZ_VS_Hdr"));
+    m_depthPreVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "EarlyZ_VS_Prog");
+
+    if (!m_depthPreVs || !m_depthPreVsProgram ||
+        !GFDGetVertexShader(m_depthPreVs, m_depthPreVsProgram, 0, shaderData.data())) {
+        cleanupDepthPartial();
+        return false;
+    }
+
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_depthPreVsProgram, vsProgSize);
+
+    GX2AttribStream attr{};
+    attr.location   = 0;
+    attr.buffer     = 0;
+    attr.offset     = offsetof(MeshVertex, pos);
+    attr.format     = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+    attr.type       = GX2_ATTRIB_INDEX_PER_VERTEX;
+    attr.aluDivisor = 0;
+    attr.mask       = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+    attr.endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+
+    const uint32_t fsSize = GX2CalcFetchShaderSizeEx(1, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+    m_depthPreFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "EarlyZ_FS_Prog");
+    if (!m_depthPreFsProgram) {
+        cleanupDepthPartial();
+        return false;
+    }
+
+    GX2InitFetchShaderEx(&m_depthPreFs, static_cast<uint8_t*>(m_depthPreFsProgram), 1, &attr,
+                         GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_depthPreFsProgram, fsSize);
+    m_depthPreShaderLoaded = true;
+    return true;
+}
 #endif
+
+void ForwardRendererGX2::RenderStaticMeshWithMaterial(const StaticMesh& mesh,
+                                                      const Matrix4x4& modelMatrix,
+                                                      const MaterialPropertyBlock& material) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!mesh.IsLoaded() || !mesh.GetVBO() || !mesh.GetIBO()) return;
+    RenderMeshBuffers(*const_cast<GX2RBuffer*>(mesh.GetVBO()),
+                      *const_cast<GX2RBuffer*>(mesh.GetIBO()),
+                      mesh.GetIndexCount(),
+                      mesh.GetHeader().vertexStride,
+                      modelMatrix,
+                      static_cast<GX2Texture*>(material.diffuseTexture),
+                      static_cast<GX2Texture*>(material.envCubeMap),
+                      material.ubo.materialParams[0],
+                      material.ubo.materialParams[1] > 0.5f,
+                      material.ubo.materialParams[2],
+                      material.ubo.materialParams[3],
+                      mesh.GetHeader().indexFormat == 1,
+                      material.blendMode,
+                      material.depthTest,
+                      material.depthWrite,
+                      RHI_COMPARE_LEQUAL);
+#else
+    (void)mesh; (void)modelMatrix; (void)material;
+#endif
+}
+
+void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
+                                                   const Matrix4x4* modelMatrices,
+                                                   uint32_t instanceCount,
+                                                   GX2Texture* diffuseTexture,
+                                                   GX2Texture* envCubeMap,
+                                                   const MaterialPropertyBlock* material) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!mesh.IsLoaded() || !modelMatrices || instanceCount == 0 || !mesh.GetVBO() || !mesh.GetIBO()) return;
+
+    if (!m_instShaderLoaded || !m_instanceBufferCreated) {
+        for (uint32_t i = 0; i < instanceCount; ++i) {
+            if (material) {
+                RenderStaticMeshWithMaterial(mesh, modelMatrices[i], *material);
+            } else {
+                RenderStaticMesh(mesh, modelMatrices[i], diffuseTexture, envCubeMap);
+            }
+        }
+        return;
+    }
+
+    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
+
+    GX2SetFetchShader(&m_instFs);
+    GX2SetVertexShader(m_instVs);
+    GX2SetPixelShader(m_instPs);
+
+    alignas(256) float vpUniform[16];
+    std::memcpy(vpUniform, m_vpMatrix.m, sizeof(vpUniform));
+    GX2SetVertexUniformReg(0, 16, vpUniform);
+
+    alignas(256) float psParams[16];
+    psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
+    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
+    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
+    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? (material ? material->ubo.materialParams[0] : 0.0f) : 0.0f;
+    psParams[13] = material ? material->ubo.materialParams[1] : 1.0f;
+    psParams[14] = material ? material->ubo.materialParams[2] : 2.0f;
+    psParams[15] = material ? material->ubo.materialParams[3] : 0.38f;
+    GX2SetPixelUniformReg(0, 16, psParams);
+
+    const GX2Texture* activeDiffuseTex = diffuseTexture ? diffuseTexture : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
+    if (activeDiffuseTex) {
+        GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuseTex), 0);
+        GX2SetPixelSampler(&m_meshSampler, 0);
+    }
+
+    // Garantizar CubeMap valido en slot 1 incluso cuando envCubeMap == nullptr (shader 100% branchless)
+    GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
+    if (activeCube && m_cubeSamplerCreated) {
+        GX2SetPixelTexture(activeCube, 1);
+        GX2SetPixelSampler(&m_cubeSampler, 1);
+    }
+
+    RHIPipelineCache::Instance().BindState(RHIPipelineState(
+        material ? material->depthTest : true,
+        material ? material->depthWrite : true,
+        RHI_COMPARE_LEQUAL,
+        material ? material->blendMode : BlendMode::Opaque,
+        false));
+
+    const GX2IndexType idxType = (mesh.GetHeader().indexFormat == 1) ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
+    GX2RSetAttributeBuffer(const_cast<GX2RBuffer*>(mesh.GetVBO()), 0, mesh.GetHeader().vertexStride, 0);
+
+    // Multi-Frame Ring Buffer: avanza cursor monotonicamente dentro del slice del frame actual (0 carreras CPU/GPU)
+    const uint32_t sliceBase = m_instanceFrameSlice * MAX_INSTANCES_PER_FRAME;
+    uint32_t offset = 0;
+    while (offset < instanceCount) {
+        if (m_instanceWriteCursor >= MAX_INSTANCES_PER_FRAME) {
+            // Si el slice de 1024 instancias del frame se llena, delegar el excedente al draw estandar seguro
+            for (uint32_t rem = offset; rem < instanceCount; ++rem) {
+                if (material) {
+                    RenderStaticMeshWithMaterial(mesh, modelMatrices[rem], *material);
+                } else {
+                    RenderStaticMesh(mesh, modelMatrices[rem], diffuseTexture, envCubeMap);
+                }
+            }
+            break;
+        }
+
+        const uint32_t availInSlice = MAX_INSTANCES_PER_FRAME - m_instanceWriteCursor;
+        const uint32_t batchCount = std::min({instanceCount - offset, MAX_INSTANCES_PER_DRAW, availInSlice});
+        const uint32_t slotStart = sliceBase + m_instanceWriteCursor;
+        const uint32_t byteOffset = slotStart * static_cast<uint32_t>(sizeof(Matrix4x4));
+        const uint32_t byteSize = batchCount * static_cast<uint32_t>(sizeof(Matrix4x4));
+
+        uint8_t* basePtr = static_cast<uint8_t*>(GX2RLockBufferEx(&m_instanceMatrixBuffer, GX2R_RESOURCE_BIND_NONE));
+        if (!basePtr) break;
+        std::memcpy(basePtr + byteOffset, modelMatrices + offset, byteSize);
+        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_ATTRIBUTE_BUFFER, basePtr + byteOffset, byteSize);
+        GX2RUnlockBufferEx(&m_instanceMatrixBuffer, GX2R_RESOURCE_DISABLE_CPU_INVALIDATE);
+
+        GX2RSetAttributeBuffer(&m_instanceMatrixBuffer, 1, sizeof(Matrix4x4), byteOffset);
+        GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES,
+                        const_cast<GX2RBuffer*>(mesh.GetIBO()),
+                        idxType, mesh.GetIndexCount(), 0, 0, batchCount);
+
+        m_instanceWriteCursor += batchCount;
+        m_drawCallsCount += 1;
+        m_trianglesCount += (mesh.GetIndexCount() / 3) * batchCount;
+        offset += batchCount;
+    }
+#else
+    (void)mesh; (void)modelMatrices; (void)instanceCount;
+    (void)diffuseTexture; (void)envCubeMap; (void)material;
+#endif
+}
+
+void ForwardRendererGX2::RenderSkinnedMeshInstanced(const StaticMesh& skinnedMesh,
+                                                    const Matrix4x4* modelMatrices,
+                                                    const Matrix4x4* const* bonePalettes,
+                                                    uint32_t boneCount,
+                                                    uint32_t instanceCount,
+                                                    GX2Texture* diffuseTexture,
+                                                    GX2Texture* envCubeMap,
+                                                    float reflectionIntensity,
+                                                    bool clayMode) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!m_skelShaderLoaded || !skinnedMesh.IsLoaded() || !skinnedMesh.GetVBO() || !skinnedMesh.GetIBO() ||
+        !modelMatrices || !bonePalettes || boneCount == 0 || instanceCount == 0) {
+        return;
+    }
+
+    // Enlace UNICO de pipeline, shaders, texturas, samplers, PSO y VBO fuera del bucle (0 binds redundantes)
+    GX2SetFetchShader(&m_skelFs);
+    GX2SetVertexShader(m_skelVs);
+    GX2SetPixelShader(m_skelPs);
+
+    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
+    alignas(256) float psParams[16];
+    psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
+    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
+    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
+    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;
+    psParams[13] = clayMode ? 1.0f : 0.0f;
+    psParams[14] = 2.0f;
+    psParams[15] = 0.38f;
+    GX2SetPixelUniformReg(0, 16, psParams);
+
+    GX2Texture* activeDiffuse = diffuseTexture ? diffuseTexture
+                              : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
+    if (activeDiffuse) {
+        GX2SetPixelTexture(activeDiffuse, 0);
+        GX2SetPixelSampler(&m_meshSampler, 0);
+    }
+    if (m_cubeSamplerCreated) {
+        GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
+        if (activeCube) {
+            GX2SetPixelTexture(activeCube, 1);
+            GX2SetPixelSampler(&m_cubeSampler, 1);
+        }
+    }
+
+    RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
+
+    const GX2IndexType idxType = (skinnedMesh.GetHeader().indexFormat == 1) ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
+    GX2RSetAttributeBuffer(const_cast<GX2RBuffer*>(skinnedMesh.GetVBO()), 0, skinnedMesh.GetHeader().vertexStride, 0);
+
+    constexpr uint32_t TOTAL_VS_UNIFORMS = 32 + 24 * 16;
+    alignas(256) float skelVsUniforms[TOTAL_VS_UNIFORMS];
+    const uint32_t clampedBones = (boneCount > 24u) ? 24u : boneCount;
+    const Matrix4x4 ident = Matrix4x4::Identity();
+
+    for (uint32_t i = 0; i < instanceCount; ++i) {
+        if (!bonePalettes[i]) continue;
+
+        const Matrix4x4& model = modelMatrices[i];
+        const Matrix4x4 mvp = m_vpMatrix * model;
+        std::memcpy(&skelVsUniforms[0], mvp.m, 16 * sizeof(float));
+        std::memcpy(&skelVsUniforms[16], model.m, 16 * sizeof(float));
+        for (uint32_t b = 0; b < clampedBones; ++b) {
+            std::memcpy(&skelVsUniforms[32 + b * 16], bonePalettes[i][b].m, 16 * sizeof(float));
+        }
+        for (uint32_t b = clampedBones; b < 24u; ++b) {
+            std::memcpy(&skelVsUniforms[32 + b * 16], ident.m, 16 * sizeof(float));
+        }
+        GX2SetVertexUniformReg(0, TOTAL_VS_UNIFORMS, skelVsUniforms);
+
+        GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES,
+                        const_cast<GX2RBuffer*>(skinnedMesh.GetIBO()),
+                        idxType, skinnedMesh.GetIndexCount(), 0, 0, 1);
+        m_drawCallsCount += 1;
+        m_trianglesCount += skinnedMesh.GetIndexCount() / 3;
+    }
+#else
+    (void)skinnedMesh; (void)modelMatrices; (void)bonePalettes; (void)boneCount;
+    (void)instanceCount; (void)diffuseTexture; (void)envCubeMap; (void)reflectionIntensity; (void)clayMode;
+#endif
+}
+
+void ForwardRendererGX2::BeginDepthPrePass() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!m_depthPreShaderLoaded) return;
+    m_inDepthPrePass = true;
+    // Modo Z-only a doble tasa de AMD Latte: Color Writes OFF + Null Pixel Shader + AlphaTest OFF
+    GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
+    GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, FALSE);
+    GX2SetTargetChannelMasks(static_cast<GX2ChannelMask>(0), static_cast<GX2ChannelMask>(0),
+                             static_cast<GX2ChannelMask>(0), static_cast<GX2ChannelMask>(0),
+                             static_cast<GX2ChannelMask>(0), static_cast<GX2ChannelMask>(0),
+                             static_cast<GX2ChannelMask>(0), static_cast<GX2ChannelMask>(0));
+    GX2SetAlphaTest(FALSE, GX2_COMPARE_FUNC_ALWAYS, 0.0f);
+    GX2SetCullOnlyControl(GX2_FRONT_FACE_CCW, FALSE, FALSE);
+    GX2SetDepthOnlyControl(TRUE, TRUE, GX2_COMPARE_FUNC_LEQUAL);
+    GX2SetFetchShader(&m_depthPreFs);
+    GX2SetVertexShader(m_depthPreVs);
+    GX2SetPixelShader(nullptr);
+#endif
+}
+
+void ForwardRendererGX2::RenderDepthPrePassBuffers(GX2RBuffer& vbo,
+                                                   GX2RBuffer& ibo,
+                                                   uint32_t indexCount,
+                                                   uint32_t vertexStride,
+                                                   const Matrix4x4& modelMatrix,
+                                                   bool use32BitIndices) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!m_inDepthPrePass || !m_depthPreShaderLoaded || indexCount == 0) return;
+
+    const Matrix4x4 mvp = m_vpMatrix * modelMatrix;
+    alignas(256) float ubo[16];
+    std::memcpy(ubo, mvp.m, sizeof(ubo));
+    GX2SetVertexUniformReg(0, 16, ubo);
+
+    GX2RSetAttributeBuffer(&vbo, 0, vertexStride, 0);
+    GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES, &ibo,
+                    use32BitIndices ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16,
+                    indexCount, 0, 0, 1);
+    m_drawCallsCount += 1;
+    m_trianglesCount += indexCount / 3;
+#else
+    (void)vbo; (void)ibo; (void)indexCount; (void)vertexStride; (void)modelMatrix; (void)use32BitIndices;
+#endif
+}
+
+void ForwardRendererGX2::EndDepthPrePass() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!m_inDepthPrePass) return;
+    m_inDepthPrePass = false;
+    GX2SetTargetChannelMasks(GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA,
+                             GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA,
+                             GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA,
+                             GX2_CHANNEL_MASK_RGBA, GX2_CHANNEL_MASK_RGBA);
+    // 0x00 = sin blending hardware en RT0..RT7 para pases opacos (RHIPipelineCache habilita 0x01 solo en AlphaBlend/Additive)
+    GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, TRUE);
+    RHIPipelineCache::Instance().Invalidate();
+#endif
+}
+
+void ForwardRendererGX2::SetTextureFilterMode(TextureFilterMode mode) {
+    if (!m_initialized) return;
+    ApplyTextureFilterMode(mode);
+}
+
+void ForwardRendererGX2::ApplyTextureFilterMode(TextureFilterMode mode) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    GX2TexXYFilterMode magFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+    GX2TexXYFilterMode minFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+    GX2TexAnisoRatio anisoRatio = GX2_TEX_ANISO_RATIO_NONE;
+
+    switch (mode) {
+        case TextureFilterMode::Point:
+            magFilter = GX2_TEX_XY_FILTER_MODE_POINT;
+            minFilter = GX2_TEX_XY_FILTER_MODE_POINT;
+            anisoRatio = GX2_TEX_ANISO_RATIO_NONE;
+            break;
+        case TextureFilterMode::Bilinear:
+            magFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            minFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            anisoRatio = GX2_TEX_ANISO_RATIO_NONE;
+            break;
+        case TextureFilterMode::Aniso2x:
+            magFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            minFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            anisoRatio = GX2_TEX_ANISO_RATIO_2_TO_1;
+            break;
+        case TextureFilterMode::Aniso4x:
+            magFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            minFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            anisoRatio = GX2_TEX_ANISO_RATIO_4_TO_1;
+            break;
+        case TextureFilterMode::Aniso8x:
+            magFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            minFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            anisoRatio = GX2_TEX_ANISO_RATIO_8_TO_1;
+            break;
+        case TextureFilterMode::Aniso16x:
+            magFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            minFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
+            anisoRatio = GX2_TEX_ANISO_RATIO_16_TO_1;
+            break;
+    }
+
+    GX2InitSamplerXYFilter(&m_meshSampler, magFilter, minFilter, anisoRatio);
+    GX2InitSamplerZMFilter(&m_meshSampler, GX2_TEX_Z_FILTER_MODE_NONE, 
+                           (mode == TextureFilterMode::Point) ? GX2_TEX_MIP_FILTER_MODE_POINT : GX2_TEX_MIP_FILTER_MODE_LINEAR);
+#else
+    (void)mode;
+#endif
+}
 
 } // namespace WiiU

@@ -29,9 +29,9 @@ struct MaterialComponent {
     float materialMode{1.0f}; // 0 = SkyDome, 1 = Textured, 2 = Water, 3 = Emissive/Sun
     float customParam{0.0f};  // Parámetro auxiliar de silicio (ej. waterLevel = -0.35f)
     uint32_t textureId{0};
-#if defined(__WIIU__) || defined(__wiiu__)
+    void* diffuseTexture{nullptr}; // Puntero RHI opaco opcional (GX2Texture* en Wii U)
+    void* envCubeMap{nullptr};     // CubeMap ambiental RHI opaco opcional
     ResourceHandle<GX2Texture> textureHandle{};
-#endif
     BlendMode blendMode{BlendMode::Opaque};
     bool depthTest{true};
     bool depthWrite{true};

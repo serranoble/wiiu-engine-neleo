@@ -119,10 +119,9 @@ bool RHIFullscreenShader::Initialize(const char* shaderAssetPath,
         }
     }
 
-    bool loaded = !m_stagedBinary.empty() &&
-                  (TryLoadDirectGFD(m_stagedBinary.data()) || TryLoadWHB(m_stagedBinary.data()));
+    bool loaded = !m_stagedBinary.empty() && TryLoadDirectGFD(m_stagedBinary.data());
     if (!loaded && fallbackData && fallbackSize > 0) {
-        loaded = TryLoadDirectGFD(fallbackData) || TryLoadWHB(fallbackData);
+        loaded = TryLoadDirectGFD(fallbackData);
     }
 
     m_stagedBinary.clear();
@@ -164,14 +163,7 @@ void RHIFullscreenShader::Shutdown() {
         m_quadCreated = false;
     }
 
-    if (m_shaderLoaded) {
-        if (!m_useDirectGFD) {
-            WHBGfxFreeShaderGroup(&m_shaderGroup);
-        }
-        m_shaderLoaded = false;
-        m_useDirectGFD = false;
-    }
-
+    m_shaderLoaded = false;
     FreeDirectGFD();
 #endif
 }
@@ -247,16 +239,9 @@ void RHIFullscreenShader::BindPipeline(uint32_t viewportW,
     }
 
     GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
-
-    if (m_useDirectGFD) {
-        GX2SetFetchShader(&m_directFetchShader);
-        GX2SetVertexShader(m_mainShader.vs);
-        GX2SetPixelShader(m_mainShader.ps);
-    } else {
-        GX2SetFetchShader(&m_shaderGroup.fetchShader);
-        GX2SetVertexShader(m_shaderGroup.vertexShader);
-        GX2SetPixelShader(m_shaderGroup.pixelShader);
-    }
+    GX2SetFetchShader(&m_directFetchShader);
+    GX2SetVertexShader(m_mainShader.vs);
+    GX2SetPixelShader(m_mainShader.ps);
 
     RHIPipelineCache::Instance().Invalidate();
     RHIPipelineState state(false, false, RHI_COMPARE_ALWAYS, BlendMode::Opaque, false, RHI_FRONT_FACE_CCW);
@@ -329,7 +314,7 @@ void RHIFullscreenShader::DrawQuad() noexcept {
         GX2SetFetchShader(&m_blitFetchShader);
         GX2SetVertexShader(m_blitShader.vs);
         GX2SetPixelShader(m_blitShader.ps);
-        GX2SetColorControl(GX2_LOGIC_OP_COPY, 0xFF, FALSE, TRUE);
+        GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, TRUE);
 
         const float texW = static_cast<float>(std::max<uint32_t>(1u, m_offscreenWidth));
         const float texH = static_cast<float>(std::max<uint32_t>(1u, m_offscreenHeight));
@@ -409,13 +394,7 @@ void RHIFullscreenShader::FreeShaderPair(DirectShaderPair& pair) noexcept {
 
 const GX2PixelShader* RHIFullscreenShader::GetActivePixelShader() const noexcept {
     if (!m_shaderLoaded) return nullptr;
-    return m_useDirectGFD ? m_mainShader.ps : m_shaderGroup.pixelShader;
-}
-
-bool RHIFullscreenShader::TryLoadWHB(const uint8_t* data) {
-    (void)data;
-    // libwhb requiere WHBGfxInit() que no se ejecuta en SDL2; usar Direct GFD siempre.
-    return false;
+    return m_mainShader.ps;
 }
 
 void RHIFullscreenShader::FreeDirectGFD() noexcept {
@@ -483,7 +462,6 @@ bool RHIFullscreenShader::TryLoadDirectGFD(const uint8_t* data) {
         return false;
     }
 
-    m_useDirectGFD = true;
     m_shaderLoaded = true;
     return true;
 }

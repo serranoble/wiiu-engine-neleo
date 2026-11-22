@@ -1,8 +1,16 @@
 #include "Graphics/Render2D.hpp"
+#include "Core/Window.hpp"
+#if defined(__WIIU__) || defined(__wiiu__)
+#include "Graphics/Render2DGX2.hpp"
+#include <gx2/context.h>
+#include <gx2/registers.h>
+#else
+#include <SDL2/SDL.h>
+#include <vector>
+#endif
 #include <cstring>
 #include <cctype>
 #include <cmath>
-#include <vector>
 
 namespace WiiU {
 
@@ -78,13 +86,66 @@ void Render2D::GetFont5x7(char c, uint8_t out[5]) {
     }
 }
 
-void Render2D::DrawPixelChar(SDL_Renderer* renderer, char c, int x, int y, int scale, const ColorRGBA& color) {
-    DrawPixelString(renderer, std::string_view(&c, 1), x, y, scale, color);
+void Render2D::Begin() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (void* ctx = Window::GetActiveNativeContextState()) {
+        GX2SetContextState(static_cast<GX2ContextState*>(ctx));
+    }
+    if (void* cb = Window::GetActiveNativeColorBuffer()) {
+        GX2SetColorBuffer(static_cast<GX2ColorBuffer*>(cb), GX2_RENDER_TARGET_0);
+    }
+    Render2DGX2::Instance().Begin();
+#endif
 }
 
-// OPTIMIZACIÓN: Acumular píxeles de texto y emitir 1 sola llamada GPU SDL_RenderFillRects por string
-void Render2D::DrawPixelString(SDL_Renderer* renderer, std::string_view text, int x, int y, int scale, const ColorRGBA& color) {
-    if (text.empty()) return;
+void Render2D::End() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    Render2DGX2::Instance().End();
+#endif
+}
+
+void Render2D::DrawRect(int x, int y, int w, int h, const ColorRGBA& color) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    Render2DGX2::Instance().DrawRect(static_cast<float>(x), static_cast<float>(y),
+                                     static_cast<float>(w), static_cast<float>(h), color);
+#else
+    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
+    if (!renderer || w <= 0 || h <= 0) return;
+    SDL_Rect rect{x, y, w, h};
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderFillRect(renderer, &rect);
+#endif
+}
+
+void Render2D::DrawLine(int x0, int y0, int x1, int y1, const ColorRGBA& color, float width) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    Render2DGX2::Instance().DrawLine(static_cast<float>(x0), static_cast<float>(y0),
+                                     static_cast<float>(x1), static_cast<float>(y1),
+                                     width, color);
+#else
+    (void)width;
+    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
+    if (!renderer) return;
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    SDL_RenderDrawLine(renderer, x0, y0, x1, y1);
+#endif
+}
+
+void Render2D::DrawPixelChar(char c, int x, int y, int scale, const ColorRGBA& color) {
+    char buf[2]{c, '\0'};
+    DrawPixelString(std::string_view(buf, 1), x, y, scale, color);
+}
+
+void Render2D::DrawPixelString(std::string_view text, int x, int y, int scale, const ColorRGBA& color) {
+    if (scale <= 0 || text.empty()) return;
+#if defined(__WIIU__) || defined(__wiiu__)
+    Render2DGX2::Instance().DrawText(text, static_cast<float>(x), static_cast<float>(y),
+                                     static_cast<float>(scale), color);
+#else
+    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
+    if (!renderer) return;
 
     static std::vector<SDL_Rect> pixelBatch;
     pixelBatch.clear();
@@ -107,14 +168,31 @@ void Render2D::DrawPixelString(SDL_Renderer* renderer, std::string_view text, in
     }
 
     if (!pixelBatch.empty()) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         SDL_RenderFillRects(renderer, pixelBatch.data(), static_cast<int>(pixelBatch.size()));
     }
+#endif
 }
 
-// OPTIMIZACIÓN: Acumular puntos del anillo y emitir 1 sola llamada GPU SDL_RenderFillRects
-void Render2D::DrawShrinkingRing(SDL_Renderer* renderer, int cx, int cy, float radius, const ColorRGBA& color) {
+void Render2D::DrawShrinkingRing(int cx, int cy, float radius, const ColorRGBA& color) {
     if (radius <= 1.0f) return;
+#if defined(__WIIU__) || defined(__wiiu__)
+    constexpr int SEGMENTS = 24;
+    constexpr float TWO_PI = 2.0f * 3.14159265f;
+    auto& r2d = Render2DGX2::Instance();
+    for (int i = 0; i < SEGMENTS; ++i) {
+        const float a0 = (static_cast<float>(i) / static_cast<float>(SEGMENTS)) * TWO_PI;
+        const float a1 = (static_cast<float>(i + 1) / static_cast<float>(SEGMENTS)) * TWO_PI;
+        r2d.DrawLine(static_cast<float>(cx) + radius * std::cos(a0),
+                     static_cast<float>(cy) + radius * std::sin(a0),
+                     static_cast<float>(cx) + radius * std::cos(a1),
+                     static_cast<float>(cy) + radius * std::sin(a1),
+                     2.0f, color);
+    }
+#else
+    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
+    if (!renderer) return;
 
     int numPoints = static_cast<int>(2.0f * 3.14159265f * radius * 0.8f);
     if (numPoints < 20) numPoints = 20;
@@ -128,23 +206,37 @@ void Render2D::DrawShrinkingRing(SDL_Renderer* renderer, int cx, int cy, float r
         float angle = (static_cast<float>(i) / static_cast<float>(numPoints)) * TWO_PI;
         int px = static_cast<int>(cx + radius * std::cos(angle));
         int py = static_cast<int>(cy + radius * std::sin(angle));
-        
+
         ringBatch.push_back(SDL_Rect{ px - 1, py - 1, 3, 3 });
     }
 
     if (!ringBatch.empty()) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         SDL_RenderFillRects(renderer, ringBatch.data(), static_cast<int>(ringBatch.size()));
     }
+#endif
 }
 
-void Render2D::DrawBox(SDL_Renderer* renderer, int x, int y, int w, int h, const ColorRGBA& fillColor, const ColorRGBA& borderColor) {
+void Render2D::DrawBox(int x, int y, int w, int h, const ColorRGBA& fillColor, const ColorRGBA& borderColor) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    Render2DGX2::Instance().DrawBox(static_cast<float>(x), static_cast<float>(y),
+                                    static_cast<float>(w), static_cast<float>(h),
+                                    fillColor, borderColor, 2.0f);
+#else
+    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
+    if (!renderer) return;
     SDL_Rect rect = { x, y, w, h };
-    SDL_SetRenderDrawColor(renderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
-    SDL_RenderFillRect(renderer, &rect);
-
-    SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
-    SDL_RenderDrawRect(renderer, &rect);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    if (fillColor.a > 0) {
+        SDL_SetRenderDrawColor(renderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+        SDL_RenderFillRect(renderer, &rect);
+    }
+    if (borderColor.a > 0) {
+        SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
+        SDL_RenderDrawRect(renderer, &rect);
+    }
+#endif
 }
 
 } // namespace WiiU

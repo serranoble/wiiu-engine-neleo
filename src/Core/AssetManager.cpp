@@ -1,5 +1,4 @@
 #include "Core/AssetManager.hpp"
-#include <SDL2/SDL.h>
 #include <cstdio>
 #include <algorithm>
 #include <mutex>
@@ -16,27 +15,12 @@ namespace {
     bool s_hasCachedPrefix = false;
 
     bool ProbeFileSize(const std::string& path, int64_t& outSize) {
-        // Intento 1: Vía fopen estándar (bajo overhead en newlib / devkitPPC)
+        // Vía fopen estándar (nativo newlib / devkitPPC en Wii U y stdio en PC)
         FILE* f = std::fopen(path.c_str(), "rb");
         if (f) {
             std::fseek(f, 0, SEEK_END);
             long sz = std::ftell(f);
             std::fclose(f);
-            if (sz > 0) {
-                outSize = static_cast<int64_t>(sz);
-                return true;
-            }
-        }
-
-        // Intento 2: Vía SDL_RWops (resuelve empaquetado WUHB y capas virtuales de SDL)
-        SDL_RWops* rw = SDL_RWFromFile(path.c_str(), "rb");
-        if (rw) {
-            Sint64 sz = SDL_RWsize(rw);
-            if (sz <= 0) {
-                SDL_RWseek(rw, 0, RW_SEEK_END);
-                sz = SDL_RWtell(rw);
-            }
-            SDL_RWclose(rw);
             if (sz > 0) {
                 outSize = static_cast<int64_t>(sz);
                 return true;
@@ -233,47 +217,18 @@ bool AssetManager::LoadBinaryFile(const std::string& filepath, std::vector<uint8
             }
             outBuffer.clear();
         }
-
-        SDL_RWops* rw = SDL_RWFromFile(resolvedPath.c_str(), "rb");
-        if (rw) {
-            outBuffer.resize(static_cast<size_t>(resolvedSize));
-            uint8_t* dst = outBuffer.data();
-            size_t remaining = static_cast<size_t>(resolvedSize);
-            size_t totalRead = 0;
-
-            while (remaining > 0) {
-                size_t toRead = std::min(remaining, BURST_CHUNK_SIZE);
-                size_t n = SDL_RWread(rw, dst + totalRead, 1, toRead);
-                if (n == 0) {
-                    break;
-                }
-                totalRead += n;
-                remaining -= n;
-                s_asyncBytesLoaded.fetch_add(static_cast<uint32_t>(n), std::memory_order_relaxed);
-            }
-            SDL_RWclose(rw);
-
-            if (totalRead > 0) {
-                if (totalRead < outBuffer.size()) {
-                    outBuffer.resize(totalRead);
-                }
-                s_asyncFilesLoaded.fetch_add(1, std::memory_order_relaxed);
-                return true;
-            }
-            outBuffer.clear();
-        }
     }
 
-    // Fallback para streams virtuales sin tamaño conocido de antemano
-    SDL_RWops* rw = SDL_RWFromFile(resolvedPath.c_str(), "rb");
-    if (rw) {
+    // Fallback para streams sin tamaño conocido de antemano (vía std::FILE)
+    FILE* f = std::fopen(resolvedPath.c_str(), "rb");
+    if (f) {
         std::vector<uint8_t> chunkBuf(BURST_CHUNK_SIZE);
         size_t n = 0;
-        while ((n = SDL_RWread(rw, chunkBuf.data(), 1, chunkBuf.size())) > 0) {
+        while ((n = std::fread(chunkBuf.data(), 1, chunkBuf.size(), f)) > 0) {
             outBuffer.insert(outBuffer.end(), chunkBuf.data(), chunkBuf.data() + n);
             s_asyncBytesLoaded.fetch_add(static_cast<uint32_t>(n), std::memory_order_relaxed);
         }
-        SDL_RWclose(rw);
+        std::fclose(f);
         if (!outBuffer.empty()) {
             s_asyncFilesLoaded.fetch_add(1, std::memory_order_relaxed);
             return true;

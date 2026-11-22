@@ -4,8 +4,7 @@
 #include "Audio/AudioManager.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
-#include <cmath>
-#include <algorithm>
+#include "Core/StackString.hpp"
 
 namespace WiiU {
 
@@ -40,63 +39,73 @@ void SceneAssetError::Update(float dt) {
     }
 }
 
-void SceneAssetError::Render(SDL_Renderer* renderer) {
+void SceneAssetError::Render() {
+    Render2D::Begin();
+
     // 1. Fondo Oscuro Atenuado
-    Render2D::drawBox(renderer, 0, 0, 1280, 720, ColorRGBA{10, 14, 24, 255}, ColorRGBA{30, 45, 70, 255});
+    Render2D::DrawBox(0, 0, 1280, 720, ColorRGBA{10, 14, 24, 255}, ColorRGBA{30, 45, 70, 255});
 
     // Cuadrícula sutil
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 20, 30, 45, 100);
+    const ColorRGBA gridColor{20, 30, 45, 100};
     for (int x = 0; x < 1280; x += 64) {
-        SDL_RenderDrawLine(renderer, x, 0, x, 720);
+        Render2D::DrawLine(x, 0, x, 720, gridColor, 1.0f);
     }
     for (int y = 0; y < 720; y += 64) {
-        SDL_RenderDrawLine(renderer, 0, y, 1280, y);
+        Render2D::DrawLine(0, y, 1280, y, gridColor, 1.0f);
     }
 
     // 2. Ventana Modal Central (960 x 570)
-    SDL_Rect modalRect = { 160, 60, 960, 570 };
-    Render2D::drawBox(renderer, modalRect.x, modalRect.y, modalRect.w, modalRect.h,
+    constexpr int modalX = 160;
+    constexpr int modalY = 60;
+    constexpr int modalW = 960;
+    constexpr int modalH = 570;
+    Render2D::DrawBox(modalX, modalY, modalW, modalH,
                       ColorRGBA{18, 24, 38, 250}, ColorRGBA{240, 60, 60, 255});
 
     // 3. Banner Superior Rojo de Alerta
-    SDL_Rect headerRect = { modalRect.x, modalRect.y, modalRect.w, 54 };
-    Render2D::drawBox(renderer, headerRect.x, headerRect.y, headerRect.w, headerRect.h,
+    Render2D::DrawBox(modalX, modalY, modalW, 54,
                       ColorRGBA{180, 25, 25, 240}, ColorRGBA{255, 80, 80, 255});
-    Render2D::drawPixelString(renderer, "[!] ERROR: RECURSOS NO ENCONTRADOS", modalRect.x + 18, modalRect.y + 14, 3, ColorRGBA::White());
+    Render2D::DrawPixelString("[!] ERROR: RECURSOS NO ENCONTRADOS", modalX + 18, modalY + 14, 3, ColorRGBA::White());
 
     // 4. Mensaje Principal
-    Render2D::drawPixelString(renderer, "NO SE PUDO INICIAR LA ESCENA:", modalRect.x + 35, modalRect.y + 75, 2, ColorRGBA{200, 215, 230, 255});
-    Render2D::drawPixelString(renderer, m_targetSceneName, modalRect.x + 35, modalRect.y + 105, 3, ColorRGBA::Yellow());
+    Render2D::DrawPixelString("NO SE PUDO INICIAR LA ESCENA:", modalX + 35, modalY + 75, 2, ColorRGBA{200, 215, 230, 255});
+    Render2D::DrawPixelString(m_targetSceneName, modalX + 35, modalY + 105, 3, ColorRGBA::Yellow());
 
-    Render2D::drawPixelString(renderer, "LOS SIGUIENTES ARCHIVOS NO FUERON ENCONTRADOS EN EL SISTEMA:",
-                              modalRect.x + 35, modalRect.y + 155, 2, ColorRGBA::White());
+    Render2D::DrawPixelString("LOS SIGUIENTES ARCHIVOS NO FUERON ENCONTRADOS EN EL SISTEMA:",
+                              modalX + 35, modalY + 155, 2, ColorRGBA::White());
 
     // 5. Caja de Lista de Assets Faltantes
-    SDL_Rect listRect = { modalRect.x + 35, modalRect.y + 185, modalRect.w - 70, 210 };
-    Render2D::drawBox(renderer, listRect.x, listRect.y, listRect.w, listRect.h,
+    constexpr int listX = modalX + 35;
+    constexpr int listY = modalY + 185;
+    constexpr int listW = modalW - 70;
+    constexpr int listH = 210;
+    Render2D::DrawBox(listX, listY, listW, listH,
                       ColorRGBA{8, 12, 20, 240}, ColorRGBA{200, 50, 50, 180});
 
-    int lineY = listRect.y + 18;
+    int lineY = listY + 18;
     for (size_t i = 0; i < m_missingAssets.size() && i < 5; ++i) {
-        std::string item = "[-] ASSET REQUERIDO: " + m_missingAssets[i];
-        Render2D::drawPixelString(renderer, item, listRect.x + 20, lineY, 2, ColorRGBA{255, 110, 110, 255});
+        StackString<128> item;
+        item.Format("[-] ASSET REQUERIDO: %s", m_missingAssets[i].c_str());
+        Render2D::DrawPixelString(item.string_view(), listX + 20, lineY, 2, ColorRGBA{255, 110, 110, 255});
         lineY += 36;
     }
 
     if (m_missingAssets.size() > 5) {
-        std::string moreText = "... Y " + std::to_string(m_missingAssets.size() - 5) + " ARCHIVOS ADICIONALES";
-        Render2D::drawPixelString(renderer, moreText, listRect.x + 20, lineY, 2, ColorRGBA{255, 170, 170, 255});
+        StackString<128> moreText;
+        moreText.Format("... Y %zu ARCHIVOS ADICIONALES", m_missingAssets.size() - 5);
+        Render2D::DrawPixelString(moreText.string_view(), listX + 20, lineY, 2, ColorRGBA{255, 170, 170, 255});
     }
 
     // 6. Indicaciones de Solución
-    Render2D::drawPixelString(renderer, "SOLUCION: VERIFICA QUE LOS ARCHIVOS ESTEN EN 'content/' O 'assets/'",
-                              modalRect.x + 35, modalRect.y + 415, 2, ColorRGBA::Cyan());
-    Render2D::drawPixelString(renderer, "JUNTO AL BINARIO DEL MOTOR (.WUHB / .RPX) Y RECOMPILA EL PROYECTO.",
-                              modalRect.x + 35, modalRect.y + 445, 2, ColorRGBA{0, 210, 240, 255});
+    Render2D::DrawPixelString("SOLUCION: VERIFICA QUE LOS ARCHIVOS ESTEN EN 'content/' O 'assets/'",
+                              modalX + 35, modalY + 415, 2, ColorRGBA::Cyan());
+    Render2D::DrawPixelString("JUNTO AL BINARIO DEL MOTOR (.WUHB / .RPX) Y RECOMPILA EL PROYECTO.",
+                              modalX + 35, modalY + 445, 2, ColorRGBA{0, 210, 240, 255});
 
     // 7. Botón Interactivo de Aceptar
-    m_acceptButton.Render(renderer);
+    m_acceptButton.Render();
+
+    Render2D::End();
 }
 
 } // namespace WiiU

@@ -1,13 +1,18 @@
 #pragma once
 
-#include <SDL2/SDL.h>
 #include "Graphics/Color.hpp"
 #include "Input/InputManager.hpp"
-#include <string>
 #include <string_view>
 #include <functional>
 
 namespace WiiU {
+
+struct UIIntRect {
+    int x{0};
+    int y{0};
+    int w{0};
+    int h{0};
+};
 
 /**
  * @brief Reusable, lightweight UI Button component for Wii U touch/screen interfaces.
@@ -15,11 +20,11 @@ namespace WiiU {
 class UIButton {
 public:
     UIButton();
-    UIButton(int x, int y, int w, int h, std::string label, int textScale = 2);
+    UIButton(int x, int y, int w, int h, std::string_view label, int textScale = 2);
 
     void SetRect(int x, int y, int w, int h);
-    void SetLabel(std::string_view label) { m_label = label; }
-    void SetTextScale(int scale) { m_textScale = scale; }
+    void SetLabel(std::string_view label) noexcept;
+    void SetTextScale(int scale) noexcept { m_textScale = scale; }
     void SetColors(ColorRGBA normalFill, ColorRGBA hoverFill,
                    ColorRGBA normalBorder, ColorRGBA hoverBorder,
                    ColorRGBA textColor);
@@ -33,15 +38,16 @@ public:
     /**
      * @brief Renders button background, border, and centered text.
      */
-    void Render(SDL_Renderer* renderer) const;
+    void Render() const;
 
-    bool IsHovered() const { return m_hovered; }
-    const SDL_Rect& GetRect() const { return m_rect; }
-    const std::string& GetLabel() const { return m_label; }
+    [[nodiscard]] bool IsHovered() const noexcept { return m_hovered; }
+    void SetHovered(bool hovered) noexcept { m_hovered = hovered; }
+    [[nodiscard]] const UIIntRect& GetRect() const noexcept { return m_rect; }
+    [[nodiscard]] std::string_view GetLabel() const noexcept { return std::string_view(m_label); }
 
 private:
-    SDL_Rect m_rect{0, 0, 0, 0};
-    std::string m_label;
+    UIIntRect m_rect{0, 0, 0, 0};
+    char m_label[96]{0};
     int m_textScale{2};
     bool m_hovered{false};
 
@@ -68,7 +74,7 @@ public:
      */
     bool UpdateAndHandle(const TouchState& touch);
 
-    void Render(SDL_Renderer* renderer) const;
+    void Render() const;
 
 private:
     UIButton m_button;
@@ -81,14 +87,14 @@ private:
 class UISlider {
 public:
     UISlider();
-    UISlider(int x, int y, int w, int h, float minValue = 0.0f, float maxValue = 1.0f, float initialValue = 1.0f, std::string label = "");
+    UISlider(int x, int y, int w, int h, float minValue = 0.0f, float maxValue = 1.0f, float initialValue = 1.0f, std::string_view label = "");
 
     void SetRect(int x, int y, int w, int h);
     void SetRange(float minVal, float maxVal);
     void SetValue(float value);
     [[nodiscard]] float GetValue() const { return m_value; }
 
-    void SetLabel(std::string_view label) { m_label = label; }
+    void SetLabel(std::string_view label) noexcept;
     void SetColors(ColorRGBA trackFill, ColorRGBA progressFill, ColorRGBA handleFill, ColorRGBA border, ColorRGBA textColor);
 
     /**
@@ -100,14 +106,14 @@ public:
     /**
      * @brief Renders the track, active progress bar, sliding handle knob, and label.
      */
-    void Render(SDL_Renderer* renderer) const;
+    void Render() const;
 
 private:
-    SDL_Rect m_rect{0, 0, 0, 0};
+    UIIntRect m_rect{0, 0, 0, 0};
     float m_minValue{0.0f};
     float m_maxValue{1.0f};
     float m_value{1.0f};
-    std::string m_label;
+    char m_label[64]{0};
     bool m_dragging{false};
     bool m_hovered{false};
 

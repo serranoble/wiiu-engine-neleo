@@ -1,6 +1,5 @@
 #include "Core/ECS/Systems/CullingSystem.hpp"
 #include "Core/Spatial/SpatialBVH.hpp"
-#include "Core/JobSystem.hpp"
 #include <cmath>
 #include <algorithm>
 
@@ -22,9 +21,11 @@ void ComputeWorldSphere(const TransformComponent& transform, const BoundingVolum
         m.m[1] * bounding.center.x + m.m[5] * bounding.center.y + m.m[9]  * bounding.center.z + m.m[13],
         m.m[2] * bounding.center.x + m.m[6] * bounding.center.y + m.m[10] * bounding.center.z + m.m[14]
     };
-    const float maxScale = std::max({std::abs(transform.scale.x),
-                                     std::abs(transform.scale.y),
-                                     std::abs(transform.scale.z)});
+    // Escala real en espacio de mundo (normas de las 3 columnas de worldMatrix, correcto para jerarquias)
+    const float sx2 = m.m[0] * m.m[0] + m.m[1] * m.m[1] + m.m[2] * m.m[2];
+    const float sy2 = m.m[4] * m.m[4] + m.m[5] * m.m[5] + m.m[6] * m.m[6];
+    const float sz2 = m.m[8] * m.m[8] + m.m[9] * m.m[9] + m.m[10] * m.m[10];
+    const float maxScale = std::sqrt(std::max({sx2, sy2, sz2}));
     outRadius = bounding.radius * maxScale;
 }
 

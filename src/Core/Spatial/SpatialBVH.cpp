@@ -72,7 +72,7 @@ bool SpatialBVH::FindBestSAHSplit(uint32_t nodeIdx, uint32_t first, uint32_t cou
         for (uint32_t i = 0; i < count; ++i) {
             const BVHPrimitive& prim = m_prims[m_primIndices[first + i]];
             const float val = (axis == 0) ? prim.centroid.x : ((axis == 1) ? prim.centroid.y : prim.centroid.z);
-            const int binIdx = std::min(BINS - 1, static_cast<int>((val - cMin) * scale));
+            const int binIdx = std::clamp(static_cast<int>((val - cMin) * scale), 0, BINS - 1);
             bins[binIdx].count++;
             bins[binIdx].bounds.Expand(prim.bounds);
         }

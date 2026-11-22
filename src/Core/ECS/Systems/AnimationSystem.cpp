@@ -57,7 +57,8 @@ void AnimationSystem::Update(ECSWorld& world, float dt) {
                     JointTransform overlaySQT[MAX_SKELETON_JOINTS]{};
                     anim.overlayClip->SampleSQTPose(anim.overlayPlaybackTime, overlaySQT, jointCount);
 
-                    for (uint32_t i = 0; i < jointCount; ++i) {
+                    static_assert(MAX_SKELETON_JOINTS <= 32, "overlayJointMask es bitmask de 32 bits");
+                    for (uint32_t i = 0; i < jointCount && i < 32u; ++i) {
                         if ((anim.overlayJointMask & (1u << i)) != 0u) {
                             skelMesh.localSQT[i] = JointTransform::Blend(
                                 skelMesh.localSQT[i], overlaySQT[i], anim.overlayWeight
