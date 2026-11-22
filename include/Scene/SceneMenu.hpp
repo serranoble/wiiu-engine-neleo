@@ -36,6 +36,7 @@ private:
 
     Starfield3D m_starfield;
     std::vector<MainMenuItem> m_menuItems;
+    size_t m_focusedIndex{0};
 };
 
 } // namespace WiiU

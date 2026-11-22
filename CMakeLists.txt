@@ -119,6 +119,7 @@ add_library(engine_framework STATIC
     src/Core/Engine.cpp
     src/Core/ResourceMonitor.cpp
     src/Core/ECS/Systems/OrbitCameraSystem.cpp
+    src/Input/SoftwareKeyboard.cpp
     src/Scene/ModalStack.cpp
     src/Scene/SceneManager.cpp
     src/Scene/GameScene3D.cpp
@@ -138,12 +139,25 @@ add_library(engine_ai STATIC
 )
 target_link_libraries(engine_ai PUBLIC engine_core)
 
+# 8. SUBSISTEMA DE REDES Y MULTIJUGADOR (CAP. 20 JASON GREGORY)
+add_library(engine_net STATIC
+    src/Net/NetBitStream.cpp
+    src/Net/NetSocket.cpp
+    src/Net/NetSession.cpp
+    src/Net/NetReplication.cpp
+)
+target_link_libraries(engine_net PUBLIC engine_core)
+if(WIN32 AND NOT WUT)
+    target_link_libraries(engine_net PUBLIC ws2_32)
+endif()
+
 target_link_libraries(engine_framework PUBLIC 
     engine_graphics 
     engine_physics 
     engine_audio 
     engine_input 
     engine_ai
+    engine_net
     engine_core
 )
 
@@ -155,6 +169,7 @@ set(DEMO_SOURCES
     src/Scene/Starfield3D.cpp
     src/Scene/SceneMenu.cpp
     src/Scene/SceneOptions.cpp
+    src/Scene/NetTestModal.cpp
 )
 
 if(WUT AND WIIU_ENGINE_BUILD_DEMOS)
@@ -168,6 +183,7 @@ if(WUT AND WIIU_ENGINE_BUILD_DEMOS)
         engine_audio
         engine_input
         engine_ai
+        engine_net
         engine_core
         -Wl,--end-group
         wut

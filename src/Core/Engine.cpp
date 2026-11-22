@@ -25,6 +25,7 @@
 #include "Core/ECS/Systems/AudioSpatialSystem.hpp"
 #include "Core/ECS/Systems/KinematicCharacterSystem.hpp"
 #include "Core/JobSystem.hpp"
+#include "Net/NetSocket.hpp"
 #include "Graphics/Mesh/StaticMesh.hpp"
 #include "Graphics/UI/UIToolkit.hpp"
 #if defined(__WIIU__) || defined(__wiiu__)
@@ -169,6 +170,12 @@ bool Engine::Init(std::unique_ptr<IScene> initialScene) {
 
     // Autodiagnóstico del toolkit de interfaz estandarizado y alineación de píxeles (OPT-312)
     if (!UI::UIToolkit::VerifyUIToolkitIntegrity()) {
+        Shutdown();
+        return false;
+    }
+
+    // Inicialización y autodiagnóstico del subsistema de redes (Jason Gregory Cap. 20 - OPT-443)
+    if (!NetPlatform::Initialize() || !NetPlatform::VerifyNetIntegrity()) {
         Shutdown();
         return false;
     }
@@ -371,6 +378,7 @@ void Engine::Shutdown() {
     ShadowMapRendererGX2::Instance().Shutdown();
     ForwardRendererGX2::Instance().Shutdown();
     AudioManager::Instance().Shutdown();
+    NetPlatform::Shutdown();
     VirtualFileSystem::Instance().Shutdown();
     StorageManager::Shutdown();       // Drenar guardados asíncronos ANTES de detener Core 2
     JobSystem::Instance().Shutdown();
