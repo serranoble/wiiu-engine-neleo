@@ -111,6 +111,7 @@ public:
 
     bool LoadFromFile(const char* filepath = nullptr);
     bool SaveToFile(const char* filepath = nullptr);
+    bool SaveToFileAsync(const char* filepath = nullptr) const;
     void ResetToDefaults() noexcept;
     void ApplyToSubsystems();
 
@@ -132,6 +133,7 @@ public:
 private:
     EngineConfig() noexcept;
     ~EngineConfig() = default;
+    [[nodiscard]] size_t FormatIni(char* outBuf, size_t capacity) const noexcept;
 
     struct ObserverSlot {
         uint32_t id{0};

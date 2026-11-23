@@ -71,9 +71,39 @@ struct alignas(256) LightBlockUBO {
     float pointLightColorIntensity[MAX_POINT_LIGHTS][4]{}; // rgb = color, w = intensity
     uint32_t activePointLights{0};
     uint32_t pad[3]{0, 0, 0};
-    uint32_t reservedPad[52]{}; // Relleno exacto a 512 bytes (multiplo de 256B)
+    // Luz focal / linterna (Spot Light — CGP Cap. 7)
+    float spotLightPosRange[4]{0.0f, 5.0f, 6.0f, 25.0f};      // xyz = world pos, w = range
+    float spotLightDirInner[4]{0.0f, -0.35f, -0.94f, 0.94f};  // xyz = unit dir, w = cos(innerAngle)
+    float spotLightColorOuter[4]{1.0f, 0.96f, 0.88f, 0.85f};  // rgb = color, w = cos(outerAngle)
+    float spotLightIntensity{0.0f};                            // 0.0f = apagada por defecto
+    uint32_t reservedPad[39]{}; // Relleno exacto a 512 bytes (multiplo de 256B)
 
     void ClearPointLights() noexcept { activePointLights = 0; }
+
+    void ClearSpotLight() noexcept { spotLightIntensity = 0.0f; }
+
+    void SetSpotLight(const Point3D& pos,
+                      const Point3D& dir,
+                      const Point3D& color,
+                      float intensity,
+                      float range = 28.0f,
+                      float cosInnerCutoff = 0.94f,
+                      float cosOuterCutoff = 0.84f) noexcept {
+        const Point3D n = dir.Normalized();
+        spotLightPosRange[0] = pos.x;
+        spotLightPosRange[1] = pos.y;
+        spotLightPosRange[2] = pos.z;
+        spotLightPosRange[3] = range;
+        spotLightDirInner[0] = n.x;
+        spotLightDirInner[1] = n.y;
+        spotLightDirInner[2] = n.z;
+        spotLightDirInner[3] = cosInnerCutoff;
+        spotLightColorOuter[0] = color.x;
+        spotLightColorOuter[1] = color.y;
+        spotLightColorOuter[2] = color.z;
+        spotLightColorOuter[3] = cosOuterCutoff;
+        spotLightIntensity = intensity;
+    }
 
     bool AddPointLight(const Point3D& pos, float radius, const Point3D& color, float intensity) noexcept {
         if (activePointLights >= MAX_POINT_LIGHTS) return false;

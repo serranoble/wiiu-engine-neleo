@@ -63,6 +63,7 @@ MEMHeapHandle s_mem1ExpHeap = nullptr;
 
 GX2ContextState* s_defaultContextState = nullptr;
 GX2ColorBuffer s_mainColorBuffer{};
+GX2DepthBuffer s_mainDepthBuffer{};
 
 OSTime s_prevSubmittedTs = 0;
 OSTime s_lastSubmittedTs = 0;
@@ -197,6 +198,14 @@ void* Window::GetActiveNativeColorBuffer() noexcept {
 #endif
 }
 
+void* Window::GetActiveNativeDepthBuffer() noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+    return (s_hasForeground.load(std::memory_order_acquire) && s_mainDepthBuffer.surface.image) ? static_cast<void*>(&s_mainDepthBuffer) : nullptr;
+#else
+    return nullptr;
+#endif
+}
+
 void* Window::GetActiveNativeContextState() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
     return s_hasForeground.load(std::memory_order_acquire) ? static_cast<void*>(s_defaultContextState) : nullptr;
@@ -303,10 +312,61 @@ void Window::AcquireForeground() noexcept {
     GX2Invalidate(GX2_INVALIDATE_MODE_CPU, s_mainColorBuffer.surface.image, s_mainColorBuffer.surface.imageSize);
     GX2InitColorBufferRegs(&s_mainColorBuffer);
 
+    // 4. DepthBuffer principal 1280x720 (32-bit float + HiZ en eDRAM/MEM1)
+    std::memset(&s_mainDepthBuffer, 0, sizeof(GX2DepthBuffer));
+    s_mainDepthBuffer.surface.dim = GX2_SURFACE_DIM_TEXTURE_2D;
+    s_mainDepthBuffer.surface.width = 1280u;
+    s_mainDepthBuffer.surface.height = 720u;
+    s_mainDepthBuffer.surface.depth = 1u;
+    s_mainDepthBuffer.surface.mipLevels = 1u;
+    s_mainDepthBuffer.surface.format = GX2_SURFACE_FORMAT_FLOAT_R32;
+    s_mainDepthBuffer.surface.aa = GX2_AA_MODE1X;
+    s_mainDepthBuffer.surface.use = GX2_SURFACE_USE_DEPTH_BUFFER;
+    s_mainDepthBuffer.surface.tileMode = GX2_TILE_MODE_DEFAULT;
+    s_mainDepthBuffer.viewMip = 0u;
+    s_mainDepthBuffer.viewFirstSlice = 0u;
+    s_mainDepthBuffer.viewNumSlices = 1u;
+    s_mainDepthBuffer.depthClear = 1.0f;
+    s_mainDepthBuffer.stencilClear = 0u;
+    GX2CalcSurfaceSizeAndAlignment(&s_mainDepthBuffer.surface);
+
+    const int dbAlign = (s_mainDepthBuffer.surface.alignment < 256u)
+                        ? 256 : static_cast<int>(s_mainDepthBuffer.surface.alignment);
+    s_mainDepthBuffer.surface.image = MEMAllocFromExpHeapEx(
+        s_mem1ExpHeap, s_mainDepthBuffer.surface.imageSize, dbAlign);
+    if (!s_mainDepthBuffer.surface.image) {
+        MEMFreeToExpHeap(s_mem1ExpHeap, s_mainColorBuffer.surface.image);
+        std::memset(&s_mainColorBuffer, 0, sizeof(GX2ColorBuffer));
+        std::memset(&s_mainDepthBuffer, 0, sizeof(GX2DepthBuffer));
+        if (s_drcScanBuffer && s_fgExpHeap) { MEMFreeToExpHeap(s_fgExpHeap, s_drcScanBuffer); s_drcScanBuffer = nullptr; }
+        if (s_tvScanBuffer && s_fgExpHeap)  { MEMFreeToExpHeap(s_fgExpHeap, s_tvScanBuffer);  s_tvScanBuffer = nullptr; }
+        DestroyForegroundHeaps();
+        return;
+    }
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU, s_mainDepthBuffer.surface.image, s_mainDepthBuffer.surface.imageSize);
+
+    uint32_t hiZSize = 0u;
+    uint32_t hiZAlign = 0u;
+    GX2CalcDepthBufferHiZInfo(&s_mainDepthBuffer, &hiZSize, &hiZAlign);
+    if (hiZSize > 0u) {
+        const int safeHiZAlign = (hiZAlign < 256u) ? 256 : static_cast<int>(hiZAlign);
+        s_mainDepthBuffer.hiZPtr = MEMAllocFromExpHeapEx(s_mem1ExpHeap, hiZSize, safeHiZAlign);
+        if (s_mainDepthBuffer.hiZPtr) {
+            s_mainDepthBuffer.hiZSize = hiZSize;
+            GX2Invalidate(GX2_INVALIDATE_MODE_CPU, s_mainDepthBuffer.hiZPtr, s_mainDepthBuffer.hiZSize);
+        } else {
+            s_mainDepthBuffer.hiZSize = 0u;
+        }
+    }
+    // En gx2.rpl, GX2InitDepthBufferRegs reconstruye db_depth_info; habilitar HiZ siempre DESPUES.
+    GX2InitDepthBufferRegs(&s_mainDepthBuffer);
+    GX2InitDepthBufferHiZEnable(&s_mainDepthBuffer, (s_mainDepthBuffer.hiZPtr != nullptr) ? TRUE : FALSE);
+
     if (s_defaultContextState) {
         GX2SetContextState(s_defaultContextState);
     }
     GX2SetColorBuffer(&s_mainColorBuffer, GX2_RENDER_TARGET_0);
+    GX2SetDepthBuffer(&s_mainDepthBuffer);
     GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
     GX2SetScissor(0, 0, 1280, 720);
     GX2SetTVScale(s_tvWidth, s_tvHeight);
@@ -328,6 +388,14 @@ void Window::ReleaseForeground() noexcept {
     if (s_gx2Initialized) {
         GX2DrawDone();
     }
+
+    if (s_mainDepthBuffer.hiZPtr && s_mem1ExpHeap) {
+        MEMFreeToExpHeap(s_mem1ExpHeap, s_mainDepthBuffer.hiZPtr);
+    }
+    if (s_mainDepthBuffer.surface.image && s_mem1ExpHeap) {
+        MEMFreeToExpHeap(s_mem1ExpHeap, s_mainDepthBuffer.surface.image);
+    }
+    std::memset(&s_mainDepthBuffer, 0, sizeof(GX2DepthBuffer));
 
     if (s_mainColorBuffer.surface.image && s_mem1ExpHeap) {
         MEMFreeToExpHeap(s_mem1ExpHeap, s_mainColorBuffer.surface.image);
@@ -474,9 +542,15 @@ void Window::Clear(const ColorRGBA& color) {
                   static_cast<float>(color.g) / 255.0f,
                   static_cast<float>(color.b) / 255.0f,
                   static_cast<float>(color.a) / 255.0f);
-    // GX2ClearColor modifica el contexto de hardware; re-enlazar estado base limpio
+    if (s_mainDepthBuffer.surface.image) {
+        GX2ClearDepthStencilEx(&s_mainDepthBuffer, 1.0f, 0u, GX2_CLEAR_FLAGS_DEPTH);
+    }
+    // GX2ClearColor/GX2ClearDepthStencilEx modifican el contexto de hardware; re-enlazar estado base limpio
     GX2SetContextState(s_defaultContextState);
     GX2SetColorBuffer(&s_mainColorBuffer, GX2_RENDER_TARGET_0);
+    if (s_mainDepthBuffer.surface.image) {
+        GX2SetDepthBuffer(&s_mainDepthBuffer);
+    }
     GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
     GX2SetScissor(0, 0, 1280, 720);
     GX2SetDepthOnlyControl(FALSE, FALSE, GX2_COMPARE_FUNC_ALWAYS);

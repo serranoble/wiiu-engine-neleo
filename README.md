@@ -6,7 +6,9 @@ Motor de videojuegos modular de alto rendimiento y suite de demos gráficas para
 
 > [!TIP]
 > **📘 MOTOR MODULAR OPEN SOURCE PARA NINTENDO WII U (C++20 / GX2):**
-> - **Umbrella Header Público:** [`include/WiiUEngine.hpp`](include/WiiUEngine.hpp) expone los 7 módulos estáticos desacoplados del motor (`engine_core`, `engine_physics`, `engine_audio`, `engine_input`, `engine_ai`, `engine_graphics`, `engine_framework`).
+> - **Sitio Web de Documentación (GitHub Pages):** [`docs/index.html`](docs/index.html) (activar en *Settings → Pages → Branch → `/docs`*).
+> - **Umbrella Header Público:** [`include/WiiUEngine.hpp`](include/WiiUEngine.hpp) expone los **8 módulos estáticos** desacoplados del motor (`engine_core`, `engine_physics`, `engine_audio`, `engine_input`, `engine_ai`, `engine_graphics`, `engine_framework`, `engine_net`).
+> - **Plan Maestro de Calidad Gráfica (CGP + RTR4):** **8/8 Suites (G1–G8)** validadas en Cemu 2.6 y **Nintendo Wii U real** + **43/43 pruebas** en `EngineSelfTestSuite` — ver [`docs/GRAPHICS_QUALITY_PLAN_AUDIT.md`](docs/GRAPHICS_QUALITY_PLAN_AUDIT.md).
 > - **Guía de Framework y Contribución:** Lee [`docs/FRAMEWORK_ENGINE_GUIDE.md`](docs/FRAMEWORK_ENGINE_GUIDE.md), [`CONTRIBUTING.md`](CONTRIBUTING.md) y la licencia [`LICENSE`](LICENSE) (Apache 2.0).
 > - **Auditoría Jason Gregory (*Game Engine Architecture*, 3ª Ed.):** **98.0% Core Engine / 93.0% Libro Completo** — ver [`docs/JASON_GREGORY_COMPLETION_AUDIT.md`](docs/JASON_GREGORY_COMPLETION_AUDIT.md).
 
@@ -29,17 +31,40 @@ Motor de videojuegos modular de alto rendimiento y suite de demos gráficas para
 
 ## 🏛️ Arquitectura Modular del Motor y Características
 
-El motor está desacoplado en **7 librerías estáticas CMake** independientes (ninguna depende de escenas demo ni menús; todo consumidor externo enlaza `engine_framework` e incluye [`include/WiiUEngine.hpp`](include/WiiUEngine.hpp)):
+El motor está desacoplado en **8 librerías estáticas CMake** independientes (DAG acíclico; ninguna depende de escenas demo ni menús; todo consumidor externo enlaza `engine_framework` e incluye [`include/WiiUEngine.hpp`](include/WiiUEngine.hpp)):
 
 | Librería CMake | Namespace / Subsistema | Responsabilidad Principal |
 | :--- | :--- | :--- |
-| **`engine_core`** | `WiiU` (`Core/`, `ECS/`, `Spatial/`, `AI` types, `Time/`, `Events/`, `Storage/`, `Config/`) | Loop base, `ECSWorld` DOD, `MemoryManager`/`ResourcePool`, `JobSystem` SMP, `SpatialBVH`, `GameClock`, `GameplayEventBus`, `StorageManager` SAL/VFS, `EngineConfig`. Cero cabeceras `<gx2/*.h>`. |
+| **`engine_core`** | `WiiU` (`Core/`, `ECS/`, `Spatial/`, `Time/`, `Events/`, `Storage/`, `Config/`) | Loop base, `ECSWorld` DOD, `MemoryManager`/`ResourcePool`, `JobSystem` SMP, `ViewFrustum`, `StacklessBVH`, `GameClock`, `GameplayEventBus`, `StorageManager` SAL/VFS + `SaveFileAsync()`, `EngineConfig::SaveToFileAsync()`. Cero cabeceras `<gx2/*.h>`. |
 | **`engine_physics`** | `WiiU` (`CollisionSystem`, `KinematicCharacterSystem`, `RigidBodyPhysicsSystem`) | Barrido cinemático KCC, detección continua, cuerpos rígidos SO(3), impulsos secuenciales + fricción de Coulomb y restricciones XPBD. |
-| **`engine_audio`** | `WiiU` (`AudioManager`, `AudioEngine3D`, `AudioSpatialSystem`) | Mixer 32 voces, paneo azimutal, LPF oclusión, efecto Doppler físico, *sidechain ducking* por buses y reverberación estéreo Schroeder. |
-| **`engine_input`** | `WiiU` (`InputManager`, `RumbleManager`) | HAL unificado VPAD/WPAD/Pro Controller, curvas de respuesta no lineales, contexto jerárquico de acciones y háptica ADSR. |
+| **`engine_audio`** | `WiiU` (`AudioManager`, `AudioEngine3D`, `AudioSpatialSystem`) | Mixer 32 voces (`sndcore2` AX), paneo azimutal, LPF oclusión, efecto Doppler físico, *sidechain ducking* por buses y reverberación estéreo Schroeder. |
+| **`engine_input`** | `WiiU` (`InputManager`, `RumbleManager`, `SoftwareKeyboard`) | HAL unificado VPAD/WPAD/Pro Controller, curvas de respuesta no lineales, contexto jerárquico de acciones, háptica ADSR y teclado nativo `nn::swkbd` con calibración táctil `VPADGetTPCalibratedPoint`. |
 | **`engine_ai`** | `WiiU::AI` (`NavGraph`, `AStarPathfinder`, `SteeringBehaviors`, `AISteeringSystem`) | Navegación A* en memoria de pila, comportamientos de Craig Reynolds y máquina de estados cognitiva FSM. |
-| **`engine_graphics`** | `WiiU` / `WiiU::Graphics` (`RHI/`, `ForwardRendererGX2`, `TextureLoaderGX2`, `ShadowSystem`, `StaticMesh`, `Render2DGX2`, `DebugDraw3D`, `UIToolkit`) | Renderizado hardware AMD Latte GX2, Cascaded Shadow Maps (CSM), cargas `.wmesh`/`.wtex`/`.wcube`, LBS *skinning* en GPU y primitivas 2D/UI. |
-| **`engine_framework`** | `WiiU` (`Engine`, `SceneManager`, `GameScene3D`, `HUDOverlay`, `ResourceMonitor`, `SceneLoading`, `SceneAssetError`) | Orquestación de arranque con escena inyectable `Engine::Init(std::unique_ptr<IScene>)`, navegación desacoplada por fábricas (`SetHomeMenuFactory` / `SetOptionsSceneFactory`) y clase base `GameScene3D`. |
+| **`engine_graphics`** | `WiiU` / `WiiU::Graphics` (`RHI/`, `ForwardRendererGX2`, `RenderTargetGX2`, `PostProcessHDRGX2`, `TextureLoaderGX2`, `ShadowSystem`, `MeshLODGroup`, `ParticleSystem3D`, `Render2DGX2`, `DebugDraw3D`, `UIToolkit`) | Renderizado hardware AMD Latte GX2, PBR Cook-Torrance, Shadow Maps 2-Pass PCF, Skybox Atlas 2D 3×2 + Agua Planar RTT, HDR `RGBA16F` + Bloom Kawase 5-Tap, Instancing Ring Buffer lock-free, Terreno Heightmap, Toon NPR y Ray Tracing BVH. |
+| **`engine_net`** | `WiiU::Net` (`NetSocket`, `NetBitStream`, `NetSession`, `NetReplication`) | Sockets no bloqueantes `nsysnet`/`Winsock2`, serialización endian-safe, framing TCP + datagramas UDP `WUN1`, replicación de snapshots 50B con LERP/SLERP y telemetría RTT/SRTT/Jitter. |
+| **`engine_framework`** | `WiiU` (`Engine`, `SceneManager`, `GameScene3D`, `HUDOverlay`, `ResourceMonitor`, `EngineSelfTestSuite`) | Orquestación de arranque con escena inyectable `Engine::Init(std::unique_ptr<IScene>)`, navegación desacoplada por fábricas, suite de **43/43 pruebas automatizadas** y sincronización de VSync/ProcUI. |
+
+### Suites de Validación Gráfica (G1–G8) — Benchmarks Reales en Wii U
+
+| Suite | Enfoque Técnico | FPS Cemu 2.6 | FPS Wii U Real (VSync OFF) |
+| :---: | :--- | :---: | :---: |
+| **G1** | Pipeline, Mipmaps (9 niveles), Z-Buffer 32F+HiZ | 60.1 FPS | **87 FPS** |
+| **G2** | PBR Cook-Torrance GGX + Normal Mapping TBN | 60.2 FPS | **32 FPS** *(fillrate PBR)* |
+| **G3** | Shadow Map 2-Pass (`1024×1024 D32F`) + PCF 3×3/5×5 | 60.0 FPS | **56 FPS** |
+| **G4** | Skybox Atlas 2D `3×2` + Agua Física + Reflexión Planar RTT (`640×360`) | 60.0 FPS | **62 FPS** |
+| **G5** | HDR `1280×720 RGBA16F` + Bloom Kawase 5-Tap (`320×192`) + Alpha Blend | 59.7 FPS | **50 FPS** *(40 cerca)* |
+| **G6** | Instancing HW (1,000 inst, Ring Buffer lock-free) + Frustum Culling + LOD | 60.0 FPS | **55 FPS** |
+| **G7** | Terreno Heightmap `48×48` + Ruido 3D + Partículas (128) + Toon NPR | 58.1–60 FPS | **50 FPS** |
+| **G8** | Ray Tracing GPU (BVH Stackless 12 esferas) + Render Scale `360p..720p` | 57.0–60 FPS | **25–50 FPS** *(30 FPS ≤540p VSync)* |
+
+> **Networking en Wii U real (Wi-Fi):** `engine_net` validado contra `tools/net_test_server.py` con **RTT 34.6 ms | SRTT 46 ms | Jitter 19 ms**.
+
+### Errores Conocidos y Limitaciones de Silicio
+
+- **`RenderSkinnedMeshInstanced` en Wii U real:** Pendiente de auditoría en silicio real (provocaba congelamiento en el primer frame en Suite G6; reemplazado temporalmente por bloques PBR en G6 mientras se aísla el microcódigo de skinning multi-instancia).
+- **Instrucción R600 `CUBE` (`samplerCube`) en CafeGLSL / Cemu 2.6:** Produce artefactos radiales en Vulkan y fallos en cubemaps lineales. **Solución canónica adoptada:** Atlas 2D `3×2` (`SampleCubeAtlas()`) en `pbr_mesh_gx2.frag` y reflexión hemisférica analítica en `instanced_mesh_gx2.frag`.
+- **Escalón VSync 60→30 Hz y GPRs en `pbr_mesh_gx2.frag`:** Con VSync ON, cualquier frame que supere `16.67 ms` cae a 30 FPS exactos; el uber-shader PBR (36 GPRs) limita G2 a ~32 FPS en fillrate puro en AMD Latte R700. Especializar variantes livianas del shader es una mejora planificada.
+- **Ray Tracing GPU (G8):** La GPU AMD Latte (~0.35 TFLOPS) carece de RT Cores; a 720p cae a ~20–25 FPS, mientras que con Render Scale `≤ 540p` sostiene 30 FPS.
 
 * **Renderizado Dual:**
   - **GX2 Nativo en Silicio:** Control directo del procesador de comandos de la GPU AMD Latte GX2, pases de render en eDRAM (MEM1 32 MB), z-buffer jerárquico HiZ y shaders CafeGLSL directos.

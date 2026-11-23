@@ -200,7 +200,7 @@ bool Engine::Init(std::unique_ptr<IScene> initialScene) {
 
     // [Hito 124 - Jason Gregory Cap. 5.3] Suscripción pasiva de subsistemas a EngineConfig (DIP desacoplado)
     if (s_engineConfigObserverId == 0) {
-        s_engineConfigObserverId = EngineConfig::Instance().RegisterChangeCallback([](const EngineConfig& cfg, void*) {
+        s_engineConfigObserverId = EngineConfig::Instance().RegisterChangeCallback([](const EngineConfig& cfg, void* userData) {
             // 1. Sincronizar Audio (Maestro, BGM y SFX)
             auto& audioMgr = AudioManager::Instance();
             audioMgr.SetMasterVolume(cfg.audio.masterVolume);
@@ -209,16 +209,21 @@ bool Engine::Init(std::unique_ptr<IScene> initialScene) {
             audioMgr.SetSFXEnabled(cfg.audio.sfxEnabled);
             audioMgr.SetSFXVolume(cfg.audio.sfxVolume);
 
-            // 2. Sincronizar SceneManager (VSync / Límite FPS)
+            // 2. Sincronizar SceneManager y Window (VSync / Límite FPS)
             auto& sceneMgr = SceneManager::Instance();
             sceneMgr.SetFPSLimitEnabled(cfg.graphics.vsyncEnabled);
+            if (auto* engine = static_cast<Engine*>(userData)) {
+                const int targetSwap = cfg.graphics.vsyncEnabled ? 1 : 0;
+                engine->m_lastSwapInterval = targetSwap;
+                engine->m_window.SetSwapInterval(targetSwap);
+            }
 
             // 3. Sincronizar OSD Telemetría
             ResourceMonitor::Instance().SetVisible(cfg.graphics.showOSDTelemetry);
 
             // 4. Sincronizar Filtrado de Texturas en Silicio GX2
             ForwardRendererGX2::Instance().SetTextureFilterMode(cfg.graphics.textureFilter);
-        }, nullptr);
+        }, this);
     }
 
     // Carga y aplicación de configuración global del motor

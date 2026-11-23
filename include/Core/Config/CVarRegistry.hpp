@@ -8,6 +8,10 @@
 
 namespace WiiU {
 
+namespace Diagnostics {
+class CoreSelfTest;
+}
+
 enum class CVarType : uint8_t {
     Bool = 0,
     Int,
@@ -128,6 +132,8 @@ public:
     }
 
 private:
+    friend class Diagnostics::CoreSelfTest;
+
     CVarRegistry() noexcept = default;
     ~CVarRegistry() noexcept = default;
 

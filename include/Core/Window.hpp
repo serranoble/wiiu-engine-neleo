@@ -33,6 +33,7 @@ public:
 
     // Accesores multiplataforma opacos (0 fugas <gx2/*.h> o <SDL2/SDL.h> en include/Core/)
     [[nodiscard]] static void* GetActiveNativeColorBuffer() noexcept;
+    [[nodiscard]] static void* GetActiveNativeDepthBuffer() noexcept;
     [[nodiscard]] static void* GetActiveNativeContextState() noexcept;
     [[nodiscard]] static void* GetActiveRendererHandle() noexcept;
     [[nodiscard]] static bool HasForeground() noexcept;

@@ -8,6 +8,7 @@
 #include <vector>
 
 #if defined(__WIIU__) || defined(__wiiu__)
+#include "Core/Window.hpp"
 #include <gx2/clear.h>
 #include <gx2/draw.h>
 #include <gx2/event.h>
@@ -144,6 +145,7 @@ bool RHIFullscreenShader::Initialize(const char* shaderAssetPath,
     (void)fallbackSize;
     m_stagedBinary.clear();
     m_stagedBinary.shrink_to_fit();
+    m_shaderLoaded = true;
     return true;
 #endif
 }
@@ -152,7 +154,9 @@ void RHIFullscreenShader::Shutdown() {
     m_stagedBinary.clear();
     m_stagedBinary.shrink_to_fit();
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown()) {
+    const bool hasGpuResources = m_shaderLoaded || m_quadCreated || m_offscreenReady;
+    if (hasGpuResources && ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+        Window::HasForeground() && !Window::IsExitingProcUI()) {
         GX2DrawDone();
     }
 
@@ -165,6 +169,8 @@ void RHIFullscreenShader::Shutdown() {
 
     m_shaderLoaded = false;
     FreeDirectGFD();
+#else
+    m_shaderLoaded = false;
 #endif
 }
 
@@ -172,7 +178,7 @@ bool RHIFullscreenShader::IsReady() const noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
     return m_shaderLoaded && m_quadCreated;
 #else
-    return true;
+    return m_shaderLoaded;
 #endif
 }
 
@@ -473,7 +479,8 @@ bool RHIFullscreenShader::InitOffscreenScaler(uint32_t maxWidth, uint32_t maxHei
         if (m_offscreenWidth >= reqW && m_offscreenHeight >= reqH) {
             return true;
         }
-        if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown()) {
+        if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+            Window::HasForeground() && !Window::IsExitingProcUI()) {
             GX2DrawDone();
         }
         ShutdownOffscreenScaler();

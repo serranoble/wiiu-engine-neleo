@@ -54,3 +54,11 @@ Este documento establece las reglas obligatorias e inviolables de desarrollo, co
   - Cero asignaciones dinámicas en el bucle caliente (60 FPS).
   - Manejo de memoria consciente de MEM1 (16 MB rápidos) y MEM2 (2 GB principales).
   - Limpieza y sincronización de contextos gráficos al alternar entre SDL2 y GX2.
+
+---
+
+## 6. Cobertura Obligatoria de Pruebas y Validaciones del Motor
+- **Todo lo desarrollado debe contar con una prueba automatizada y verificable:**
+  - Cada nuevo subsistema, funcionalidad gráfica o corrección de bug crítico debe incorporar su validación correspondiente en el orquestador unificado `EngineSelfTestSuite` (Zero-Alloc en consulta, reporte estructurado por subsistema).
+  - Si la funcionalidad o corrección protege un invariante de silicio, memoria o arquitectura (p. ej. `GX2DepthBuffer`, orden de registros HiZ, guardas ProcUI, DAG), debe añadirse además un chequeo estático en `scripts/agent_harness.py check`.
+  - El avance y las brechas pendientes por cada una de las 8 librerías del motor se rastrean en [`docs/ENGINE_VALIDATION_PLAN.md`](docs/ENGINE_VALIDATION_PLAN.md).

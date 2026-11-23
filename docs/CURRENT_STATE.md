@@ -1,16 +1,17 @@
 # Estado Vivo del Proyecto — Wii U 3D Engine C++20
 
-**Última actualización:** 21 de Noviembre de 2026 (Hito 145: Subsistema de Redes `engine_net` + Servidor Dual TCP/UDP `OPT-443`)
+**Última actualización:** 23 de Noviembre de 2026 (Hito 146: Plan Maestro de Calidad Gráfica 8/8 Suites G1–G8 validadas en Wii U real + 43/43 pruebas)
 **Rama activa:** `refactor/engine-stability-and-scene-archive`
 **Plataforma base:** Nintendo Wii U (Espresso PPC 750CL Tri-Core @ 1.24 GHz, AMD Latte GX2 @ 550 MHz, Cafe OS) — diseño multi-consola (Wii U / Switch / PC).
 
 ---
 
-## Arquitectura Vigente (Hito 145 — 8 Librerías Estáticas + Redes)
+## Arquitectura Vigente (Hito 146 — 8 Librerías Estáticas + Plan Gráfico 8/8 Completo)
 
 - **8 librerías estáticas (DAG acíclico en `CMakeLists.txt`):**
-  1. `engine_core`, 2. `engine_physics`, 3. `engine_audio`, 4. `engine_input`, 5. `engine_graphics`, 6. `engine_ai`, 7. `engine_framework`, 8. `engine_net` (`NetSocket` HAL no bloqueante `nsysnet`/`Winsock2`, `NetBitStream` endian-safe, `NetSession` UDP `WUN1` + TCP framing, `NetReplication` snapshots 50B + LERP/SLERP).
-- **Herramienta de Diagnóstico:** `tools/net_test_server.py` (servidor local dual TCP 7777 + UDP 7778 con simulación de latencia/pérdida).
+  1. `engine_core` (+ `ViewFrustum`, `StacklessBVH`, `EngineConfig::SaveToFileAsync()` sobre `StorageManager::SaveFileAsync`), 2. `engine_physics`, 3. `engine_audio`, 4. `engine_input` (+ `SoftwareKeyboard` táctil calibrado `VPADGetTPCalibratedPoint`), 5. `engine_graphics` (+ `RenderTargetGX2`, `PostProcessHDRGX2` Kawase 5-Tap, `MeshLODGroup`, `ParticleSystem3D`, Instancing Ring Buffer lock-free), 6. `engine_ai`, 7. `engine_framework`, 8. `engine_net` (validado sobre Wi-Fi Wii U real: RTT 34.6 ms / SRTT 46 ms / Jitter 19 ms).
+- **Cobertura de Calidad Gráfica:** **8/8 Suites QA (G1–G8)** cerradas y validadas en **Cemu 2.6** y **Wii U real** (G1: 87 FPS, G2: 32 FPS, G3: 56 FPS, G4: 62 FPS, G5: 50 FPS, G6: 55 FPS, G7: 50 FPS, G8: 25–50 FPS con VSync OFF) + **43/43 pruebas** en `EngineSelfTestSuite`.
+- **Herramienta de Diagnóstico:** `tools/net_test_server.py` (servidor local dual TCP 7777 + UDP 7778).
 - **Umbrella header público:** `include/WiiUEngine.hpp`.
 
 ---

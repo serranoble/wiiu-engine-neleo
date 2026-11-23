@@ -156,9 +156,41 @@ def report_binaries() -> None:
             print(f"BINARY {rel}: MISSING")
 
 
+def check_gx2_invariants() -> list[str]:
+    issues: list[str] = []
+    win_cpp = ROOT / "src" / "Core" / "Window.cpp"
+    if win_cpp.exists():
+        text = win_cpp.read_text(encoding="utf-8", errors="replace")
+        for sym in ("GX2SetColorBuffer", "GX2SetDepthBuffer", "GX2ClearDepthStencilEx", "GX2InitDepthBufferRegs"):
+            if sym not in text:
+                issues.append(f"src/Core/Window.cpp: missing required GX2 invariant '{sym}'")
+        idx_regs = text.find("GX2InitDepthBufferRegs")
+        idx_hiz = text.find("GX2InitDepthBufferHiZEnable")
+        if idx_regs != -1 and idx_hiz != -1 and idx_hiz < idx_regs:
+            issues.append("src/Core/Window.cpp: GX2InitDepthBufferHiZEnable must appear AFTER GX2InitDepthBufferRegs")
+
+    shadow_cpp = ROOT / "src" / "Graphics" / "ShadowMapRendererGX2.cpp"
+    if shadow_cpp.exists():
+        stext = shadow_cpp.read_text(encoding="utf-8", errors="replace")
+        if "GX2SetPixelShader(nullptr)" in stext:
+            issues.append("src/Graphics/ShadowMapRendererGX2.cpp: GX2SetPixelShader(nullptr) crashes Cemu 2.6 HLE (0xc0000005)")
+
+    for scan_dir in (ROOT / "src" / "Scene", ROOT / "src" / "Graphics"):
+        if scan_dir.exists():
+            for p in scan_dir.rglob("*.cpp"):
+                text = p.read_text(encoding="utf-8", errors="replace")
+                if ("GX2DrawDone()" in text and
+                    "HasForeground" not in text and
+                    "ProcUIInForeground" not in text and
+                    "WaitForGpuIdleSafe" not in text):
+                    issues.append(f"{p.relative_to(ROOT)}: unguarded GX2DrawDone() without foreground check")
+    return issues
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     crlf = check_crlf(fix=args.fix_lf)
     leaks = check_core_leaks()
+    gx2_issues = check_gx2_invariants()
     sdl_status, sdl_count = check_sdl_symbols()
 
     print(f"CRLF_CHECK: {'PASS (0)' if not crlf else f'FAIL ({len(crlf)})'}")
@@ -169,10 +201,14 @@ def cmd_check(args: argparse.Namespace) -> int:
     for l in leaks[:15]:
         print(f"  LEAK: {l}")
 
+    print(f"GX2_INVARIANTS: {'PASS (0)' if not gx2_issues else f'FAIL ({len(gx2_issues)})'}")
+    for gi in gx2_issues[:15]:
+        print(f"  GX2: {gi}")
+
     print(f"ELF_SDL_SYMBOLS: {sdl_status} ({sdl_count})")
     report_binaries()
 
-    failed = bool(crlf) or bool(leaks) or (sdl_count > 0)
+    failed = bool(crlf) or bool(leaks) or bool(gx2_issues) or (sdl_count > 0)
     return 1 if failed else 0
 
 

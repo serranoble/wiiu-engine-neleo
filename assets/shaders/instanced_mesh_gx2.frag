@@ -6,7 +6,6 @@ in vec2 vTexCoord;
 in vec4 vColor;
 
 uniform sampler2D uTexture;
-uniform samplerCube uSkybox;
 
 uniform vec4 uCamPosTime;      // xyz = camPos, w = time
 uniform vec4 uLightDir;        // xyz = lightDir, w = unused
@@ -43,9 +42,9 @@ void main() {
 
     vec3 litColor = albedo * (ambient + keyDiffuse + fillDiffuse) + uLightColor.rgb * spec;
 
-    // 100% branchless Fresnel + CubeMap reflection (stack_size = 0 en AMD Latte VLIW5)
+    // Reflexión hemisférica analítica 100% branchless (0 samplerCube / 0 instrucción CUBE en AMD Latte R700)
     vec3 R = reflect(-viewDir, N);
-    vec3 envColor = texture(uSkybox, R).rgb;
+    vec3 envColor = mix(vec3(0.18, 0.22, 0.28), vec3(0.55, 0.72, 0.92), clamp(R.y * 0.5 + 0.5, 0.0, 1.0));
     float oneMinusNdotV = 1.0 - clamp(dot(N, viewDir), 0.0, 1.0);
     float f2 = oneMinusNdotV * oneMinusNdotV;
     float f5 = f2 * f2 * oneMinusNdotV;
