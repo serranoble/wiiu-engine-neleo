@@ -81,12 +81,9 @@ void ResourceMonitor::Update(float dt) {
     }
     m_pulseAnim += dt * 4.0f;
 
-    if (!m_visible) {
-        return;
-    }
-
     m_sampleTimer += dt;
-    if (m_sampleTimer >= 0.05f) { // Muestrear cada 50 ms solo cuando el OSD es visible
+    const float sampleInterval = m_visible ? 0.05f : 0.50f;
+    if (m_sampleTimer >= sampleInterval) {
         m_sampleTimer = 0.0f;
         SampleMetrics();
     }

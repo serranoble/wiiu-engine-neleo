@@ -8,6 +8,7 @@
 #include <vector>
 
 #if defined(__WIIU__) || defined(__wiiu__)
+#include "Core/Window.hpp"
 #include <gx2/clear.h>
 #include <gx2/draw.h>
 #include <gx2/event.h>
@@ -83,6 +84,22 @@ bool ShadowMapRendererGX2::Initialize(uint32_t resolution) {
     GX2InitSamplerBorderType(&m_shadowSampler, GX2_TEX_BORDER_TYPE_WHITE);
     GX2InitSamplerDepthCompare(&m_shadowSampler, GX2_COMPARE_FUNC_LEQUAL);
     GX2InitSamplerZMFilter(&m_shadowSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_POINT);
+
+    // Sampler de lectura directa de profundidad (sin DepthCompare) para Hard/PCF3x3/PCF5x5/Debug
+    GX2InitSampler(&m_rawDepthSampler, GX2_TEX_CLAMP_MODE_CLAMP_BORDER, GX2_TEX_XY_FILTER_MODE_POINT);
+    GX2InitSamplerBorderType(&m_rawDepthSampler, GX2_TEX_BORDER_TYPE_WHITE);
+    GX2InitSamplerZMFilter(&m_rawDepthSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_POINT);
+
+    // ContextState dedicado Depth-Only (sin ColorBuffer RT0 enlazado, evitando conflicto 1280x720 vs 1024x1024 en Cemu/Latte)
+    m_shadowContextState = static_cast<GX2ContextState*>(MemoryManager::Instance().AllocAligned(
+        GX2_CONTEXT_STATE_ALIGNMENT, sizeof(GX2ContextState), MemoryTag::ContextState, "Shadow_CtxState"));
+    if (!m_shadowContextState) {
+        Shutdown();
+        return false;
+    }
+    std::memset(m_shadowContextState, 0, sizeof(GX2ContextState));
+    GX2SetupContextStateEx(m_shadowContextState, TRUE);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU, m_shadowContextState, sizeof(GX2ContextState));
 #endif
 
     m_initialized = true;
@@ -101,19 +118,25 @@ bool ShadowMapRendererGX2::InitDepthShader() {
 
     const uint32_t vsHdrSize  = GFDGetVertexShaderHeaderSize(0, shaderData.data());
     const uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
-    if (vsHdrSize == 0 || vsProgSize == 0) {
+    const uint32_t psHdrSize  = GFDGetPixelShaderHeaderSize(0, shaderData.data());
+    const uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+    if (vsHdrSize == 0 || vsProgSize == 0 || psHdrSize == 0 || psProgSize == 0) {
         return false;
     }
 
     m_depthVs        = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "ShadowDepth_VS_Hdr"));
     m_depthVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "ShadowDepth_VS_Prog");
+    m_depthPs        = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "ShadowDepth_PS_Hdr"));
+    m_depthPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "ShadowDepth_PS_Prog");
 
-    if (!m_depthVs || !m_depthVsProgram ||
-        !GFDGetVertexShader(m_depthVs, m_depthVsProgram, 0, shaderData.data())) {
+    if (!m_depthVs || !m_depthVsProgram || !m_depthPs || !m_depthPsProgram ||
+        !GFDGetVertexShader(m_depthVs, m_depthVsProgram, 0, shaderData.data()) ||
+        !GFDGetPixelShader(m_depthPs, m_depthPsProgram, 0, shaderData.data())) {
         return false;
     }
 
     GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_depthVsProgram, vsProgSize);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_depthPsProgram, psProgSize);
 
     GX2AttribStream attr{};
     attr.location   = 0;
@@ -142,9 +165,15 @@ bool ShadowMapRendererGX2::InitDepthShader() {
 void ShadowMapRendererGX2::Shutdown() {
 #if defined(__WIIU__) || defined(__wiiu__)
     if (m_surfaceCreated || m_shaderLoaded) {
-        if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown()) {
+        if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+            Window::HasForeground() && !Window::IsExitingProcUI()) {
             GX2DrawDone();
         }
+    }
+    if (m_shadowContextState) {
+        void* rawCtx = static_cast<void*>(m_shadowContextState);
+        MemoryManager::Instance().FreeAligned(rawCtx);
+        m_shadowContextState = nullptr;
     }
     if (m_surfaceCreated) {
         GX2RDestroySurfaceEx(&m_shadowDepthBuffer.surface, GX2R_RESOURCE_BIND_NONE);
@@ -153,6 +182,8 @@ void ShadowMapRendererGX2::Shutdown() {
     // Liberacion incondicional de cualquier puntero no nulo (0 leaks ante fallos parciales de Init)
     if (m_depthVs)        { void* p = m_depthVs; MemoryManager::Instance().Free(p); m_depthVs = nullptr; }
     if (m_depthVsProgram) { MemoryManager::Instance().FreeAligned(m_depthVsProgram); m_depthVsProgram = nullptr; }
+    if (m_depthPs)        { void* p = m_depthPs; MemoryManager::Instance().Free(p); m_depthPs = nullptr; }
+    if (m_depthPsProgram) { MemoryManager::Instance().FreeAligned(m_depthPsProgram); m_depthPsProgram = nullptr; }
     if (m_depthFsProgram) { MemoryManager::Instance().FreeAligned(m_depthFsProgram); m_depthFsProgram = nullptr; }
     m_shaderLoaded = false;
 #endif
@@ -164,14 +195,15 @@ bool ShadowMapRendererGX2::BeginShadowPass(const Matrix4x4& lightViewProj, GX2Co
                                            bool cullFrontFaces,
                                            float depthBiasUnits,
                                            float depthBiasSlope) {
-    if (!m_initialized || !m_surfaceCreated || !m_shaderLoaded || contextState == nullptr) {
+    if (!m_initialized || !m_surfaceCreated || !m_shaderLoaded || !m_shadowContextState || contextState == nullptr) {
         return false;
     }
 
     m_lightViewProj = lightViewProj;
+    GX2SetContextState(m_shadowContextState);
     GX2ClearDepthStencilEx(&m_shadowDepthBuffer, 1.0f, 0, GX2_CLEAR_FLAGS_DEPTH);
 
-    GX2SetContextState(contextState);
+    GX2SetContextState(m_shadowContextState);
     GX2SetDepthBuffer(&m_shadowDepthBuffer);
     GX2SetViewport(0.0f, 0.0f, static_cast<float>(m_resolution), static_cast<float>(m_resolution), 0.0f, 1.0f);
     GX2SetScissor(0, 0, m_resolution, m_resolution);
@@ -195,7 +227,8 @@ bool ShadowMapRendererGX2::BeginShadowPass(const Matrix4x4& lightViewProj, GX2Co
     GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
     GX2SetFetchShader(&m_depthFs);
     GX2SetVertexShader(m_depthVs);
-    GX2SetPixelShader(nullptr);
+    // En Cemu 2.6 HLE, pasar nullptr a GX2SetPixelShader provoca 0xc0000005; enlazar PS ligero con Color Writes OFF.
+    GX2SetPixelShader(m_depthPs);
     return true;
 }
 
@@ -269,6 +302,12 @@ void ShadowMapRendererGX2::BindShadowMap(uint32_t texSlot, uint32_t samplerSlot)
     if (!m_initialized || !m_surfaceCreated) return;
     GX2SetPixelTexture(const_cast<GX2Texture*>(&m_shadowTexture), texSlot);
     GX2SetPixelSampler(const_cast<GX2Sampler*>(&m_shadowSampler), samplerSlot);
+}
+
+void ShadowMapRendererGX2::BindShadowMapRaw(uint32_t texSlot, uint32_t samplerSlot) const {
+    if (!m_initialized || !m_surfaceCreated) return;
+    GX2SetPixelTexture(const_cast<GX2Texture*>(&m_shadowTexture), texSlot);
+    GX2SetPixelSampler(const_cast<GX2Sampler*>(&m_rawDepthSampler), samplerSlot);
 }
 #endif
 

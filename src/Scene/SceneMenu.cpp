@@ -1,6 +1,7 @@
 #include "Scene/SceneMenu.hpp"
 #include "Scene/SceneOptions.hpp"
 #include "Scene/NetTestModal.hpp"
+#include "Scene/GraphicsQAModal.hpp"
 #include "Scene/SceneManager.hpp"
 #include "Input/InputManager.hpp"
 #include "Audio/AudioManager.hpp"
@@ -16,25 +17,32 @@ SceneMenu::SceneMenu()
 
 void SceneMenu::InitMenuItems() {
     m_menuItems.clear();
-    m_menuItems.reserve(2);
+    m_menuItems.reserve(3);
 
     auto addMenuItem = [this](int y, std::string label, std::string subtitle, const char* action, std::function<void()> onSelect,
                               ColorRGBA normalFill, ColorRGBA hoverFill,
                               ColorRGBA normalBorder, ColorRGBA hoverBorder, ColorRGBA textColor) {
-        UIButton btn(300, y, 680, 58, std::move(label), 3);
+        UIButton btn(300, y, 680, 52, std::move(label), 3);
         btn.SetColors(normalFill, hoverFill, normalBorder, hoverBorder, textColor);
         m_menuItems.push_back(MainMenuItem{ std::move(btn), std::move(subtitle), action, std::move(onSelect) });
     };
 
-    // Botón 1: Opciones y Configuración Global del Motor
-    addMenuItem(248, "OPCIONES DEL MOTOR",
+    // Botón 1: Laboratorio de Calidad Gráfica (Suites G1 a G8 — CGP + RTR4)
+    addMenuItem(218, "LABORATORIO GRAFICO (QA)",
+                "SUITES G1-G8: PIPELINE, MIPMAPS, PBR, SOMBRAS, HDR Y RAY TRACING",
+                "ABRIR MODAL LABORATORIO GRAFICO", []() {
+        SceneManager::Instance().GetModalStack().Push(std::make_unique<GraphicsQAModal>());
+    }, ColorRGBA{38, 22, 62, 230}, ColorRGBA{155, 70, 230, 240}, ColorRGBA{195, 120, 255, 255}, ColorRGBA::Yellow(), ColorRGBA::White());
+
+    // Botón 2: Opciones y Configuración Global del Motor
+    addMenuItem(314, "OPCIONES DEL MOTOR",
                 "FILTRADO GX2, VSYNC, AUDIO, HAPTICOS Y CONFIGURACION GLOBAL",
                 "SELECCION CATEGORIA OPCIONES", []() {
         SceneManager::Instance().ChangeScene(std::make_unique<SceneOptions>());
     }, ColorRGBA{15, 45, 30, 230}, ColorRGBA{0, 210, 130, 240}, ColorRGBA::Green(), ColorRGBA::Yellow(), ColorRGBA::White());
 
-    // Botón 2: Modal de Prueba de Red (UDP + TCP) y Teclado Nativo Wii U
-    addMenuItem(356, "PRUEBA DE RED (UDP / TCP)",
+    // Botón 3: Modal de Prueba de Red (UDP + TCP) y Teclado Nativo Wii U
+    addMenuItem(410, "PRUEBA DE RED (UDP / TCP)",
                 "MODAL CON TECLADO WII U (NN::SWKBD), PING TCP, UDP Y RADAR",
                 "ABRIR MODAL PRUEBA RED", []() {
         SceneManager::Instance().GetModalStack().Push(std::make_unique<NetTestModal>());
@@ -108,10 +116,10 @@ void SceneMenu::Render() {
     }
 
     // 4. Panel de Estado Informativo en la parte inferior
-    Render2D::DrawBox(240, 495, 800, 120, ColorRGBA{10, 20, 35, 200}, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("ESTADO: 8 LIBRERIAS ESTATICAS (0 SDL2 EN WII U)", 275, 518, 2, ColorRGBA{120, 255, 160, 255});
-    Render2D::DrawPixelString("D-PAD ARRIBA/ABAJO + (A) O TACTIL PARA SELECCIONAR", 275, 550, 2, ColorRGBA::Yellow());
-    Render2D::DrawPixelString("PRUEBA DE RED: EJECUTA python tools/net_test_server.py", 275, 580, 2, ColorRGBA{200, 225, 255, 255});
+    Render2D::DrawBox(240, 508, 800, 114, ColorRGBA{10, 20, 35, 200}, ColorRGBA::Cyan());
+    Render2D::DrawPixelString("ESTADO: 8 LIBRERIAS ESTATICAS (0 SDL2 EN WII U)", 275, 528, 2, ColorRGBA{120, 255, 160, 255});
+    Render2D::DrawPixelString("D-PAD ARRIBA/ABAJO + (A) O TACTIL PARA SELECCIONAR", 275, 558, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString("LAB QA: SUITES G1-G8 (CGP+RTR4) | RED: net_test_server.py", 275, 588, 2, ColorRGBA{200, 225, 255, 255});
 
     Render2D::End();
 }

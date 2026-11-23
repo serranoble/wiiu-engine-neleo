@@ -5,6 +5,7 @@
 #include "Input/RumbleManager.hpp"
 #include "Audio/AudioManager.hpp"
 #include "Core/ResourceMonitor.hpp"
+#include "Core/Storage/StorageManager.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
 #include <cstdio>
@@ -279,14 +280,20 @@ void SceneOptions::TriggerActionForRow(int i) {
 
 void SceneOptions::SaveConfig() {
     AudioManager::Instance().PlayClick();
-    if (EngineConfig::Instance().SaveToFile()) {
-        m_statusMessage = "AJUSTES GUARDADOS CORRECTAMENTE EN DISCO";
-        m_statusColor = ColorRGBA::Green();
-    } else {
-        m_statusMessage = "ERROR AL GUARDAR CONFIGURACION EN DISCO";
-        m_statusColor = ColorRGBA::Red();
+    if (m_saveInFlight) {
+        return;
     }
-    m_statusTimer = 2.5f;
+
+    if (EngineConfig::Instance().SaveToFileAsync()) {
+        m_saveInFlight = true;
+        m_statusMessage = "GUARDANDO AJUSTES EN DISCO...";
+        m_statusColor = ColorRGBA::Cyan();
+        m_statusTimer = 10.0f;
+    } else {
+        m_statusMessage = "COLA DE GUARDADO OCUPADA, REINTENTA";
+        m_statusColor = ColorRGBA::Yellow();
+        m_statusTimer = 2.0f;
+    }
 }
 
 void SceneOptions::RestoreDefaults() {
@@ -303,7 +310,19 @@ void SceneOptions::RestoreDefaults() {
 void SceneOptions::Update(float dt) {
     m_starfield.Update(dt);
 
-    if (m_statusTimer > 0.0f) {
+    if (m_saveInFlight && !StorageManager::IsAsyncSavePending()) {
+        m_saveInFlight = false;
+        if (StorageManager::GetLastAsyncSaveSuccess()) {
+            m_statusMessage = "AJUSTES GUARDADOS CORRECTAMENTE EN DISCO";
+            m_statusColor = ColorRGBA::Green();
+        } else {
+            m_statusMessage = "ERROR AL GUARDAR CONFIGURACION EN DISCO";
+            m_statusColor = ColorRGBA::Red();
+        }
+        m_statusTimer = 2.5f;
+    }
+
+    if (m_statusTimer > 0.0f && !m_saveInFlight) {
         m_statusTimer -= dt;
     }
 

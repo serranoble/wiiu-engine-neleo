@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wii U 3D Engine (C++20 / GX2) — Documentación</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-badge">C++20</span>
+      <h1>Wii U 3D Engine</h1>
+    </div>
+    <p class="brand-sub">Motor nativo GX2 · Hito 146 · 8 Librerías</p>
+
+    <div class="nav-group">
+      <div class="nav-title">Documentación</div>
+      <ul class="nav-links">
+        <li><a href="#basico">1. Lo Básico y Compilación</a></li>
+        <li><a href="#arquitectura">2. Arquitectura (8 Librerías)</a></li>
+        <li><a href="#suites">3. Suites Gráficas (G1–G8)</a></li>
+        <li><a href="#ejemplos">4. Ejemplos de Uso (C++20)</a></li>
+        <li><a href="#errores">5. Errores Conocidos y Silicio</a></li>
+        <li><a href="#enlaces">6. Documentos del Repositorio</a></li>
+      </ul>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <h2>Wii U 3D Graphics &amp; Game Engine (C++20)</h2>
+      <p>
+        Framework modular de videojuegos 3D en <strong>C++20</strong> diseñado para
+        <strong>Nintendo Wii U (Aroma)</strong> sin SDL2 en consola, aprovechando la CPU tri-núcleo
+        <strong>IBM Espresso (1.24 GHz)</strong>, la GPU <strong>AMD Latte R700 / GX2 (550 MHz)</strong>
+        y audio nativo <strong>sndcore2 / AX</strong>, con arquitectura multi-consola (Wii U / Switch / PC).
+      </p>
+      <div class="pills">
+        <span class="pill ok">8/8 Suites Gráficas Validadas en Wii U Real</span>
+        <span class="pill ok">43/43 Pruebas Automáticas</span>
+        <span class="pill">8 Librerías Estáticas (DAG)</span>
+        <span class="pill">Zero-Alloc 60 FPS</span>
+        <span class="pill">Licencia Apache 2.0</span>
+      </div>
+    </header>
+
+    <section id="basico">
+      <h2>1. Lo Básico y Compilación Rápida</h2>
+      <p>
+        El motor utiliza <strong>devkitPro / WUT</strong> y <strong>CMake</strong> para compilar de forma
+        desacoplada tanto la librería del framework (<code>build_lib/</code>) como el paquete ejecutable
+        <code>build/wiiu_demos.wuhb</code> listo para Cemu o consola física Wii U.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <strong>Hardware Objetivo</strong>
+          <p>IBM Espresso PPC 750CL Tri-Core @ 1.24 GHz, AMD Latte R700 @ 550 MHz, 32 MB eDRAM (MEM1) y 2 GB DDR3 (MEM2).</p>
+        </div>
+        <div class="card">
+          <strong>Umbrella Header</strong>
+          <p>Incluye <code>#include &lt;WiiUEngine.hpp&gt;</code> y enlaza <code>engine_framework</code> para usar el motor en cualquier juego.</p>
+        </div>
+        <div class="card">
+          <strong>Invariantes Críticos</strong>
+          <p>0 símbolos <code>SDL_</code> en Wii U, 0 CRLF, Zero-Alloc en bucles a 60 FPS y guardas ProcUI en todo <code>GX2DrawDone()</code>.</p>
+        </div>
+      </div>
+
+      <h3>Comandos de verificación y compilación</h3>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre><code># 1. Validar terminaciones LF, higiene de cabeceras e invariantes GX2
+python scripts/agent_harness.py check
+
+# 2. Compilar demo (.wuhb / .rpx) y librería estática (engine_framework)
+python scripts/agent_harness.py build --lib
+
+# 3. Transferir por FTP a Wii U real (reemplaza la IP por la de tu consola)
+curl.exe -T build/wiiu_demos.wuhb ftp://192.168.0.140:21/fs/vol/external01/wiiu/apps/wiiu_demos.wuhb</code></pre>
+      </div>
+    </section>
+
+    <section id="arquitectura">
+      <h2>2. Lo Implementado — 8 Librerías Estáticas (DAG)</h2>
+      <p>
+        El repositorio está organizado en 8 librerías estáticas CMake con grafo de dependencias acíclico:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Librería</th>
+              <th>Módulos Clave</th>
+              <th>Capacidades Principales</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>engine_core</code></td>
+              <td><code>ECSWorld</code>, <code>MemoryManager</code>, <code>JobSystem</code>, <code>ViewFrustum</code>, <code>StacklessBVH</code>, <code>StorageManager</code>, <code>EngineConfig</code></td>
+              <td>ECS orientado a datos (DOD), hilos SMP en Core 0/1/2, guardado asíncrono ping-pong (<code>SaveToFileAsync()</code>), VFS y cero cabeceras <code>&lt;gx2/*.h&gt;</code>.</td>
+            </tr>
+            <tr>
+              <td><code>engine_physics</code></td>
+              <td><code>CollisionSystem</code>, <code>KinematicCharacterSystem</code>, <code>RigidBodyPhysicsSystem</code></td>
+              <td>Barrido cinemático KCC, cuerpos rígidos SO(3), fricción de Coulomb y restricciones XPBD.</td>
+            </tr>
+            <tr>
+              <td><code>engine_audio</code></td>
+              <td><code>AudioManager</code>, <code>AudioEngine3D</code>, <code>AudioSpatialSystem</code></td>
+              <td>Mezclador 32 voces <code>sndcore2</code> AX, paneo 3D, oclusión LPF, Doppler, ducking y reverb Schroeder.</td>
+            </tr>
+            <tr>
+              <td><code>engine_input</code></td>
+              <td><code>InputManager</code>, <code>RumbleManager</code>, <code>SoftwareKeyboard</code></td>
+              <td>VPAD/WPAD/Pro Controller, háptica ADSR y teclado nativo <code>nn::swkbd</code> con táctil calibrado (<code>VPADGetTPCalibratedPoint</code>).</td>
+            </tr>
+            <tr>
+              <td><code>engine_ai</code></td>
+              <td><code>NavGraph</code>, <code>AStarPathfinder</code>, <code>SteeringBehaviors</code></td>
+              <td>Pathfinding A* en pila, comportamientos Craig Reynolds y máquina de estados FSM.</td>
+            </tr>
+            <tr>
+              <td><code>engine_graphics</code></td>
+              <td><code>ForwardRendererGX2</code>, <code>RenderTargetGX2</code>, <code>PostProcessHDRGX2</code>, <code>ShadowSystem</code>, <code>MeshLODGroup</code>, <code>ParticleSystem3D</code></td>
+              <td>PBR Cook-Torrance, Shadow Maps 2-Pass PCF, Skybox Atlas 2D 3×2 + Agua Planar RTT, HDR <code>RGBA16F</code> + Bloom Kawase 5-Tap, Instancing lock-free, Terreno Heightmap, Toon NPR y Ray Tracing BVH.</td>
+            </tr>
+            <tr>
+              <td><code>engine_net</code></td>
+              <td><code>NetSocket</code>, <code>NetBitStream</code>, <code>NetSession</code>, <code>NetReplication</code></td>
+              <td>Sockets no bloqueantes <code>nsysnet</code>/Winsock2, TCP framing + UDP <code>WUN1</code>, snapshots 50B con LERP/SLERP. Validado en Wii U Wi-Fi: <strong>RTT 34.6 ms | SRTT 46 ms | Jitter 19 ms</strong>.</td>
+            </tr>
+            <tr>
+              <td><code>engine_framework</code></td>
+              <td><code>Engine</code>, <code>SceneManager</code>, <code>GameScene3D</code>, <code>EngineSelfTestSuite</code></td>
+              <td>Ciclo de vida ProcUI, sincronización VSync, OSD de telemetría y <strong>43/43 pruebas automatizadas</strong>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="suites">
+      <h2>3. Suites Gráficas (G1–G8) — Benchmarks Reales</h2>
+      <p>
+        Las 8 suites del Plan Maestro de Calidad Gráfica (basado en CGP 3ª Ed. y RTR4 4ª Ed.) fueron validadas
+        tanto en <strong>Cemu 2.6 (Vulkan)</strong> como en <strong>Nintendo Wii U real</strong> (con VSync OFF para medir el techo real del silicio AMD Latte):
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Suite</th>
+              <th>Qué valida</th>
+              <th>Cemu 2.6</th>
+              <th>Wii U Real (VSync OFF)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>G1</strong></td>
+              <td>Pipeline GX2, Mipmaps (9 niveles), Z-Buffer 32F+HiZ, Wrap/Filtering</td>
+              <td>60.1 FPS</td>
+              <td class="fps">87 FPS</td>
+            </tr>
+            <tr>
+              <td><strong>G2</strong></td>
+              <td>PBR Cook-Torrance GGX, Normal Mapping TBN, Dir + Point + Spot</td>
+              <td>60.2 FPS</td>
+              <td class="fps">32 FPS <span style="color:var(--muted);font-weight:400">(fillrate PBR)</span></td>
+            </tr>
+            <tr>
+              <td><strong>G3</strong></td>
+              <td>Shadow Map 2-Pass (<code>1024×1024 D32F</code>) + PCF 3×3 / 5×5</td>
+              <td>60.0 FPS</td>
+              <td class="fps">56 FPS</td>
+            </tr>
+            <tr>
+              <td><strong>G4</strong></td>
+              <td>Skybox Atlas 2D <code>3×2</code> + Agua Física + Reflexión Planar RTT (<code>640×360</code>)</td>
+              <td>60.0 FPS</td>
+              <td class="fps">62 FPS</td>
+            </tr>
+            <tr>
+              <td><strong>G5</strong></td>
+              <td>HDR <code>1280×720 RGBA16F</code> + Bloom Kawase 5-Tap (<code>320×192</code>) + ACES + Alpha</td>
+              <td>59.7 FPS</td>
+              <td class="fps">50 FPS <span style="color:var(--muted);font-weight:400">(40 cerca)</span></td>
+            </tr>
+            <tr>
+              <td><strong>G6</strong></td>
+              <td>Hardware Instancing (1,000 inst, Ring Buffer lock-free) + Frustum Culling + LOD</td>
+              <td>60.0 FPS</td>
+              <td class="fps">55 FPS</td>
+            </tr>
+            <tr>
+              <td><strong>G7</strong></td>
+              <td>Terreno Heightmap <code>48×48</code> + Ruido 3D + Partículas (128) + Toon NPR</td>
+              <td>58–60 FPS</td>
+              <td class="fps">50 FPS</td>
+            </tr>
+            <tr>
+              <td><strong>G8</strong></td>
+              <td>Ray Tracing GPU (BVH Stackless 12 esferas) + Render Scale <code>360p..720p</code></td>
+              <td>57–60 FPS</td>
+              <td class="fps">25–50 FPS <span style="color:var(--muted);font-weight:400">(30 ≤540p VSync)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ejemplos">
+      <h2>4. Ejemplos de Uso (C++20)</h2>
+
+      <h3>A. Arrancar una escena propia con el framework</h3>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre><code>#include &lt;WiiUEngine.hpp&gt;
+
+class MiEscena final : public WiiU::GameScene3D {
+public:
+    void OnEnter() override {
+        GameScene3D::OnEnter();
+        WiiU::Graphics::ProceduralMeshBuilder::CreateUVSphere(m_esfera, 1.0f, 16, 12, 0.2f, 0.8f, 1.0f);
+    }
+    void OnRender3D(const WiiU::Matrix4x4&amp; view, const WiiU::Matrix4x4&amp; proj) override {
+        auto&amp; r = WiiU::ForwardRendererGX2::Instance();
+        r.SetViewProjection(proj * view, GetCameraPosition());
+        WiiU::MaterialPropertyBlock mat{};
+        mat.ubo.pbrParams[0] = 0.25f; // Roughness
+        mat.ubo.pbrParams[1] = 0.85f; // Metallic
+        r.RenderStaticMeshPBR(m_esfera, WiiU::Matrix4x4::Identity(), mat, 0u);
+    }
+    void OnExit() override {
+        m_esfera.Destroy();
+        GameScene3D::OnExit();
+    }
+private:
+    WiiU::StaticMesh m_esfera;
+};
+
+int main() {
+    WiiU::Engine engine;
+    if (engine.Init(std::make_unique&lt;MiEscena&gt;())) {
+        engine.Run();
+    }
+    return 0;
+}</code></pre>
+      </div>
+
+      <h3>B. Guardado asíncrono de configuración y teclado táctil nativo</h3>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre><code>// 1. Abrir teclado nativo del GamePad (soporta botones y pantalla táctil calibrada)
+char ipBuf[64] = "192.168.0.100";
+if (WiiU::SoftwareKeyboard::Show("IP DEL SERVIDOR", ipBuf, ipBuf, sizeof(ipBuf), 32)) {
+    std::snprintf(WiiU::EngineConfig::Instance().network.serverIp, 64, "%s", ipBuf);
+}
+
+// 2. Guardar configuración en SD en Core 2 sin congelar la UI (0 data races)
+if (WiiU::EngineConfig::Instance().SaveToFileAsync()) {
+    // Consultar estado en Update():
+    // if (!WiiU::StorageManager::IsAsyncSavePending()) { ... }
+}</code></pre>
+      </div>
+
+      <h3>C. Post-procesado HDR + Bloom Kawase</h3>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+        <pre><code>WiiU::Graphics::PostProcessHDRGX2 post;
+post.Initialize(1280u, 720u);
+
+// En tu bucle de render:
+post.BeginSceneHDR(0.02f, 0.03f, 0.06f, 1.0f);
+// ... dibuja tu escena 3D en espacio lineal ...
+post.EndSceneHDR();
+
+WiiU::Graphics::PostProcessHDRParams params{};
+params.toneMapMode = WiiU::Graphics::ToneMapMode::ACES;
+params.bloomIntensity = 0.65f;
+post.RenderBloomAndComposite(params);</code></pre>
+      </div>
+    </section>
+
+    <section id="errores">
+      <h2>5. Errores Conocidos y Limitaciones de Silicio</h2>
+
+      <div class="callout danger">
+        <strong>1. RenderSkinnedMeshInstanced en Nintendo Wii U real</strong>
+        <p>
+          El camino multi-instancia de skinning (<code>bird_orange.wmesh</code> + <code>RenderSkinnedMeshInstanced</code>)
+          produjo congelamiento en el primer frame en consola física durante las pruebas de G6. El Hardware Instancing
+          estático (<code>RenderStaticMeshInstanced</code> con Ring Buffer lock-free) opera estable a <strong>55 FPS</strong>;
+          el skinning multi-instancia queda pendiente de auditoría específica en silicio real.
+        </p>
+      </div>
+
+      <div class="callout warn">
+        <strong>2. Instrucción R600 CUBE (samplerCube) en CafeGLSL y Cemu 2.6</strong>
+        <p>
+          Compilar <code>samplerCube</code> con CafeGLSL genera microcódigo con artefactos radiales en Cemu 2.6 Vulkan
+          y riesgos en cubemaps lineales en Latte. <strong>Solución adoptada:</strong> usar Atlas 2D <code>3×2</code>
+          (<code>SampleCubeAtlas()</code>) o reflexión hemisférica analítica.
+        </p>
+      </div>
+
+      <div class="callout warn">
+        <strong>3. Escalón VSync 60→30 Hz y presión de GPRs en pbr_mesh_gx2.frag</strong>
+        <p>
+          El uber-shader PBR actual (36 GPRs, 10 modos) reduce la ocupación de wavefronts en AMD Latte R700. Con VSync ON,
+          cualquier escena que supere <code>16.67 ms</code> cae a 30 FPS exactos (ej. G2 rinde 32 FPS con VSync OFF en fillrate puro).
+          Dividir el uber-shader en variantes especializadas devolverá 60 FPS sostenidos con VSync.
+        </p>
+      </div>
+
+      <div class="callout">
+        <strong>4. Límites físicos de Ray Tracing GPU en Wii U (Suite G8)</strong>
+        <p>
+          AMD Latte (~0.35 TFLOPS) no posee RT Cores. G8 demuestra BVH Stackless Zero-Alloc y Render Scale dinámico:
+          mantiene <strong>30 FPS hasta 540p</strong> y baja a ~20–25 FPS a 720p de cerca. Para juegos completos en Wii U,
+          la vía recomendada es rasterización (G1–G7) + BVH en CPU para física/IA.
+        </p>
+      </div>
+    </section>
+
+    <section id="enlaces">
+      <h2>6. Documentos del Repositorio</h2>
+      <ul>
+        <li><a href="../README.md">README.md</a> — Visión general, instalación de devkitPro y comandos FTP.</li>
+        <li><a href="FRAMEWORK_ENGINE_GUIDE.md">docs/FRAMEWORK_ENGINE_GUIDE.md</a> — Guía detallada para construir juegos sobre el framework.</li>
+        <li><a href="GRAPHICS_QUALITY_PLAN_AUDIT.md">docs/GRAPHICS_QUALITY_PLAN_AUDIT.md</a> — Auditoría completa de las 8/8 Suites Gráficas (CGP + RTR4).</li>
+        <li><a href="ENGINE_VALIDATION_PLAN.md">docs/ENGINE_VALIDATION_PLAN.md</a> — Cobertura de las 43/43 pruebas en <code>EngineSelfTestSuite</code>.</li>
+        <li><a href="JASON_GREGORY_COMPLETION_AUDIT.md">docs/JASON_GREGORY_COMPLETION_AUDIT.md</a> — Auditoría arquitectónica (98% Core / 93% Libro Completo).</li>
+        <li><a href="CURRENT_STATE.md">docs/CURRENT_STATE.md</a> — Estado vivo del proyecto (Hito 146).</li>
+      </ul>
+    </section>
+
+    <footer>
+      Wii U 3D Engine (C++20 / GX2) · Licencia Apache 2.0 · Documentación estática lista para GitHub Pages (<code>/docs</code>).
+    </footer>
+  </main>
+
+  <script>
+    function copyCode(btn) {
+      const code = btn.nextElementSibling.innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        const prev = btn.textContent;
+        btn.textContent = "Copiado";
+        setTimeout(() => (btn.textContent = prev), 1400);
+      });
+    }
+  </script>
+</body>
+</html>

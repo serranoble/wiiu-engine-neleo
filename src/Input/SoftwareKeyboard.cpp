@@ -187,6 +187,10 @@ bool SoftwareKeyboard::Show(const char* hintText,
 
             nn::swkbd::ControllerInfo ctrlInfo{};
             if (vpadCount > 0 && vpadErr == VPAD_READ_SUCCESS) {
+                // Calibrar coordenadas táctiles del GamePad (0..4095 -> 1280x720) para que nn::swkbd reconozca toques
+                VPADGetTPCalibratedPoint(VPAD_CHAN_0, &vpadStatus.tpNormal, &vpadStatus.tpNormal);
+                VPADGetTPCalibratedPoint(VPAD_CHAN_0, &vpadStatus.tpFiltered1, &vpadStatus.tpFiltered1);
+                VPADGetTPCalibratedPoint(VPAD_CHAN_0, &vpadStatus.tpFiltered2, &vpadStatus.tpFiltered2);
                 ctrlInfo.vpad = &vpadStatus;
             }
             for (int c = 0; c < 4; ++c) {

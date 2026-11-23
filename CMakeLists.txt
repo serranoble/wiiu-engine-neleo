@@ -44,6 +44,7 @@ add_library(engine_core STATIC
     src/Core/Config/EngineConfig.cpp
     src/Core/Config/CVarRegistry.cpp
     src/Core/MemoryManager.cpp
+    src/Core/Diagnostics/CoreSelfTest.cpp
     src/Core/Window.cpp
     src/Core/AssetManager.cpp
     src/Core/JobSystem.cpp
@@ -68,6 +69,7 @@ endif()
 # 2. SUBSISTEMA DE FÍSICA Y COLISIONES
 add_library(engine_physics STATIC
     src/Core/Physics/SpatialHashGrid.cpp
+    src/Core/Physics/PhysicsSelfTest.cpp
     src/Core/ECS/Systems/CollisionSystem.cpp
     src/Core/ECS/Systems/KinematicCharacterSystem.cpp
     src/Core/ECS/Systems/CameraRelativeMovementSystem.cpp
@@ -79,6 +81,7 @@ target_link_libraries(engine_physics PUBLIC engine_core)
 add_library(engine_audio STATIC
     src/Audio/AudioManager.cpp
     src/Audio/AudioEngine3D.cpp
+    src/Audio/AudioSelfTest.cpp
     src/Core/ECS/Systems/AudioSpatialSystem.cpp
 )
 target_link_libraries(engine_audio PUBLIC engine_core)
@@ -88,6 +91,7 @@ add_library(engine_input STATIC
     src/Input/InputContextStack.cpp
     src/Input/InputManager.cpp
     src/Input/RumbleManager.cpp
+    src/Input/InputSelfTest.cpp
 )
 target_link_libraries(engine_input PUBLIC engine_core)
 
@@ -101,10 +105,14 @@ add_library(engine_graphics STATIC
     src/Graphics/ForwardRendererGX2.cpp
     src/Graphics/ShadowSystem.cpp
     src/Graphics/ShadowMapRendererGX2.cpp
+    src/Graphics/PostProcessHDRGX2.cpp
     src/Graphics/SkyboxRenderPass.cpp
     src/Graphics/Mesh/StaticMesh.cpp
+    src/Graphics/Mesh/ProceduralMeshBuilder.cpp
     src/Graphics/Texture/TextureLoaderGX2.cpp
+    src/Graphics/GraphicsSelfTest.cpp
     src/Graphics/RHI/RHIPipelineCache.cpp
+    src/Graphics/RHI/RenderTargetGX2.cpp
     src/Graphics/RHI/RHIRenderPass.cpp
     src/Graphics/RHI/RHIFullscreenShader.cpp
     src/Graphics/RHI/DisplayCompositor.cpp
@@ -118,6 +126,7 @@ target_link_libraries(engine_graphics PUBLIC engine_core)
 add_library(engine_framework STATIC
     src/Core/Engine.cpp
     src/Core/ResourceMonitor.cpp
+    src/Core/Diagnostics/EngineSelfTestSuite.cpp
     src/Core/ECS/Systems/OrbitCameraSystem.cpp
     src/Input/SoftwareKeyboard.cpp
     src/Scene/ModalStack.cpp
@@ -136,6 +145,7 @@ add_library(engine_ai STATIC
     src/Core/AI/AISteeringSystem.cpp
     src/Core/AI/AIPerceptionSystem.cpp
     src/Core/AI/BehaviorTreeSystem.cpp
+    src/Core/AI/AISelfTest.cpp
 )
 target_link_libraries(engine_ai PUBLIC engine_core)
 
@@ -170,6 +180,16 @@ set(DEMO_SOURCES
     src/Scene/SceneMenu.cpp
     src/Scene/SceneOptions.cpp
     src/Scene/NetTestModal.cpp
+    src/Scene/GraphicsQAModal.cpp
+    src/Scene/GraphicsQASceneBase.cpp
+    src/Scene/SceneQA_PipelineTextures.cpp
+    src/Scene/SceneQA_LightingPBR.cpp
+    src/Scene/SceneQA_Shadows.cpp
+    src/Scene/SceneQA_EnvironmentWater.cpp
+    src/Scene/SceneQA_PostProcessAlpha.cpp
+    src/Scene/SceneQA_StressCulling.cpp
+    src/Scene/SceneQA_ProceduralNPR.cpp
+    src/Scene/SceneQA_RaytracingBVH.cpp
 )
 
 if(WUT AND WIIU_ENGINE_BUILD_DEMOS)

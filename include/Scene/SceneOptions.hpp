@@ -67,6 +67,7 @@ private:
     float m_statusTimer{0.0f};
     const char* m_statusMessage{nullptr};
     ColorRGBA m_statusColor{ColorRGBA::Green()};
+    bool m_saveInFlight{false};
 };
 
 } // namespace WiiU

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("native_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2")]
+    [ValidateSet("native_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2", "pbr_mesh_gx2")]
     [string] $Shader
 )
 
@@ -56,6 +56,12 @@ $shaderFiles = @{
         Header = "include/Graphics/SkinningShaderBinary.hpp"
         SizeSymbol = "SKINNING_GX2_GSH_SIZE"
         DataSymbol = "SKINNING_GX2_GSH_DATA"
+    }
+    pbr_mesh_gx2 = @{
+        Binary = "assets/shaders/pbr_mesh_gx2.gsh"
+        Header = "include/Graphics/PBRMeshShaderBinary.hpp"
+        SizeSymbol = "PBR_MESH_GX2_GSH_SIZE"
+        DataSymbol = "PBR_MESH_GX2_GSH_DATA"
     }
 }
 

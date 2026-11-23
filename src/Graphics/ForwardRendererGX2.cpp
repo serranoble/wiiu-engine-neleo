@@ -10,6 +10,8 @@
 #include "Graphics/AdvancedSkelShaderBinary.hpp"
 #include "Graphics/InstancedMeshShaderBinary.hpp"
 #include "Graphics/ShadowDepthShaderBinary.hpp"
+#include "Graphics/PBRMeshShaderBinary.hpp"
+#include "Graphics/ShadowMapRendererGX2.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -42,6 +44,7 @@ bool ForwardRendererGX2::Initialize() {
     if (!InitSkinningShader()) { Shutdown(); return false; }
     (void)InitInstancedShader();
     (void)InitDepthPrePassShader();
+    (void)InitPBRShader();
 
     // Inicializar Samplers GX2
     GX2InitSampler(&m_skySampler, GX2_TEX_CLAMP_MODE_WRAP, GX2_TEX_XY_FILTER_MODE_LINEAR);
@@ -54,7 +57,7 @@ bool ForwardRendererGX2::Initialize() {
 
     GX2InitSampler(&m_cubeSampler, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_LINEAR);
     GX2InitSamplerXYFilter(&m_cubeSampler, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_NONE);
-    GX2InitSamplerZMFilter(&m_cubeSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_LINEAR);
+    GX2InitSamplerZMFilter(&m_cubeSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_NONE);
     m_cubeSamplerCreated = true;
 
     // Textura neutra 4x4 (0,0,0,0) en búfer estático alineado a 256B (0 leaks en MemoryManager).
@@ -119,8 +122,8 @@ void ForwardRendererGX2::Shutdown() {
 #if defined(__WIIU__) || defined(__wiiu__)
     const bool hasGpuResources =
         m_skyShaderLoaded || m_meshShaderLoaded || m_skelShaderLoaded ||
-        m_instShaderLoaded || m_depthPreShaderLoaded || m_instanceBufferCreated ||
-        m_skyVs || m_meshVs || m_skelVs || m_instVs || m_depthPreVs;
+        m_instShaderLoaded || m_depthPreShaderLoaded || m_pbrShaderLoaded || m_instanceBufferCreated ||
+        m_skyVs || m_meshVs || m_skelVs || m_instVs || m_depthPreVs || m_pbrVs;
     if (hasGpuResources && ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
         Window::HasForeground() && !Window::IsExitingProcUI()) {
         GX2DrawDone();
@@ -157,6 +160,12 @@ void ForwardRendererGX2::Shutdown() {
     if (m_depthPreFsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreFsProgram); m_depthPreFsProgram = nullptr; }
     m_depthPreShaderLoaded = false;
     m_inDepthPrePass = false;
+
+    freeShaderPtrs(m_pbrVs, m_pbrVsProgram, m_pbrPs, m_pbrPsProgram, m_pbrFsProgram);
+    m_pbrDiffuseSlot = 0;
+    m_pbrSkyboxSlot = -1;
+    m_pbrShadowSlot = 1;
+    m_pbrShaderLoaded = false;
 #endif
     m_initialized = false;
 }
@@ -164,6 +173,8 @@ void ForwardRendererGX2::Shutdown() {
 void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& viewMatrix, const Matrix4x4& projMatrix) {
 #if defined(__WIIU__) || defined(__wiiu__)
     GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
+    // Sincronizar caché RHI tras Window::Clear() o pases 2D externos que mutan estado GX2
+    RHIPipelineCache::Instance().Invalidate();
     // Rotar slice del Multi-Frame Ring Buffer de instancing (0 carreras CPU/GPU entre frames en vuelo)
     m_instanceFrameSlice = (m_instanceFrameSlice + 1u) % MAX_FRAMES_IN_FLIGHT;
     m_instanceWriteCursor = 0;
@@ -174,6 +185,9 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     m_vpMatrix = projMatrix * viewMatrix;
     m_drawCallsCount = 0;
     m_trianglesCount = 0;
+    m_instancedDrawCalls = 0;
+    m_instancedCount = 0;
+    m_shadowMode = 0u;
 }
 
 void ForwardRendererGX2::RenderSkydome(StaticMesh& skydomeMesh, GX2Texture* skyTexture) {
@@ -924,6 +938,234 @@ void ForwardRendererGX2::RenderStaticMeshWithMaterial(const StaticMesh& mesh,
 #endif
 }
 
+bool ForwardRendererGX2::InitPBRShader() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (m_pbrShaderLoaded) return true;
+
+    const uint8_t* raw = PBR_MESH_GX2_GSH_DATA;
+    if (!raw || PBR_MESH_GX2_GSH_SIZE == 0u) {
+        return false;
+    }
+
+    const uint32_t vsHdrSize = GFDGetVertexShaderHeaderSize(0, raw);
+    const uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, raw);
+    const uint32_t psHdrSize = GFDGetPixelShaderHeaderSize(0, raw);
+    const uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, raw);
+    if (vsHdrSize == 0u || vsProgSize == 0u || psHdrSize == 0u || psProgSize == 0u) {
+        return false;
+    }
+
+    m_pbrVs = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "PBR_VS_Hdr"));
+    m_pbrVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "PBR_VS_Prog");
+    m_pbrPs = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "PBR_PS_Hdr"));
+    m_pbrPsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "PBR_PS_Prog");
+
+    if (m_pbrVs && m_pbrVsProgram && m_pbrPs && m_pbrPsProgram &&
+        GFDGetVertexShader(m_pbrVs, m_pbrVsProgram, 0, raw) &&
+        GFDGetPixelShader(m_pbrPs, m_pbrPsProgram, 0, raw)) {
+        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_pbrVsProgram, vsProgSize);
+        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_pbrPsProgram, psProgSize);
+
+        GX2AttribStream attrs[4]{};
+        uint32_t numAttrs = 0u;
+        if (m_pbrVs->attribVarCount > 0u && m_pbrVs->attribVars != nullptr) {
+            for (uint32_t i = 0; i < m_pbrVs->attribVarCount && numAttrs < 4u; ++i) {
+                const auto& var = m_pbrVs->attribVars[i];
+                if (!var.name) continue;
+                if (std::strcmp(var.name, "aPos") == 0) {
+                    attrs[numAttrs].location = var.location;
+                    attrs[numAttrs].buffer = 0u;
+                    attrs[numAttrs].offset = offsetof(MeshVertex, pos);
+                    attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                    attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                    attrs[numAttrs].aluDivisor = 0u;
+                    attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                    attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                    ++numAttrs;
+                } else if (std::strcmp(var.name, "aNormal") == 0) {
+                    attrs[numAttrs].location = var.location;
+                    attrs[numAttrs].buffer = 0u;
+                    attrs[numAttrs].offset = offsetof(MeshVertex, normal);
+                    attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32;
+                    attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                    attrs[numAttrs].aluDivisor = 0u;
+                    attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
+                    attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                    ++numAttrs;
+                } else if (std::strcmp(var.name, "aTexCoord") == 0) {
+                    attrs[numAttrs].location = var.location;
+                    attrs[numAttrs].buffer = 0u;
+                    attrs[numAttrs].offset = offsetof(MeshVertex, texCoord);
+                    attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32;
+                    attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                    attrs[numAttrs].aluDivisor = 0u;
+                    attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_0, GX2_SQ_SEL_1);
+                    attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                    ++numAttrs;
+                } else if (std::strcmp(var.name, "aColor") == 0) {
+                    attrs[numAttrs].location = var.location;
+                    attrs[numAttrs].buffer = 0u;
+                    attrs[numAttrs].offset = offsetof(MeshVertex, color);
+                    attrs[numAttrs].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32_32;
+                    attrs[numAttrs].type = GX2_ATTRIB_INDEX_PER_VERTEX;
+                    attrs[numAttrs].aluDivisor = 0u;
+                    attrs[numAttrs].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_W);
+                    attrs[numAttrs].endianSwap = GX2_ENDIAN_SWAP_DEFAULT;
+                    ++numAttrs;
+                }
+            }
+        }
+        if (numAttrs > 0u) {
+            const uint32_t fsSize = GX2CalcFetchShaderSizeEx(numAttrs, GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+            m_pbrFsProgram = MemoryManager::Instance().AllocAligned(256, fsSize, MemoryTag::ShaderProgram, "PBR_FS_Prog");
+            if (m_pbrFsProgram) {
+                GX2InitFetchShaderEx(&m_pbrFs, static_cast<uint8_t*>(m_pbrFsProgram), numAttrs, attrs,
+                                     GX2_FETCH_SHADER_TESSELLATION_NONE, GX2_TESSELLATION_MODE_DISCRETE);
+                GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_pbrFsProgram, fsSize);
+
+                // Reflexion dinamica de slots TMU desde samplerVars (inmune a dead-code elimination de CafeGLSL)
+                m_pbrDiffuseSlot = -1;
+                m_pbrSkyboxSlot  = -1;
+                m_pbrShadowSlot  = -1;
+                if (m_pbrPs->samplerVarCount > 0u && m_pbrPs->samplerVars != nullptr) {
+                    for (uint32_t s = 0u; s < m_pbrPs->samplerVarCount; ++s) {
+                        const auto& svar = m_pbrPs->samplerVars[s];
+                        if (!svar.name) continue;
+                        if (std::strcmp(svar.name, "uTexture") == 0) {
+                            m_pbrDiffuseSlot = static_cast<int32_t>(svar.location);
+                        } else if (std::strcmp(svar.name, "uSkybox") == 0) {
+                            m_pbrSkyboxSlot = static_cast<int32_t>(svar.location);
+                        } else if (std::strcmp(svar.name, "uShadowMap") == 0) {
+                            m_pbrShadowSlot = static_cast<int32_t>(svar.location);
+                        }
+                    }
+                }
+                if (m_pbrDiffuseSlot < 0) m_pbrDiffuseSlot = 0;
+                m_pbrShaderLoaded = true;
+            }
+        }
+    }
+    return m_pbrShaderLoaded;
+#else
+    return true;
+#endif
+}
+
+void ForwardRendererGX2::SetDirectionalShadowState(const Matrix4x4& lightVP,
+                                                   uint32_t shadowMode,
+                                                   float depthBias,
+                                                   float texelSize,
+                                                   float minLitFactor) noexcept {
+    m_shadowLightVP = lightVP;
+    m_shadowMode = shadowMode;
+    m_shadowDepthBias = depthBias;
+    m_shadowTexelSize = (texelSize > 0.0f) ? texelSize : (1.0f / 1024.0f);
+    m_shadowMinLit = minLitFactor;
+}
+
+void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
+                                             const Matrix4x4& modelMatrix,
+                                             const MaterialPropertyBlock& material,
+                                             uint32_t shadingMode) {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (!mesh.IsLoaded() || !mesh.GetVBO() || !mesh.GetIBO()) return;
+    if (!m_pbrShaderLoaded) {
+        RenderStaticMeshWithMaterial(mesh, modelMatrix, material);
+        return;
+    }
+
+    GX2SetFetchShader(&m_pbrFs);
+    GX2SetVertexShader(m_pbrVs);
+    GX2SetPixelShader(m_pbrPs);
+
+    const Matrix4x4 mvp = m_vpMatrix * modelMatrix;
+    alignas(256) float vsUniforms[48];
+    std::memcpy(&vsUniforms[0], mvp.m, 16 * sizeof(float));
+    std::memcpy(&vsUniforms[16], modelMatrix.m, 16 * sizeof(float));
+    std::memcpy(&vsUniforms[32], m_shadowLightVP.m, 16 * sizeof(float));
+    GX2SetVertexUniformReg(0, 48, vsUniforms);
+
+    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
+    const uint32_t numPoints = (lights.activePointLights > 4u) ? 4u : lights.activePointLights;
+    const bool shadowActive = (m_shadowMode > 0u) && ShadowMapRendererGX2::Instance().IsReady();
+
+    alignas(256) float psData[72]{};
+    // [0] camPos + shadingMode
+    psData[0] = m_camPos.x; psData[1] = m_camPos.y; psData[2] = m_camPos.z; psData[3] = static_cast<float>(shadingMode);
+    // [1] dirLightDir + elapsedTime (para olas de agua y efectos temporales)
+    psData[4] = lights.dirLightDir[0]; psData[5] = lights.dirLightDir[1]; psData[6] = lights.dirLightDir[2]; psData[7] = m_shaderTime;
+    // [2] dirLightColor
+    psData[8] = lights.dirLightColor[0]; psData[9] = lights.dirLightColor[1]; psData[10] = lights.dirLightColor[2]; psData[11] = lights.dirLightColor[3];
+    // [3] albedoTint + customParam (ior para vidrio / waveAmp para agua)
+    psData[12] = material.ubo.albedoTint[0]; psData[13] = material.ubo.albedoTint[1]; psData[14] = material.ubo.albedoTint[2]; psData[15] = material.ubo.pbrParams[3];
+    // [4] materialParams (refl, normalMapEnabled, bumpScale, ambient)
+    psData[16] = material.ubo.materialParams[0];
+    psData[17] = material.ubo.materialParams[1];
+    psData[18] = material.ubo.materialParams[2];
+    psData[19] = material.ubo.materialParams[3];
+    // [5] pbrParams (roughness, metallic, numPoints, spotIntensity)
+    psData[20] = material.ubo.pbrParams[0];
+    psData[21] = material.ubo.pbrParams[1];
+    psData[22] = static_cast<float>(numPoints);
+    psData[23] = lights.spotLightIntensity;
+    // [6..13] pointLights[0..3]
+    for (uint32_t i = 0u; i < 4u; ++i) {
+        std::memcpy(&psData[24u + i * 4u], lights.pointLightPosRadius[i], 4u * sizeof(float));
+        std::memcpy(&psData[40u + i * 4u], lights.pointLightColorIntensity[i], 4u * sizeof(float));
+    }
+    // [14..16] spotLight
+    std::memcpy(&psData[56], lights.spotLightPosRange, 4u * sizeof(float));
+    std::memcpy(&psData[60], lights.spotLightDirInner, 4u * sizeof(float));
+    std::memcpy(&psData[64], lights.spotLightColorOuter, 4u * sizeof(float));
+    // [17] shadowParams (shadowMode, depthBias, texelSize, minLitFactor)
+    psData[68] = shadowActive ? static_cast<float>(m_shadowMode) : 0.0f;
+    psData[69] = m_shadowDepthBias;
+    psData[70] = m_shadowTexelSize;
+    psData[71] = m_shadowMinLit;
+    GX2SetPixelUniformReg(0, 72, psData);
+
+    GX2Texture* diffuseTex = static_cast<GX2Texture*>(material.diffuseTexture);
+    GX2Texture* envCube = static_cast<GX2Texture*>(material.envCubeMap);
+    const GX2Texture* activeDiffuse = diffuseTex ? diffuseTex : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
+    if (m_pbrDiffuseSlot >= 0 && activeDiffuse) {
+        const uint32_t slot = static_cast<uint32_t>(m_pbrDiffuseSlot);
+        GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuse), slot);
+        GX2SetPixelSampler(&m_meshSampler, slot);
+    }
+    if (m_pbrSkyboxSlot >= 0 && m_cubeSamplerCreated) {
+        // pbr_mesh_gx2.frag usa uSkybox como sampler2D (Atlas 3x2 de 6 caras); guarda defensiva TEXTURE_2D
+        const bool validAtlas2D = (envCube != nullptr) && (envCube->surface.dim == GX2_SURFACE_DIM_TEXTURE_2D);
+        GX2Texture* activeCube = validAtlas2D ? envCube : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
+        if (activeCube) {
+            const uint32_t slot = static_cast<uint32_t>(m_pbrSkyboxSlot);
+            GX2SetPixelTexture(activeCube, slot);
+            GX2SetPixelSampler(&m_cubeSampler, slot);
+        }
+    }
+    if (m_pbrShadowSlot >= 0) {
+        const uint32_t slot = static_cast<uint32_t>(m_pbrShadowSlot);
+        if (shadowActive) {
+            ShadowMapRendererGX2::Instance().BindShadowMapRaw(slot, slot);
+        } else if (m_defaultTexCreated) {
+            GX2SetPixelTexture(&m_defaultNeutralTex, slot);
+            GX2SetPixelSampler(&m_meshSampler, slot);
+        }
+    }
+
+    RHIPipelineCache::Instance().BindState(
+        RHIPipelineState(material.depthTest, material.depthWrite, RHI_COMPARE_LEQUAL, material.blendMode, false));
+
+    const GX2IndexType idxType = (mesh.GetHeader().indexFormat == 1u) ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
+    GX2RSetAttributeBuffer(const_cast<GX2RBuffer*>(mesh.GetVBO()), 0, mesh.GetHeader().vertexStride, 0);
+    GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES, const_cast<GX2RBuffer*>(mesh.GetIBO()),
+                    idxType, mesh.GetIndexCount(), 0, 0, 1);
+    m_drawCallsCount += 1u;
+    m_trianglesCount += mesh.GetIndexCount() / 3u;
+#else
+    (void)mesh; (void)modelMatrix; (void)material; (void)shadingMode;
+#endif
+}
+
 void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
                                                    const Matrix4x4* modelMatrices,
                                                    uint32_t instanceCount,
@@ -946,6 +1188,7 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
 
     const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
 
+    GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
     GX2SetFetchShader(&m_instFs);
     GX2SetVertexShader(m_instVs);
     GX2SetPixelShader(m_instPs);
@@ -970,13 +1213,6 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
         GX2SetPixelSampler(&m_meshSampler, 0);
     }
 
-    // Garantizar CubeMap valido en slot 1 incluso cuando envCubeMap == nullptr (shader 100% branchless)
-    GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
-    if (activeCube && m_cubeSamplerCreated) {
-        GX2SetPixelTexture(activeCube, 1);
-        GX2SetPixelSampler(&m_cubeSampler, 1);
-    }
-
     RHIPipelineCache::Instance().BindState(RHIPipelineState(
         material ? material->depthTest : true,
         material ? material->depthWrite : true,
@@ -987,43 +1223,54 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
     const GX2IndexType idxType = (mesh.GetHeader().indexFormat == 1) ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
     GX2RSetAttributeBuffer(const_cast<GX2RBuffer*>(mesh.GetVBO()), 0, mesh.GetHeader().vertexStride, 0);
 
-    // Multi-Frame Ring Buffer: avanza cursor monotonicamente dentro del slice del frame actual (0 carreras CPU/GPU)
+    // Multi-Frame Ring Buffer lock-free: 1 memcpy + GX2Invalidate por llamada (0 stalls GX2R por bucket LOD)
     const uint32_t sliceBase = m_instanceFrameSlice * MAX_INSTANCES_PER_FRAME;
-    uint32_t offset = 0;
-    while (offset < instanceCount) {
-        if (m_instanceWriteCursor >= MAX_INSTANCES_PER_FRAME) {
-            // Si el slice de 1024 instancias del frame se llena, delegar el excedente al draw estandar seguro
-            for (uint32_t rem = offset; rem < instanceCount; ++rem) {
-                if (material) {
-                    RenderStaticMeshWithMaterial(mesh, modelMatrices[rem], *material);
-                } else {
-                    RenderStaticMesh(mesh, modelMatrices[rem], diffuseTexture, envCubeMap);
-                }
+    const uint32_t availInSlice = (m_instanceWriteCursor < MAX_INSTANCES_PER_FRAME)
+        ? (MAX_INSTANCES_PER_FRAME - m_instanceWriteCursor)
+        : 0u;
+    const uint32_t hwCount = std::min(instanceCount, availInSlice);
+    uint32_t hwRendered = 0u;
+
+    if (hwCount > 0u) {
+        const uint32_t startSlot = sliceBase + m_instanceWriteCursor;
+        const uint32_t totalByteOffset = startSlot * static_cast<uint32_t>(sizeof(Matrix4x4));
+        const uint32_t totalByteSize = hwCount * static_cast<uint32_t>(sizeof(Matrix4x4));
+        const uint32_t ringTotalBytes = INSTANCE_RING_CAPACITY * static_cast<uint32_t>(sizeof(Matrix4x4));
+
+        // Escritura directa lock-free sobre el Ring Buffer de 3 frames (rangos disjuntos por frame y por bucket LOD):
+        // Evita el deadlock de Cafe OS GX2RLockBufferEx cuando múltiples buckets LOD comparten m_instanceMatrixBuffer
+        // dentro del mismo frame antes de GX2Flush().
+        uint8_t* basePtr = static_cast<uint8_t*>(m_instanceMatrixBuffer.buffer);
+        if (basePtr) {
+            std::memcpy(basePtr + totalByteOffset, modelMatrices, totalByteSize);
+            GX2Invalidate(GX2_INVALIDATE_MODE_CPU_ATTRIBUTE_BUFFER, basePtr + totalByteOffset, totalByteSize);
+
+            uint32_t offset = 0u;
+            while (offset < hwCount) {
+                const uint32_t batchCount = std::min(hwCount - offset, MAX_INSTANCES_PER_DRAW);
+                const uint32_t batchByteOffset = (startSlot + offset) * static_cast<uint32_t>(sizeof(Matrix4x4));
+                GX2SetAttribBuffer(1, ringTotalBytes - batchByteOffset, sizeof(Matrix4x4), basePtr + batchByteOffset);
+                GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES,
+                                const_cast<GX2RBuffer*>(mesh.GetIBO()),
+                                idxType, mesh.GetIndexCount(), 0, 0, batchCount);
+                m_drawCallsCount += 1u;
+                m_instancedDrawCalls += 1u;
+                m_instancedCount += batchCount;
+                m_trianglesCount += (mesh.GetIndexCount() / 3u) * batchCount;
+                offset += batchCount;
             }
-            break;
+            m_instanceWriteCursor += hwCount;
+            hwRendered = hwCount;
         }
+    }
 
-        const uint32_t availInSlice = MAX_INSTANCES_PER_FRAME - m_instanceWriteCursor;
-        const uint32_t batchCount = std::min({instanceCount - offset, MAX_INSTANCES_PER_DRAW, availInSlice});
-        const uint32_t slotStart = sliceBase + m_instanceWriteCursor;
-        const uint32_t byteOffset = slotStart * static_cast<uint32_t>(sizeof(Matrix4x4));
-        const uint32_t byteSize = batchCount * static_cast<uint32_t>(sizeof(Matrix4x4));
-
-        uint8_t* basePtr = static_cast<uint8_t*>(GX2RLockBufferEx(&m_instanceMatrixBuffer, GX2R_RESOURCE_BIND_NONE));
-        if (!basePtr) break;
-        std::memcpy(basePtr + byteOffset, modelMatrices + offset, byteSize);
-        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_ATTRIBUTE_BUFFER, basePtr + byteOffset, byteSize);
-        GX2RUnlockBufferEx(&m_instanceMatrixBuffer, GX2R_RESOURCE_DISABLE_CPU_INVALIDATE);
-
-        GX2RSetAttributeBuffer(&m_instanceMatrixBuffer, 1, sizeof(Matrix4x4), byteOffset);
-        GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES,
-                        const_cast<GX2RBuffer*>(mesh.GetIBO()),
-                        idxType, mesh.GetIndexCount(), 0, 0, batchCount);
-
-        m_instanceWriteCursor += batchCount;
-        m_drawCallsCount += 1;
-        m_trianglesCount += (mesh.GetIndexCount() / 3) * batchCount;
-        offset += batchCount;
+    // Si el slice de 1024 instancias del frame se llena (o basePtr es nulo), delegar el excedente al draw estándar seguro
+    for (uint32_t rem = hwRendered; rem < instanceCount; ++rem) {
+        if (material) {
+            RenderStaticMeshWithMaterial(mesh, modelMatrices[rem], *material);
+        } else {
+            RenderStaticMesh(mesh, modelMatrices[rem], diffuseTexture, envCubeMap);
+        }
     }
 #else
     (void)mesh; (void)modelMatrices; (void)instanceCount;
@@ -1047,6 +1294,7 @@ void ForwardRendererGX2::RenderSkinnedMeshInstanced(const StaticMesh& skinnedMes
     }
 
     // Enlace UNICO de pipeline, shaders, texturas, samplers, PSO y VBO fuera del bucle (0 binds redundantes)
+    GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
     GX2SetFetchShader(&m_skelFs);
     GX2SetVertexShader(m_skelVs);
     GX2SetPixelShader(m_skelPs);
@@ -1173,17 +1421,51 @@ void ForwardRendererGX2::EndDepthPrePass() {
 }
 
 void ForwardRendererGX2::SetTextureFilterMode(TextureFilterMode mode) {
+    m_activeFilterMode = mode;
+    m_activeMipFilterMode = (mode == TextureFilterMode::Point)
+        ? TextureMipFilterMode::Point
+        : TextureMipFilterMode::Linear;
     if (!m_initialized) return;
-    ApplyTextureFilterMode(mode);
+    ApplyMeshSamplerState();
+}
+
+void ForwardRendererGX2::SetTextureWrapMode(TextureWrapMode mode) {
+    m_activeWrapMode = mode;
+    if (!m_initialized) return;
+    ApplyMeshSamplerState();
+}
+
+void ForwardRendererGX2::SetTextureMipFilter(TextureMipFilterMode mode) {
+    m_activeMipFilterMode = mode;
+    if (!m_initialized) return;
+    ApplyMeshSamplerState();
+}
+
+void ForwardRendererGX2::ResetMeshSamplerDefaults() {
+    m_activeWrapMode = TextureWrapMode::Wrap;
+    m_activeFilterMode = EngineConfig::Instance().graphics.textureFilter;
+    m_activeMipFilterMode = (m_activeFilterMode == TextureFilterMode::Point)
+        ? TextureMipFilterMode::Point
+        : TextureMipFilterMode::Linear;
+    if (!m_initialized) return;
+    ApplyMeshSamplerState();
 }
 
 void ForwardRendererGX2::ApplyTextureFilterMode(TextureFilterMode mode) {
+    m_activeFilterMode = mode;
+    m_activeMipFilterMode = (mode == TextureFilterMode::Point)
+        ? TextureMipFilterMode::Point
+        : TextureMipFilterMode::Linear;
+    ApplyMeshSamplerState();
+}
+
+void ForwardRendererGX2::ApplyMeshSamplerState() {
 #if defined(__WIIU__) || defined(__wiiu__)
     GX2TexXYFilterMode magFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
     GX2TexXYFilterMode minFilter = GX2_TEX_XY_FILTER_MODE_LINEAR;
     GX2TexAnisoRatio anisoRatio = GX2_TEX_ANISO_RATIO_NONE;
 
-    switch (mode) {
+    switch (m_activeFilterMode) {
         case TextureFilterMode::Point:
             magFilter = GX2_TEX_XY_FILTER_MODE_POINT;
             minFilter = GX2_TEX_XY_FILTER_MODE_POINT;
@@ -1216,11 +1498,40 @@ void ForwardRendererGX2::ApplyTextureFilterMode(TextureFilterMode mode) {
             break;
     }
 
+    GX2TexClampMode clampMode = GX2_TEX_CLAMP_MODE_WRAP;
+    switch (m_activeWrapMode) {
+        case TextureWrapMode::Wrap:
+            clampMode = GX2_TEX_CLAMP_MODE_WRAP;
+            break;
+        case TextureWrapMode::Clamp:
+            clampMode = GX2_TEX_CLAMP_MODE_CLAMP;
+            break;
+        case TextureWrapMode::Mirror:
+            clampMode = GX2_TEX_CLAMP_MODE_MIRROR;
+            break;
+    }
+
+    GX2TexMipFilterMode mipFilter = GX2_TEX_MIP_FILTER_MODE_LINEAR;
+    float maxLod = 12.0f;
+    switch (m_activeMipFilterMode) {
+        case TextureMipFilterMode::None:
+            mipFilter = GX2_TEX_MIP_FILTER_MODE_NONE;
+            maxLod = 0.0f;
+            break;
+        case TextureMipFilterMode::Point:
+            mipFilter = GX2_TEX_MIP_FILTER_MODE_POINT;
+            maxLod = 12.0f;
+            break;
+        case TextureMipFilterMode::Linear:
+            mipFilter = GX2_TEX_MIP_FILTER_MODE_LINEAR;
+            maxLod = 12.0f;
+            break;
+    }
+
+    GX2InitSamplerClamping(&m_meshSampler, clampMode, clampMode, GX2_TEX_CLAMP_MODE_WRAP);
     GX2InitSamplerXYFilter(&m_meshSampler, magFilter, minFilter, anisoRatio);
-    GX2InitSamplerZMFilter(&m_meshSampler, GX2_TEX_Z_FILTER_MODE_NONE, 
-                           (mode == TextureFilterMode::Point) ? GX2_TEX_MIP_FILTER_MODE_POINT : GX2_TEX_MIP_FILTER_MODE_LINEAR);
-#else
-    (void)mode;
+    GX2InitSamplerZMFilter(&m_meshSampler, GX2_TEX_Z_FILTER_MODE_NONE, mipFilter);
+    GX2InitSamplerLOD(&m_meshSampler, 0.0f, maxLod, 0.0f);
 #endif
 }
 

@@ -135,8 +135,6 @@ private:
     OutputTargetBinding m_outputTarget{};
     OutputTargetBinding m_boundTarget{};
 
-    bool m_shaderLoaded{false};
-
     DirectShaderPair m_mainShader{};
     GX2FetchShader m_directFetchShader{};
     void* m_directFsProgram{nullptr};
@@ -162,6 +160,7 @@ private:
     bool m_quadCreated{false};
 #endif
 
+    bool m_shaderLoaded{false};
     std::vector<uint8_t> m_stagedBinary;
 };
 

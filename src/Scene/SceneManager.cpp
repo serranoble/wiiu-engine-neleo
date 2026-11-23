@@ -246,8 +246,10 @@ void SceneManager::Update(float dt) {
     }
 
     if (!m_modalStack.IsEmpty()) {
+        const bool blockedBeforeUpdate = m_modalStack.IsBlockingSceneUpdate();
         m_modalStack.Update(dt);
-        if (m_modalStack.IsBlockingSceneUpdate()) {
+        if (blockedBeforeUpdate || m_modalStack.IsBlockingSceneUpdate() ||
+            m_transitionPhase != TransitionPhase::Idle) {
             return;
         }
     }

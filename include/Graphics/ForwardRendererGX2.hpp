@@ -23,6 +23,24 @@ struct GX2RBuffer;
 namespace WiiU {
 
 /**
+ * @brief Modos de direccionamiento UV en hardware GX2 (CGP Cap. 5 / RTR4 Cap. 6).
+ */
+enum class TextureWrapMode : uint8_t {
+    Wrap = 0,
+    Clamp = 1,
+    Mirror = 2
+};
+
+/**
+ * @brief Modos de filtrado entre niveles de Mipmap en hardware GX2.
+ */
+enum class TextureMipFilterMode : uint8_t {
+    None = 0,   // Fuerza Mip 0 (ideal para contrastar Bilinear sin mipmaps vs Trilinear)
+    Point = 1,  // Seleccion discreta del nivel de mipmap mas cercano
+    Linear = 2  // Interpolacion trilinear suave entre dos niveles de mipmap
+};
+
+/**
  * @brief ForwardRendererGX2: Subsistema de renderizado forward desacoplado para Nintendo Wii U (Latte GX2).
  * 
  * Centraliza y orquesta:
@@ -42,8 +60,36 @@ public:
     // Inicializa todos los shaders, fetch shaders y samplers de silicio
     bool Initialize();
 
+    [[nodiscard]] bool IsInitialized() const noexcept { return m_initialized; }
+    [[nodiscard]] bool IsPBRShaderLoaded() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_pbrShaderLoaded;
+#else
+        return m_initialized;
+#endif
+    }
+
+    [[nodiscard]] bool HasAllPBRSamplerSlots() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_pbrShaderLoaded && (m_pbrDiffuseSlot >= 0) && (m_pbrSkyboxSlot >= 0) && (m_pbrShadowSlot >= 0);
+#else
+        return m_initialized;
+#endif
+    }
+
+    void SetShaderTime(float elapsedSec) noexcept { m_shaderTime = elapsedSec; }
+
     // Actualiza dinámicamente el modo de filtrado de textura en hardware GX2
     void SetTextureFilterMode(TextureFilterMode mode);
+
+    // Actualiza dinámicamente el modo de direccionamiento UV (Wrap / Clamp / Mirror) en GX2
+    void SetTextureWrapMode(TextureWrapMode mode);
+
+    // Actualiza dinámicamente el modo de filtrado de mipmaps (None / Point / Linear) en GX2
+    void SetTextureMipFilter(TextureMipFilterMode mode);
+
+    // Restaura el sampler de mallas a la configuración global del motor (Wrap + EngineConfig)
+    void ResetMeshSamplerDefaults();
 
     // Libera recursos asignados en MemoryManager
     void Shutdown();
@@ -68,6 +114,21 @@ public:
     void RenderStaticMeshWithMaterial(const StaticMesh& mesh,
                                       const Matrix4x4& modelMatrix,
                                       const MaterialPropertyBlock& material);
+
+    // [Suite G2] Dibuja una malla estática con shader PBR Cook-Torrance (GGX) + Multi-Luz (Dir + 4 Point + 1 Spot) + TBN
+    // shadingMode: 0=PBR Cook-Torrance, 1=Blinn-Phong, 2=Debug Normales Mundo, 3=Debug Roughness/Metallic
+    void RenderStaticMeshPBR(const StaticMesh& mesh,
+                             const Matrix4x4& modelMatrix,
+                             const MaterialPropertyBlock& material,
+                             uint32_t shadingMode = 0u);
+
+    // [Suite G3] Configura estado de Shadow Mapping direccional para RenderStaticMeshPBR (se resetea a OFF en BeginFrame)
+    // shadowMode: 0=OFF, 1=Hard (1-tap), 2=PCF 3x3, 3=PCF 5x5, 4=Debug Shadow Factor
+    void SetDirectionalShadowState(const Matrix4x4& lightVP,
+                                   uint32_t shadowMode,
+                                   float depthBias,
+                                   float texelSize,
+                                   float minLitFactor = 0.14f) noexcept;
 
     // [OPT-20 / OPT-319] Hardware Geometry Instancing (Multi-Frame Ring Buffer + stream divisor=1)
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT     = 3;
@@ -154,6 +215,8 @@ public:
     // Métricas de telemetría por frame
     [[nodiscard]] uint32_t GetDrawCallsCount() const noexcept { return m_drawCallsCount; }
     [[nodiscard]] uint32_t GetTrianglesCount() const noexcept { return m_trianglesCount; }
+    [[nodiscard]] uint32_t GetInstancedDrawCalls() const noexcept { return m_instancedDrawCalls; }
+    [[nodiscard]] uint32_t GetInstancedCount() const noexcept { return m_instancedCount; }
 
 private:
     ForwardRendererGX2() noexcept = default;
@@ -169,9 +232,14 @@ private:
     bool InitSkinningShader();
     bool InitInstancedShader();
     bool InitDepthPrePassShader();
+    bool InitPBRShader();
     void ApplyTextureFilterMode(TextureFilterMode mode);
+    void ApplyMeshSamplerState();
 
     bool m_initialized{false};
+    TextureFilterMode m_activeFilterMode{TextureFilterMode::Aniso4x};
+    TextureWrapMode m_activeWrapMode{TextureWrapMode::Wrap};
+    TextureMipFilterMode m_activeMipFilterMode{TextureMipFilterMode::Linear};
 
     // Matrices por cuadro
     Point3D m_camPos{0.0f, 0.0f, 0.0f};
@@ -179,9 +247,19 @@ private:
     Matrix4x4 m_projMatrix{};
     Matrix4x4 m_vpMatrix{};
 
+    // Estado de sombras direccionales para PBR (Suite G3)
+    Matrix4x4 m_shadowLightVP{Matrix4x4::Identity()};
+    uint32_t m_shadowMode{0u};
+    float m_shadowDepthBias{0.002f};
+    float m_shadowTexelSize{1.0f / 1024.0f};
+    float m_shadowMinLit{0.14f};
+    float m_shaderTime{0.0f};
+
     // Telemetría
     uint32_t m_drawCallsCount{0};
     uint32_t m_trianglesCount{0};
+    uint32_t m_instancedDrawCalls{0};
+    uint32_t m_instancedCount{0};
 
 #if defined(__WIIU__) || defined(__wiiu__)
     // 1. Pipeline Skydome
@@ -245,6 +323,18 @@ private:
     void* m_depthPreFsProgram{nullptr};
     bool m_depthPreShaderLoaded{false};
     bool m_inDepthPrePass{false};
+
+    // 6. [Suite G2] Pipeline PBR Cook-Torrance (GGX) + Multi-Luz (Dir + 4 Point + 1 Spot) + TBN
+    GX2VertexShader* m_pbrVs{nullptr};
+    void* m_pbrVsProgram{nullptr};
+    GX2PixelShader* m_pbrPs{nullptr};
+    void* m_pbrPsProgram{nullptr};
+    GX2FetchShader m_pbrFs{};
+    void* m_pbrFsProgram{nullptr};
+    int32_t m_pbrDiffuseSlot{0};
+    int32_t m_pbrSkyboxSlot{-1};
+    int32_t m_pbrShadowSlot{1};
+    bool m_pbrShaderLoaded{false};
 #endif
 };
 

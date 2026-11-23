@@ -181,9 +181,9 @@ bool EngineConfig::LoadFromFile(const char* filepath) {
     return true;
 }
 
-bool EngineConfig::SaveToFile(const char* filepath) {
-    char iniBuffer[1280];
-    int len = std::snprintf(iniBuffer, sizeof(iniBuffer),
+size_t EngineConfig::FormatIni(char* outBuf, size_t capacity) const noexcept {
+    if (!outBuf || capacity == 0u) return 0u;
+    int len = std::snprintf(outBuf, capacity,
         "; =============================================================================\n"
         "; Global Engine Configuration (StorageManager SAL)\n"
         "; =============================================================================\n\n"
@@ -223,12 +223,32 @@ bool EngineConfig::SaveToFile(const char* filepath) {
         static_cast<unsigned>(network.udpPort)
     );
 
-    if (len <= 0 || static_cast<size_t>(len) >= sizeof(iniBuffer)) {
+    if (len <= 0 || static_cast<size_t>(len) >= capacity) {
+        return 0u;
+    }
+    return static_cast<size_t>(len);
+}
+
+bool EngineConfig::SaveToFile(const char* filepath) {
+    char iniBuffer[1280];
+    const size_t len = FormatIni(iniBuffer, sizeof(iniBuffer));
+    if (len == 0u) {
         return false;
     }
 
     const char* targetPath = filepath ? filepath : "engine_config.ini";
-    return StorageManager::SaveStringAtomic(targetPath, std::string_view(iniBuffer, static_cast<size_t>(len)));
+    return StorageManager::SaveStringAtomic(targetPath, std::string_view(iniBuffer, len));
+}
+
+bool EngineConfig::SaveToFileAsync(const char* filepath) const {
+    char iniBuffer[1280];
+    const size_t len = FormatIni(iniBuffer, sizeof(iniBuffer));
+    if (len == 0u) {
+        return false;
+    }
+
+    const char* targetPath = filepath ? filepath : "engine_config.ini";
+    return StorageManager::SaveFileAsync(targetPath, iniBuffer, len);
 }
 
 uint32_t EngineConfig::RegisterChangeCallback(ConfigChangeCallback cb, void* userData) noexcept {

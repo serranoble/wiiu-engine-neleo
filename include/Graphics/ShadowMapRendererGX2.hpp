@@ -73,6 +73,11 @@ public:
      */
     void BindShadowMap(uint32_t texSlot = 2, uint32_t samplerSlot = 2) const;
 
+    /**
+     * @brief Enlaza la textura de profundidad con muestreo puntual directo (sin DepthCompare) para PCF manual 3x3/5x5 y Debug.
+     */
+    void BindShadowMapRaw(uint32_t texSlot = 2, uint32_t samplerSlot = 2) const;
+
     [[nodiscard]] GX2Texture* GetShadowTexture() noexcept { return m_initialized ? &m_shadowTexture : nullptr; }
     [[nodiscard]] GX2Sampler* GetShadowSampler() noexcept { return m_initialized ? &m_shadowSampler : nullptr; }
     [[nodiscard]] GX2DepthBuffer* GetShadowDepthBuffer() noexcept { return m_initialized ? &m_shadowDepthBuffer : nullptr; }
@@ -92,10 +97,14 @@ private:
     GX2DepthBuffer m_shadowDepthBuffer{};
     GX2Texture m_shadowTexture{};
     GX2Sampler m_shadowSampler{};
+    GX2Sampler m_rawDepthSampler{};
+    GX2ContextState* m_shadowContextState{nullptr};
     bool m_surfaceCreated{false};
 
     GX2VertexShader* m_depthVs{nullptr};
     void* m_depthVsProgram{nullptr};
+    GX2PixelShader* m_depthPs{nullptr};
+    void* m_depthPsProgram{nullptr};
     GX2FetchShader m_depthFs{};
     void* m_depthFsProgram{nullptr};
     bool m_shaderLoaded{false};
