@@ -17,18 +17,21 @@ out vec2 vTexCoord;
 out vec4 vColor;
 
 void main() {
-    // Linear Blend Skinning (LBS) en silicio AMD Latte GX2
-    mat4 skinMat = uBones[aBoneIndices.x] * aBoneWeights.x +
-                   uBones[aBoneIndices.y] * aBoneWeights.y +
-                   uBones[aBoneIndices.z] * aBoneWeights.z +
-                   uBones[aBoneIndices.w] * aBoneWeights.w;
+    // Linear Blend Skinning (LBS) en silicio AMD Latte GX2 (acotado a 24 huesos)
+    uvec4 bi = min(aBoneIndices, uvec4(23u));
+    mat4 skinMat = uBones[bi.x] * aBoneWeights.x +
+                   uBones[bi.y] * aBoneWeights.y +
+                   uBones[bi.z] * aBoneWeights.z +
+                   uBones[bi.w] * aBoneWeights.w;
 
     vec4 skinnedLocalPos = skinMat * vec4(aPos, 1.0);
     vec4 worldPos = uModel * skinnedLocalPos;
     gl_Position = uMVP * skinnedLocalPos;
 
     vWorldPos = worldPos.xyz;
-    vNormal = normalize((uModel * skinMat * vec4(aNormal, 0.0)).xyz);
+    vec3 nRaw = (uModel * skinMat * vec4(aNormal, 0.0)).xyz;
+    float nLenSq = dot(nRaw, nRaw);
+    vNormal = mix(vec3(0.0, 1.0, 0.0), nRaw * inversesqrt(max(nLenSq, 1e-8)), step(1e-8, nLenSq));
     vTexCoord = aTexCoord;
     vColor = aColor;
 }

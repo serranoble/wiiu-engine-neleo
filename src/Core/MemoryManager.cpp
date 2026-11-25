@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <cstring>
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(_WIN32)
 #include <malloc.h>
 #define WIIU_MEMALIGN(align, size) _aligned_malloc(size, align)
 #define WIIU_FREEALIGNED(ptr) _aligned_free(ptr)

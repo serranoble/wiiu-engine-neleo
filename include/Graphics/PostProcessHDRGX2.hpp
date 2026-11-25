@@ -71,6 +71,18 @@ public:
                                    GX2DepthBuffer* restoreDepth,
                                    uint32_t restoreWidth = 1280u,
                                    uint32_t restoreHeight = 720u);
+#else
+    [[nodiscard]] bool BeginHDRScenePass(float clearR = 0.02f,
+                                         float clearG = 0.03f,
+                                         float clearB = 0.05f,
+                                         float clearA = 1.0f);
+
+    void EndHDRScenePassAndCompose(const PostProcessHDRSettings& settings,
+                                   void* restoreContext,
+                                   void* restoreColor,
+                                   void* restoreDepth,
+                                   uint32_t restoreWidth = 1280u,
+                                   uint32_t restoreHeight = 720u);
 #endif
 
 private:
@@ -102,6 +114,12 @@ private:
     GX2Sampler m_linearClampSampler{};
     GX2RBuffer m_quadVBO{};
     bool m_quadCreated{false};
+#else
+    uint32_t m_postProgram{0u};
+    uint32_t m_fullscreenVao{0u};
+    int32_t m_sceneTexLoc{-1};
+    int32_t m_bloomTexLoc{-1};
+    int32_t m_postDataLoc{-1};
 #endif
 };
 

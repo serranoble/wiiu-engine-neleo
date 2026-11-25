@@ -234,6 +234,10 @@ private:
     bool InitDepthPrePassShader();
     bool InitPBRShader();
     void ApplyTextureFilterMode(TextureFilterMode mode);
+#if defined(__WIIU__) || defined(__wiiu__)
+    void BindMeshTextureAndSampler(const GX2Texture* tex, uint32_t slot) noexcept;
+    void BindSkinnedPipeline(GX2Texture* diffuseTexture, float reflectionIntensity, bool clayMode);
+#endif
     void ApplyMeshSamplerState();
 
     bool m_initialized{false};
@@ -280,6 +284,7 @@ private:
     GX2FetchShader m_meshFs{};
     void* m_meshFsProgram{nullptr};
     GX2Sampler m_meshSampler{};
+    GX2Sampler m_meshNoMipSampler{};
     bool m_meshShaderLoaded{false};
 
     // 3. Pipeline Animación Esquelética LBS
@@ -289,6 +294,10 @@ private:
     void* m_skelPsProgram{nullptr};
     GX2FetchShader m_skelFs{};
     void* m_skelFsProgram{nullptr};
+    uint32_t m_skelMvpRegOffset{0u};
+    uint32_t m_skelModelRegOffset{16u};
+    uint32_t m_skelBonesRegOffset{32u};
+    uint32_t m_skelDiffuseSlot{0u};
     bool m_skelShaderLoaded{false};
 
     // Sampler para CubeMaps ambientales

@@ -12,7 +12,6 @@
 namespace WiiU {
 
 void MeshRenderSystem::Render(ECSWorld& world, ForwardRendererGX2& renderer, bool enableEarlyZPrePass) {
-#if defined(__WIIU__) || defined(__wiiu__)
     static RenderQueue s_queue{};
     s_queue.Clear();
 
@@ -127,11 +126,6 @@ void MeshRenderSystem::Render(ECSWorld& world, ForwardRendererGX2& renderer, boo
 
     // 6. Despacho ordenado Back-to-Front de capas Transparent y Overlay con BlendMode real
     s_queue.FlushRange(renderer, RenderLayer::Transparent, RenderLayer::Overlay, false);
-#else
-    (void)world;
-    (void)renderer;
-    (void)enableEarlyZPrePass;
-#endif
 }
 
 } // namespace WiiU

@@ -5,8 +5,7 @@
 #include <gx2/context.h>
 #include <gx2/registers.h>
 #else
-#include <SDL2/SDL.h>
-#include <vector>
+#include "Graphics/GL/Render2DGL.hpp"
 #endif
 #include <cstring>
 #include <cctype>
@@ -95,12 +94,16 @@ void Render2D::Begin() {
         GX2SetColorBuffer(static_cast<GX2ColorBuffer*>(cb), GX2_RENDER_TARGET_0);
     }
     Render2DGX2::Instance().Begin();
+#else
+    Render2DGL::Instance().Begin();
 #endif
 }
 
 void Render2D::End() {
 #if defined(__WIIU__) || defined(__wiiu__)
     Render2DGX2::Instance().End();
+#else
+    Render2DGL::Instance().End();
 #endif
 }
 
@@ -109,12 +112,8 @@ void Render2D::DrawRect(int x, int y, int w, int h, const ColorRGBA& color) {
     Render2DGX2::Instance().DrawRect(static_cast<float>(x), static_cast<float>(y),
                                      static_cast<float>(w), static_cast<float>(h), color);
 #else
-    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
-    if (!renderer || w <= 0 || h <= 0) return;
-    SDL_Rect rect{x, y, w, h};
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-    SDL_RenderFillRect(renderer, &rect);
+    Render2DGL::Instance().DrawRect(static_cast<float>(x), static_cast<float>(y),
+                                    static_cast<float>(w), static_cast<float>(h), color);
 #endif
 }
 
@@ -124,12 +123,9 @@ void Render2D::DrawLine(int x0, int y0, int x1, int y1, const ColorRGBA& color, 
                                      static_cast<float>(x1), static_cast<float>(y1),
                                      width, color);
 #else
-    (void)width;
-    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
-    if (!renderer) return;
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-    SDL_RenderDrawLine(renderer, x0, y0, x1, y1);
+    Render2DGL::Instance().DrawLine(static_cast<float>(x0), static_cast<float>(y0),
+                                    static_cast<float>(x1), static_cast<float>(y1),
+                                    width, color);
 #endif
 }
 
@@ -144,78 +140,28 @@ void Render2D::DrawPixelString(std::string_view text, int x, int y, int scale, c
     Render2DGX2::Instance().DrawText(text, static_cast<float>(x), static_cast<float>(y),
                                      static_cast<float>(scale), color);
 #else
-    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
-    if (!renderer) return;
-
-    static std::vector<SDL_Rect> pixelBatch;
-    pixelBatch.clear();
-    pixelBatch.reserve(text.size() * 20);
-
-    int curX = x;
-    uint8_t cols[5];
-
-    for (char c : text) {
-        GetFont5x7(c, cols);
-        for (int col = 0; col < 5; ++col) {
-            uint8_t line = cols[col];
-            for (int row = 0; row < 7; ++row) {
-                if (line & (1 << row)) {
-                    pixelBatch.push_back(SDL_Rect{ curX + col * scale, y + row * scale, scale, scale });
-                }
-            }
-        }
-        curX += (5 + 1) * scale;
-    }
-
-    if (!pixelBatch.empty()) {
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-        SDL_RenderFillRects(renderer, pixelBatch.data(), static_cast<int>(pixelBatch.size()));
-    }
+    Render2DGL::Instance().DrawText(text, static_cast<float>(x), static_cast<float>(y),
+                                    static_cast<float>(scale), color);
 #endif
 }
 
 void Render2D::DrawShrinkingRing(int cx, int cy, float radius, const ColorRGBA& color) {
     if (radius <= 1.0f) return;
-#if defined(__WIIU__) || defined(__wiiu__)
     constexpr int SEGMENTS = 24;
     constexpr float TWO_PI = 2.0f * 3.14159265f;
-    auto& r2d = Render2DGX2::Instance();
     for (int i = 0; i < SEGMENTS; ++i) {
         const float a0 = (static_cast<float>(i) / static_cast<float>(SEGMENTS)) * TWO_PI;
         const float a1 = (static_cast<float>(i + 1) / static_cast<float>(SEGMENTS)) * TWO_PI;
-        r2d.DrawLine(static_cast<float>(cx) + radius * std::cos(a0),
-                     static_cast<float>(cy) + radius * std::sin(a0),
-                     static_cast<float>(cx) + radius * std::cos(a1),
-                     static_cast<float>(cy) + radius * std::sin(a1),
-                     2.0f, color);
-    }
+        const float x0 = static_cast<float>(cx) + radius * std::cos(a0);
+        const float y0 = static_cast<float>(cy) + radius * std::sin(a0);
+        const float x1 = static_cast<float>(cx) + radius * std::cos(a1);
+        const float y1 = static_cast<float>(cy) + radius * std::sin(a1);
+#if defined(__WIIU__) || defined(__wiiu__)
+        Render2DGX2::Instance().DrawLine(x0, y0, x1, y1, 2.0f, color);
 #else
-    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
-    if (!renderer) return;
-
-    int numPoints = static_cast<int>(2.0f * 3.14159265f * radius * 0.8f);
-    if (numPoints < 20) numPoints = 20;
-
-    static std::vector<SDL_Rect> ringBatch;
-    ringBatch.clear();
-    ringBatch.reserve(numPoints);
-
-    constexpr float TWO_PI = 2.0f * 3.14159265f;
-    for (int i = 0; i < numPoints; ++i) {
-        float angle = (static_cast<float>(i) / static_cast<float>(numPoints)) * TWO_PI;
-        int px = static_cast<int>(cx + radius * std::cos(angle));
-        int py = static_cast<int>(cy + radius * std::sin(angle));
-
-        ringBatch.push_back(SDL_Rect{ px - 1, py - 1, 3, 3 });
-    }
-
-    if (!ringBatch.empty()) {
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-        SDL_RenderFillRects(renderer, ringBatch.data(), static_cast<int>(ringBatch.size()));
-    }
+        Render2DGL::Instance().DrawLine(x0, y0, x1, y1, 2.0f, color);
 #endif
+    }
 }
 
 void Render2D::DrawBox(int x, int y, int w, int h, const ColorRGBA& fillColor, const ColorRGBA& borderColor) {
@@ -224,18 +170,9 @@ void Render2D::DrawBox(int x, int y, int w, int h, const ColorRGBA& fillColor, c
                                     static_cast<float>(w), static_cast<float>(h),
                                     fillColor, borderColor, 2.0f);
 #else
-    SDL_Renderer* renderer = static_cast<SDL_Renderer*>(Window::GetActiveRendererHandle());
-    if (!renderer) return;
-    SDL_Rect rect = { x, y, w, h };
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    if (fillColor.a > 0) {
-        SDL_SetRenderDrawColor(renderer, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
-        SDL_RenderFillRect(renderer, &rect);
-    }
-    if (borderColor.a > 0) {
-        SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
-        SDL_RenderDrawRect(renderer, &rect);
-    }
+    Render2DGL::Instance().DrawBox(static_cast<float>(x), static_cast<float>(y),
+                                   static_cast<float>(w), static_cast<float>(h),
+                                   fillColor, borderColor, 2.0f);
 #endif
 }
 

@@ -22,7 +22,7 @@ Este documento establece las reglas obligatorias e inviolables de desarrollo, co
     - Higiene de dependencias, diseño modular y preservación de convenciones de nombrado.
     - Cero regresiones y validación de seguridad de memoria.
   - `graphics_code_reviewer`:
-    - Valida silicio Wii U (CPU Espresso Tri-Core 750CL y GPU AMD Latte R700 / GX2).
+    - Valida silicio Wii U (CPU Espresso Tri-Core 750CL y GPU AMD Latte R700 / GX2) **y backend OpenGL 3.3 Core / Win32 PAL** (VAOs aislados, FBOs, guardado/restauración de viewport 16:9 y limpieza de textura/estado entre 3D y 2D).
     - Higiene de GX2ContextState, Render Targets, Vertex Fetch Shaders y coherencia de cachés (GX2Invalidate / DCFlushRange).
     - Descarte de deadlocks multihilo en Cafe OS y uso adecuado de MEM1/MEM2.
 - Los reportes y observaciones de ambos revisores deben integrarse en la respuesta al usuario.
@@ -31,9 +31,9 @@ Este documento establece las reglas obligatorias e inviolables de desarrollo, co
 
 ## 3. Prohibición Absoluta de Despliegues FTP Autónomos
 - El agente tiene **ESTRICTAMENTE PROHIBIDO** subir archivos o binarios por FTP a la consola Wii U sin una orden explícita y directa del usuario en el turno actual.
-- Aunque el binario (`.wuhb`, `.rpx` o `.elf`) se compile con éxito:
+- Aunque el binario (`.wuhb`, `.rpx`, `.elf` o `build-win/wiiu_demos.exe`) se compile con éxito:
   1. Se informa que la compilación local concluyó exitosamente.
-  2. Se indica el tamaño del archivo generado en `build/`.
+  2. Se indica el tamaño de los binarios generados en `build/` y `build-win/`.
   3. Se pregunta al usuario si desea que se proceda con la transferencia FTP a la consola.
 - Solamente si el usuario responde afirmativamente (ej. "sube el binario", "transfiere a la consola", "sí, súbelo"), se ejecuta el comando de despliegue FTP.
 
@@ -53,7 +53,7 @@ Este documento establece las reglas obligatorias e inviolables de desarrollo, co
 - **Rendimiento y Silicio:**
   - Cero asignaciones dinámicas en el bucle caliente (60 FPS).
   - Manejo de memoria consciente de MEM1 (16 MB rápidos) y MEM2 (2 GB principales).
-  - Limpieza y sincronización de contextos gráficos al alternar entre SDL2 y GX2.
+  - Limpieza y sincronización de contextos gráficos al alternar entre 3D (`ForwardRenderer*`/FBOs) y 2D (`Render2D*`), manteniendo **0 SDL2** en todo el repositorio y **0 DLLs de terceros** en Windows.
 
 ---
 

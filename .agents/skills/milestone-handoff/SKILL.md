@@ -15,17 +15,18 @@ description: Token-efficient workflow for updating docs/CURRENT_STATE.md, append
 
 1. **Update `docs/CURRENT_STATE.md`:**
    - Keep it under **3.5 KB** (~900 tokens).
-   - Update date, latest milestone number, branch, key architectural changes, and active invariants.
+   - Update date, latest milestone number, branch, active platforms (Wii U + Windows x64), key architectural changes, and active invariants.
 
 2. **Append Milestone to `HANDOFF_ANTIGRAVITY.md`:**
    - Update only line 3 (`**Última Actualización:** ...`).
    - Append a concise milestone section (<= 25 lines) before `## ⚡ Comandos Útiles` containing:
-     - Objective, closed `OPT-XXX` IDs, bullet list of key files changed, build sizes (`.rpx`/`.wuhb`), and Phase 1 / Phase 2 reviewer verdicts.
+     - Objective, closed `OPT-XXX` IDs, bullet list of key files changed, build sizes for all 3 binaries (`build/wiiu_demos.rpx`, `build/wiiu_demos.wuhb`, `build-win/wiiu_demos.exe` from `build --all`), and Phase 1 / Phase 2 reviewer verdicts.
 
 3. **Register `OPT-XXX` in `ANEXO_OPTIMIZACIONES_PENDIENTES.md`:**
-   - Update header range (`OPT-01` a `OPT-XXX`) in lines 4–5.
-   - Insert 1 row per new `OPT` at the end of the general status table.
-   - Append a concise card (Área, Estado, Referencia, Problema, Mecanismo, Reusabilidad, PROS, CONTRAS, Recomendación Técnica) before `## 📌 PROTOCOLO DE MANTENIMIENTO`.
+   - Run `python scripts/agent_harness.py opt tail` to obtain exact `LAST_TABLE_LINE` and `PROTOCOL_HEADER_LINE`, then read only small targeted ranges around those lines.
+   - Update header range (`OPT-01` a `OPT-XXX`) in lines 4–5 and section title (`OPT-01` a `OPT-XXX`).
+   - Insert 1 row per new `OPT` right after `LAST_TABLE_LINE`.
+   - Append a concise card (Área, Estado, Referencia, Problema, Mecanismo, Reusabilidad, PROS, CONTRAS, Recomendación Técnica) right before `PROTOCOL_HEADER_LINE`.
 
 4. **Verify LF:**
    - Run `python scripts/agent_harness.py check --fix-lf` to guarantee `0 CRLF`.

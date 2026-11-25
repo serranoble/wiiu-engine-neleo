@@ -1,16 +1,17 @@
 # Estado Vivo del Proyecto — Wii U 3D Engine C++20
 
-**Última actualización:** 23 de Noviembre de 2026 (Hito 146: Plan Maestro de Calidad Gráfica 8/8 Suites G1–G8 validadas en Wii U real + 43/43 pruebas)
+**Última actualización:** 25 de Noviembre de 2026 (Hito 151 / Fase 3 Windows Nativo: Paridad Gráfica Completa OpenGL 3.3 Core — `RenderTargetGL`, `ShadowMapRendererGL` PCF, `PostProcessHDRGL` HDR+Bloom, `RHIFullscreenShaderGL` Raytracing BVH y modos PBR/Procedurales `4..9`)
 **Rama activa:** `refactor/engine-stability-and-scene-archive`
-**Plataforma base:** Nintendo Wii U (Espresso PPC 750CL Tri-Core @ 1.24 GHz, AMD Latte GX2 @ 550 MHz, Cafe OS) — diseño multi-consola (Wii U / Switch / PC).
+**Plataformas activas:** Nintendo Wii U (Espresso PPC 750CL / AMD Latte GX2 / Cafe OS) + **Windows x64 Nativo (`build-win/wiiu_demos.exe` — 0 SDL2, 0 DLLs externas, 2D + 3D + FBOs + Sombras + HDR OpenGL 3.3 Core)** — diseño multi-consola (Wii U / Windows-ROG Ally / Linux / Switch).
 
 ---
 
-## Arquitectura Vigente (Hito 146 — 8 Librerías Estáticas + Plan Gráfico 8/8 Completo)
+## Arquitectura Vigente (Hito 151 — 8 Librerías Estáticas + PAL Multiplataforma + Fase 3 Paridad Gráfica OpenGL 3.3)
 
 - **8 librerías estáticas (DAG acíclico en `CMakeLists.txt`):**
-  1. `engine_core` (+ `ViewFrustum`, `StacklessBVH`, `EngineConfig::SaveToFileAsync()` sobre `StorageManager::SaveFileAsync`), 2. `engine_physics`, 3. `engine_audio`, 4. `engine_input` (+ `SoftwareKeyboard` táctil calibrado `VPADGetTPCalibratedPoint`), 5. `engine_graphics` (+ `RenderTargetGX2`, `PostProcessHDRGX2` Kawase 5-Tap, `MeshLODGroup`, `ParticleSystem3D`, Instancing Ring Buffer lock-free), 6. `engine_ai`, 7. `engine_framework`, 8. `engine_net` (validado sobre Wi-Fi Wii U real: RTT 34.6 ms / SRTT 46 ms / Jitter 19 ms).
-- **Cobertura de Calidad Gráfica:** **8/8 Suites QA (G1–G8)** cerradas y validadas en **Cemu 2.6** y **Wii U real** (G1: 87 FPS, G2: 32 FPS, G3: 56 FPS, G4: 62 FPS, G5: 50 FPS, G6: 55 FPS, G7: 50 FPS, G8: 25–50 FPS con VSync OFF) + **43/43 pruebas** en `EngineSelfTestSuite`.
+  1. `engine_core` (+ `PlatformClock`, `WindowWiiU` / `WindowWin32` WGL OpenGL 3.3 Core, `Win32InputBridge`, `ViewFrustum`, `StacklessBVH`, `SaveToFileAsync`), 2. `engine_physics`, 3. `engine_audio` (+ `AudioDeviceWin32` `waveOut` 48 kHz), 4. `engine_input` (+ `SoftwareKeyboard`, `InputWin32` XInput + táctil, `RumbleWin32`), 5. `engine_graphics` (+ GX2 completo + OpenGL 3.3 Core completo: `GLFunctions`, `Render2DGL`, `ForwardRendererGL` [modos `0..9`, PCF 3×3/5×5, Reflejo planar, Terreno 4 biomas, NPR], `TextureLoaderGL`, `RenderTargetGL`, `ShadowMapRendererGL`, `PostProcessHDRGL`, `RHIFullscreenShaderGL`), 6. `engine_ai`, 7. `engine_framework` (+ `GameScene3D` multiplataforma), 8. `engine_net` (Wii U `nsysnet` + Windows `ws2_32`).
+- **Cero SDL2 en todo el motor (`ZERO_SDL_SOURCE_REFS: PASS (0)` + `ELF_SDL_SYMBOLS: PASS (0)`):** Ningún `#include <SDL2/` ni símbolo `SDL_*` en `include/` o `src/`.
+- **Cobertura de Calidad Gráfica y Validación:** **8/8 Suites QA (G1–G8)** + `SceneModelHouse` + `SceneModelBird` + **44/44 pruebas** en `EngineSelfTestSuite` + **`COOKED_WMESH_CHECK`** + **`ZERO_SDL_SOURCE_REFS`** en `scripts/agent_harness.py`. (`OPT-444`..`OPT-450` en `ANEXO_OPTIMIZACIONES_PENDIENTES.md`).
 - **Herramienta de Diagnóstico:** `tools/net_test_server.py` (servidor local dual TCP 7777 + UDP 7778).
 - **Umbrella header público:** `include/WiiUEngine.hpp`.
 

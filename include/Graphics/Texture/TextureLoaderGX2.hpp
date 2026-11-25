@@ -7,7 +7,13 @@
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/texture.h>
 #else
-struct GX2Texture { int dummy{0}; };
+struct GX2Texture {
+    uint32_t glTextureId{0u};
+    uint32_t width{0u};
+    uint32_t height{0u};
+    uint32_t mipLevels{1u};
+    bool isCubeAtlas{false};
+};
 #endif
 
 namespace WiiU::Graphics::TextureLoaderGX2 {

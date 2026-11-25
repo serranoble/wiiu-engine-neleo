@@ -35,7 +35,7 @@ struct Render2DVertexGX2 {
 /**
  * @brief Subsistema de renderizado 2D 100% nativo sobre la GPU AMD Latte (GX2).
  * 
- * Diseñado específicamente para UI y HUD en escenas que prescinden completamente de SDL2:
+ * Diseñado específicamente para UI y HUD en escenas nativas 100% libres de librerías externas:
  * - Dibuja rectángulos, bordes, botones y texto bitmap 5x7 directamente en silicio GX2.
  * - Proyección ortográfica automática en coordenadas de pantalla (1280x720).
  * - Agrupamiento por lotes (Batching) con emisión en 1 sola llamada GPU (GX2DrawEx).

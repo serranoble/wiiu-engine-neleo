@@ -1,5 +1,5 @@
 #include "Graphics/DebugDraw3D.hpp"
-#include "Graphics/Render2DGX2.hpp"
+#include "Graphics/Render2D.hpp"
 #include <cmath>
 
 namespace WiiU {
@@ -97,11 +97,12 @@ void DebugDraw3D::DrawLine(const Point3D& a, const Point3D& b, float width, cons
 
     float x0 = 0.0f, y0 = 0.0f, x1 = 0.0f, y1 = 0.0f;
     if (ProjectToScreen(pa, x0, y0) && ProjectToScreen(pb, x1, y1)) {
-#if defined(__WIIU__) || defined(__wiiu__)
-        Render2DGX2::Instance().DrawLine(x0, y0, x1, y1, width, color);
-#else
-        (void)width; (void)color;
-#endif
+        Render2D::DrawLine(static_cast<int>(std::lround(x0)),
+                           static_cast<int>(std::lround(y0)),
+                           static_cast<int>(std::lround(x1)),
+                           static_cast<int>(std::lround(y1)),
+                           color,
+                           width);
     }
 }
 

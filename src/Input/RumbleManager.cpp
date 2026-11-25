@@ -1,13 +1,14 @@
 #include "Input/RumbleManager.hpp"
 #include "Input/InputManager.hpp"
 #include "Core/Config/EngineConfig.hpp"
-#if !defined(__WIIU__) && !defined(__wiiu__)
-#include <SDL2/SDL.h>
-#endif
 
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <vpad/input.h>
 #include <padscore/wpad.h>
+#elif defined(_WIN32)
+namespace WiiU::Platform {
+void SetWin32HardwareRumble(int playerIdx, float intensity, bool active) noexcept;
+}
 #endif
 
 namespace WiiU {
@@ -173,17 +174,11 @@ void RumbleManager::SetHardwareRumble(PlayerIndex player, float intensity, bool 
             }
         }
     }
+#elif defined(_WIN32)
+    const int targetIdx = (player == PlayerIndex::GamePad) ? 0 : static_cast<int>(player);
+    Platform::SetWin32HardwareRumble(targetIdx, intensity, active);
 #else
-    // Soporte PC / SDL2: mapear PlayerIndex::GamePad al pad 0
-    int targetIdx = (player == PlayerIndex::GamePad) ? 0 : static_cast<int>(player);
-    if (targetIdx >= 0 && targetIdx < 4) {
-        SDL_GameController* controller = SDL_GameControllerFromPlayerIndex(targetIdx);
-        if (controller) {
-            uint16_t freq = active ? static_cast<uint16_t>(intensity * 65535.0f) : 0;
-            uint32_t ms = active ? 250 : 0;
-            SDL_GameControllerRumble(controller, freq, freq, ms);
-        }
-    }
+    (void)player; (void)intensity; (void)active;
 #endif
 }
 

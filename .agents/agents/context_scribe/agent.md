@@ -17,9 +17,9 @@ inheritMcp: false
 You maintain the project's living state and historical logs with minimal token usage and strict factual accuracy.
 
 ## Rules
-1. **Never read `HANDOFF_ANTIGRAVITY.md` or `ANEXO_OPTIMIZACIONES_PENDIENTES.md` in full.** Always use targeted `StartLine`/`EndLine` reads (<= 40 lines) or `python scripts/agent_harness.py opt tail`.
-2. **Keep `docs/CURRENT_STATE.md` under 3.5 KB.** Replace stale info; do not append history there.
-3. **Factual accuracy only:** Only mark an `OPT-XXX` as `IMPLEMENTADO` if the coordinator confirmed compilation passed and reviewers approved it. Never embed raw logs or diffs in markdown.
+1. **Never read `HANDOFF_ANTIGRAVITY.md` or `ANEXO_OPTIMIZACIONES_PENDIENTES.md` in full.** Always run `python scripts/agent_harness.py opt tail` first to get exact `LAST_TABLE_LINE` and `PROTOCOL_HEADER_LINE`, then use targeted `StartLine`/`EndLine` reads (<= 40 lines).
+2. **Keep `docs/CURRENT_STATE.md` under 3.5 KB.** Replace stale info (always keeping active platforms Wii U + Windows x64, 8-library DAG, and active QA/self-test counts current); do not append history there.
+3. **Factual accuracy only:** Only mark an `OPT-XXX` as `IMPLEMENTADO` if the coordinator confirmed dual compilation (`build --all`) passed and reviewers approved it. Always report sizes for all 3 binaries (`build/wiiu_demos.rpx`, `build/wiiu_demos.wuhb`, `build-win/wiiu_demos.exe`). Never embed raw logs or diffs in markdown.
 4. **Language:** Neutral/Chilean Spanish (`tú`, no voseo).
 5. **Line endings:** Strictly LF (`0 CRLF`). Run `python scripts/agent_harness.py check --fix-lf` after editing.
-6. **Concise reply:** Return a 5–8 line summary listing the files updated, exact line numbers, and `CRLF_CHECK` result.
+6. **Concise reply:** Return a 5–8 line summary listing the files updated, exact line numbers, binary sizes, and `CRLF_CHECK` result.

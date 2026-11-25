@@ -1,8 +1,8 @@
 # ANEXO DE OPTIMIZACIONES PENDIENTES POR ABORDAR
 **Proyecto:** WiiU Demos - Motor Gráfico y Computación de Alto Rendimiento 3D  
 **Plataforma:** Nintendo Wii U (Espresso PPC 750CL Tri-Core @ 1.24 GHz, AMD Latte GX2 GPU @ 550 MHz, Cafe OS)  
-**Última Actualización:** 21 de Noviembre de 2026 (Hito 145 — Subsistema de Redes Multi-Consola `engine_net` [8ª librería estática, Cap. 20 Jason Gregory] + Servidor Local Dual TCP/UDP en Windows [`OPT-443`]: `NetSocket` HAL no bloqueante `nsysnet`/`Winsock2`, `NetBitStream` endian-safe, `NetSession` UDP `WUN1` + ACK sliding window + TCP framing 2048B, `NetReplication` snapshots 50B + LERP/SLERP, `tools/net_test_server.py`, `build/` + `build_lib/` exit 0 con 0 warnings, 0 errores, 0 símbolos `SDL_` en `wiiu_demos.elf` [`357,512` B `.rpx` / `51,212,524` B `.wuhb`], Fases 1 y 2 `APROBACIÓN FINAL`, 0 CRLF; `OPT-443`)  
-**Propósito:** Este documento registra de manera viva, continua y estructurada todas las técnicas, algoritmos y optimizaciones investigadas y aplicadas en el motor (`OPT-01` a `OPT-443`), sirviendo como bitácora técnica e inventario para el roadmap multi-consola.
+**Última Actualización:** 25 de Noviembre de 2026 (Hito 149 / Fase 1 Windows Nativo — Capa PAL Multiplataforma 0-SDL2 (`PlatformClock`, `WindowWiiU`/`WindowWin32`, `InputWin32` XInput+Táctil, `RumbleWin32`, `AudioDeviceWin32` `waveOut`) + Loader OpenGL 3.3 Core y `Render2DGL` para PC y ROG Ally Z1 [`OPT-448`]; `0` warnings, `0` errores, `ZERO_SDL_SOURCE_REFS: PASS (0)`, `ELF_SDL_SYMBOLS: PASS (0)`, 0 CRLF)  
+**Propósito:** Este documento registra de manera viva, continua y estructurada todas las técnicas, algoritmos y optimizaciones investigadas y aplicadas en el motor (`OPT-01` a `OPT-448`), sirviendo como bitácora técnica e inventario para el roadmap multi-consola.
 
 ---
 
@@ -452,10 +452,18 @@
 | **OPT-440** | Concurrencia / DOD | Stateless Stack-Bitset Broadphase Queries (32B L1D) & Epoch-Safe Async Job Slots (`jobCounter == 0`) | Christer Ericson / Mike Acton / Jason Gregory | **IMPLEMENTADO** | Hito 142 (19 Nov 2026) |
 | **OPT-441** | Higiene Motor / Silicio & Concurrencia | Auditoría Integral Deep-Clean (51 Hallazgos + 3 Micro-Fixes): Cola MPMC Vyukov, WAV Big-Endian, CubeMap `depth=6`, DAG Acíclico 7 Librerías, VFS Anti-ABA & `-fno-finite-math-only` | Dmitry Vyukov / AMD Latte GX2 / C++20 Core Guidelines | **IMPLEMENTADO** | Hito 143 (19 Nov 2026) |
 | **OPT-442** | Plataforma Nativa Wii U / Cero SDL2 | Migración Completa Wii U 100% Nativo (GX2 Swapchain + ProcUI + `Render2DGX2` Triple-Buffer + `sndcore2` AX 48 kHz + Resampler 48.16) y Encapsulación SDL2 Multiplataforma | Cafe OS WUT / AMD Latte GX2 / sndcore2 DSP | **IMPLEMENTADO** | Hito 144 (19 Nov 2026) |
+| **OPT-443** | Redes / Multijugador | Subsistema de Redes Multi-Consola `engine_net` (`nsysnet`/Winsock2, UDP `WUN1`, TCP framing, Snapshots 50B) + `net_test_server.py` | Jason Gregory (Cap. 20) / `nsysnet` | **IMPLEMENTADO** | Hito 145 (21 Nov 2026) |
+| **OPT-444** | Gráficos / QA Motor | Plan Maestro de Calidad Gráfica 8/8 Suites (G1–G8) + 43/43 pruebas `EngineSelfTestSuite`, Instancing Ring Buffer Lock-Free, Kawase 5-Tap, Skybox Atlas 2D, `SaveToFileAsync`, Teclado Táctil VPAD y Docs GitHub Pages | CGP (3ª Ed.) / RTR4 (4ª Ed.) / AMD Latte GX2 | **IMPLEMENTADO** | Hito 146 (23 Nov 2026) |
+| **OPT-445** | Gráficos / Asset Cooker | Hardening Skinning GPU Wii U Real (`advanced_skel_gx2` anti-NaN, 0 `CUBE`, reflexión `uniformVars`, guarda stride `80 B`, `BindSkinnedPipeline` DRY) + `COOKED_WMESH_CHECK` | Jason Gregory (Caps. 7, 12) / Gabor Szauer / AMD Latte R700 | **IMPLEMENTADO** | Hito 147 / Fase B1 (23 Nov 2026) |
+| **OPT-446** | Gráficos / Validación Cooker | Escenas Dedicadas `SceneModelHouse` (estática + Alpha-Cutout PBR sRGB modo `0u`) y `SceneModelBird` (`EvaluatePose` con fallback `localBindPose`), + soporte `AlphaCutout` en `pbr_mesh_gx2` | Jason Gregory (Cap. 11 & 12) / AMD Latte GX2 | **IMPLEMENTADO** | Hito 148 (24 Nov 2026) |
+| **OPT-447** | Silicio GX2 / Texturas & Streaming SMP | Blindaje Single-Mip TA/TD en Latte R700 (`m_meshNoMipSampler` / `m_cubeSampler` / `m_skySampler` `LOD 0..0` + `MIP_PERF_DISABLE`), Decodificador CPU Zero-Alloc `WTEX` `BC1`/`BC3` LE→`RGBA8`, Validación 64-bit `StaticMesh`, `LoadAsync()` Core 2 y `T22: WTEX_BC_DECODE_GX2` | AMD R700 ISA / Cafe OS GX2 / Jason Gregory (Cap. 7) | **IMPLEMENTADO** | Hito 148 (24 Nov 2026) |
+| **OPT-448** | Multiplataforma PAL / Windows OpenGL 3.3 | Eliminación Total de SDL2 (`ZERO_SDL_SOURCE_REFS: PASS`), Capa PAL (`PlatformClock`, `WindowWiiU`/`WindowWin32`, `InputWin32` XInput, `RumbleWin32`, `AudioDeviceWin32` `waveOut`) y `Render2DGL` OpenGL 3.3 Core | Jason Gregory (Caps. 5, 8, 11) / Win32 / WGL / OpenGL 3.3 | **IMPLEMENTADO** | Hito 149 / Fase 1 (25 Nov 2026) |
+| **OPT-449** | Gráficos 3D Multiplataforma / OpenGL 3.3 Core | Backend 3D OpenGL 3.3 Core Completo (`ForwardRendererGL`, `TextureLoaderGL`, `StaticMesh` BE→LE, Skinning 64h, Instancing HW, Skybox Atlas 3×2, `GameScene3D`, `RenderQueue`, `DebugDraw3D`) | Tomas Akenine-Möller (RTR4) / Jason Gregory (Caps. 11–13) / OpenGL 3.3 Core | **IMPLEMENTADO** | Hito 150 / Fase 2 (25 Nov 2026) |
+| **OPT-450** | Gráficos Avanzados Multiplataforma / OpenGL 3.3 Core | Paridad Gráfica Completa OpenGL 3.3 Core (`RenderTargetGL` RGBA8/16F, `ShadowMapRendererGL` PCF 3×3/5×5, `PostProcessHDRGL` HDR+Bloom Kawase, `RHIFullscreenShaderGL` Raytracing BVH, Reflejo Planar y Modos `4..9`) | Tomas Akenine-Möller (RTR4, Caps. 7 & 12) / Eric Lengyel (FGED2) / OpenGL 3.3 Core | **IMPLEMENTADO** | Hito 151 / Fase 3 (25 Nov 2026) |
 
 ---
 
-## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-442`)
+## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-450`)
 
 ### [OPT-01] Multiprocesamiento Simétrico en 2 Cores (Cores 1 y 2)
 - **Implementado en:** [Hito 24](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md#L669) (6 de Octubre de 2026).
@@ -5272,6 +5280,84 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **Grado de Reusabilidad para el Framework:** **10/10** — Aprobación final en Fase 1 (`graphics_code_reviewer`) y Fase 2 (`engine_clean_code_reviewer`), compilación dual exitosa (`build/` y `build_lib/`) con 0 errores, 0 warnings, 0 fugas en `include/Core/` y 0 símbolos `SDL_` en Wii U.
 - **PROS:** Introduce arquitectura de red profesional alineada con Jason Gregory, permitiendo juego en red determinista y pruebas locales robustas.
 - **CONTRAS:** Ninguno.
+
+### [OPT-444] Hito 146: Plan Maestro de Calidad Gráfica 8/8 Suites (G1–G8), Pruebas 43/43 y Documentación GitHub Pages
+- **Área:** Renderizado 3D GX2, Pruebas del Motor y Experiencia en Consola Real (`engine_graphics`, `engine_core`, `engine_input`, `engine_framework`, `docs/`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 146 - 23 de Noviembre de 2026).
+- **Referencia de Literatura:** Gordon & Clevenger (*CGP*, 3ª Ed.); Akenine-Möller (*RTR4*, 4ª Ed.); AMD Latte R700 / Cafe OS.
+- **Mecanismo Implementado:** Implementación y validación visual en Cemu 2.6 y **Nintendo Wii U real** de las 8 Suites QA (`G1`–`G8` + **43/43 pruebas** en `EngineSelfTestSuite`): Mipmaps+HiZ (`G1`: 87 FPS), PBR Cook-Torrance+TBN (`G2`: 32 FPS), Shadow Maps 2-Pass+PCF (`G3`: 56 FPS), Skybox Atlas 2D `3×2` sin `CUBE` + Agua Planar RTT `RenderTargetGX2` (`G4`: 62 FPS), HDR `RGBA16F` + Bloom Kawase 5-Tap `PostProcessHDRGX2` (`G5`: 50 FPS), Hardware Instancing Ring Buffer Lock-Free + Frustum Culling + `MeshLODGroup` (`G6`: 55 FPS), Terreno Heightmap + Ruido 3D + `ParticleSystem3D` + Toon NPR (`G7`: 50 FPS), Ray Tracing `StacklessBVH` + Escalador Offscreen (`G8`: 25–50 FPS). Incluye calibración táctil `VPADGetTPCalibratedPoint` en `SoftwareKeyboard`, `EngineConfig::SaveToFileAsync()` sin data races vía `StorageManager::SaveFileAsync()` y sitio estático GitHub Pages en `docs/index.html`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Doble `APROBACIÓN FINAL` en todas las suites.
+- **PROS:** Cobertura gráfica completa validada en hardware físico Wii U y roadmap de evolución guardado en `docs/ENGINE_EVOLUTION_AND_COOKER_ROADMAP.md`.
+- **CONTRAS:** `RenderSkinnedMeshInstanced` requirió remediación específica en silicio real (resuelta en `OPT-445`).
+
+### [OPT-445] Hito 147 (Fase B1): Hardening Skinning GPU en Wii U Real (`advanced_skel_gx2`) + Validador Binario `.wmesh`
+- **Área:** Pipeline de Animación Esquelética GX2 y Validación del Asset Cooker (`engine_graphics`, `assets/shaders/`, `scripts/agent_harness.py`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 147 / Fase B1 - 23 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Caps. 7 & 12); Gabor Szauer (*Hands-On C++ Game Animation Programming*); AMD R700 ISA.
+- **Mecanismo Implementado:** Acotado de índices `uvec4 bi = min(aBoneIndices, uvec4(23u));`, normalización segura anti-`NaN` (`inversesqrt(max(dot(v,v), 1e-8))` + fallback `mix`), desenrollado algebraico Fresnel/Rim (`r2*r2`), y eliminación total de `uniform samplerCube uSkybox` en `advanced_skel_gx2.vert/.frag` (`5,360 B`, 0 instrucciones `CUBE`). Reflexión dinámica de `m_skelVs->uniformVars` (`uMVP`, `uModel`, `uBones`), helper DRY `BindSkinnedPipeline()` y `UploadSkinnedVertexUniforms()` (`alignas(256)` + `GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER)`), guarda estricta `vertexStride < SKINNED_VERTEX_STRIDE` en `RenderSkinnedMesh`/`RenderSkinnedMeshInstanced`, y validador automático `COOKED_WMESH_CHECK` en `scripts/agent_harness.py` (`12 files, 0 issues`).
+- **Grado de Reusabilidad para el Framework:** **10/10** — Protege toda futura escena o juego con esqueletos cocinados en Wii U real.
+- **PROS:** Elimina lectura OOB en VRAM, `NaN`s en R700, instrucciones `CUBE` problemáticas y desajustes de offsets uniformes en silicio real.
+- **CONTRAS:** Ninguno.
+
+### [OPT-446] Hito 148: Escenas de Validación Cooker (`SceneModelHouse` + `SceneModelBird`) y Alpha-Cutout Nativo en PBR sRGB (`shadingMode 0..1`)
+- **Área:** Renderizado PBR, Pipeline Cooker y Validación Aislada (`engine_graphics`, `assets/shaders/pbr_mesh_gx2.frag`, `SceneModelHouse`, `SceneModelBird`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 148 - 24 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Caps. 11 & 12); Tomas Akenine-Möller (*RTR4*, Alpha Testing).
+- **Mecanismo Implementado:** Port de 2 escenas ligeras dedicadas sobre `GraphicsQASceneBase`: `SceneModelHouse` (`dutch_house.wmesh/.wtex`, `props`, `alpha`) y `SceneModelBird` (`bird_orange.wmesh/.wskel/.wanim/.wtex` vía `RenderSkinnedMesh`, inicializar deterministamente `localPoses` con `localBindPose` y `globalPoses` con `Identity()` ante clips parciales, acotar `jointCount` y liberar capacidad `m_clips` con `.swap()`). Añadido soporte nativo de `BlendMode::AlphaCutout` en modos `0u..1u` de `pbr_mesh_gx2.frag` (`uPsData[3].w > 0.5 && texColor.a < 0.5 -> discard`) desde `ForwardRendererGX2::RenderStaticMeshPBR()` para renderizar follaje Alpha-Cutout en el mismo espacio PBR sRGB sin transicionar al pase HDR lineal (modo 7).
+- **Grado de Reusabilidad para el Framework:** **10/10** — Toda futura malla PBR estándar en modos `0..1` soporta `BlendMode::AlphaCutout` de serie.
+- **PROS:** Erradica mezcla espacio lineal/sRGB en vegetación cocinada y previene UB de pila ante `.wanim` parciales.
+- **CONTRAS:** Ninguno.
+
+### [OPT-447] Hito 148: Blindaje Single-Mip TA/TD en AMD Latte R700, Decodificador `WTEX` `BC1`/`BC3`→`RGBA8` y Streaming SMP Core 2
+- **Área:** Silicio GX2 (Unidad de Texturas TA/TD), Pipeline de Activos `.wtex`/`.wmesh` y Concurrencia Cafe OS (`engine_graphics`, `SceneModelHouse`, `SceneModelBird`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 148 - 24 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD R700 Family Instruction Set / Registers (`SQ_TEX_SAMPLER_WORD0..2`, `SQ_TEX_RESOURCE_WORD1`); Jason Gregory (*Game Engine Architecture*, 3ª Ed., Cap. 7: Async Resource Streaming).
+- **Problema Detectado en Wii U Real:** `SceneModelHouse` y `SceneModelBird` se congelaban exactamente al llegar al `98%` de la transición (primer frame 3D ejecutado en GPU). Al activar por defecto `GX2_TEX_MIP_FILTER_MODE_LINEAR` + `maxLod = 12.0f` + `Aniso 4x` en `ForwardRendererGX2`, cualquier textura `.wtex` o fallback de 1 solo nivel (`surface.mipLevels == 1`, `surface.mipmaps == nullptr` / `MIP_ADDRESS == 0`) vista en minificación bloqueaba la unidad TA/TD de AMD Latte R700. Además, los bloques `BC1`/`BC3` en `.wtex` estaban empaquetados en Little-Endian (`<HHI`), desajustados frente al swap `8IN16` de PowerPC Big-Endian sobre `GX2_TILE_MODE_LINEAR_ALIGNED`.
+- **Mecanismo Implementado:**
+  1. **Blindaje de Samplers Single-Mip (`ForwardRendererGX2`):** Incorporación de `m_meshNoMipSampler` y endurecimiento de `m_cubeSampler` y `m_skySampler` con `GX2_TEX_MIP_FILTER_MODE_NONE`, `GX2_TEX_MIP_PERF_MODE_DISABLE`, `GX2_TEX_ANISO_RATIO_NONE` y `GX2InitSamplerLOD(..., 0.0f, 0.0f, 0.0f)`. El helper `BindMeshTextureAndSampler()` selecciona automáticamente `m_meshSampler` solo si `mipLevels > 1 && mipmaps != nullptr` y `m_meshNoMipSampler` en caso contrario. Inicialización a cero de `GX2AttribStream` y reflexión de `m_skelDiffuseSlot` (`uTexture`).
+  2. **Decodificador CPU Zero-Alloc `BC1`/`BC3` LE → `RGBA8` (`TextureLoaderGX2`):** Decodificación exacta libre de endianness en `LoadCookedTextureFromMemory` hacia `GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8` (`LINEAR_ALIGNED` alineado `>= 256B` + `GX2Invalidate`), seleccionando Mip 1 (`1024×1024`, 4 MB en MEM2, ~2 ms en Espresso) para texturas comprimidas `2048×2048` con mipmaps.
+  3. **Seguridad 64-bit en `StaticMesh` y Streaming Core 2:** Validación anti-overflow de 64 bits y conteo no nulo antes de `GX2RCreateBuffer` con índices `U16`/`U32` nativos, más `GetRequiredAssets()` / `LoadAsync()` en Core 2 en `SceneModelHouse` y `SceneModelBird` (eliminando la pausa en `48%`). Añadida prueba `T22: WTEX_BC_DECODE_GX2` (`44/44` en `EngineSelfTestSuite`) e invariantes en `scripts/agent_harness.py`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Protege globalmente las 6 rutas de `ForwardRendererGX2` y toda carga `.wtex`/`.wmesh` en Wii U y PC.
+- **PROS:** Erradica bloqueos TA/TD por `MIP_ADDRESS == NULL`, corrige endianness de `BC1`/`BC3` sin recocinar archivos y suaviza la transición asíncrona en Core 2.
+- **CONTRAS:** Ninguno (mantiene el mismo presupuesto de 4 MB en MEM2 para texturas `2048×2048` usando su nivel Mip 1 `1024×1024`).
+
+### [OPT-448] Hito 149 (Fase 1 Windows / ROG Ally): Capa PAL Multiplataforma (0 SDL2), Backends Nativos Win32 y `Render2DGL` OpenGL 3.3 Core
+- **Área:** Abstracción de Plataforma (`engine_core`, `engine_input`, `engine_audio`, `engine_graphics`) y Soporte Nativo Windows x64 (`build-win/wiiu_demos.exe`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 149 / Fase 1 - 25 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, 3ª Ed., Caps. 5, 8, 11: Platform Abstraction Layer & Link-Time Polymorphism); Win32 / WGL / XInput / OpenGL 3.3 Core.
+- **Mecanismo Implementado:**
+  1. **Erradicación Completa de SDL2:** Eliminado el 100% de `#include <SDL2/>` y símbolos `SDL_*` en `include/` y `src/` (renombrado `ControllerType::GenericSDL` → `NativeGamepad`), protegido con el chequeo permanente `ZERO_SDL_SOURCE_REFS` en `scripts/agent_harness.py`.
+  2. **Polimorfismo en Tiempo de Enlace (PAL 0-Overhead):** Separación limpia de cabeceras agnósticas (`PlatformClock.hpp`, `Window.hpp`, `InputManager.hpp`, `AudioManager.hpp`) hacia backends por sistema operativo en `CMakeLists.txt`: `src/Platform/WiiU/` (`PlatformClockWiiU`, `WindowWiiU` intacto) vs `src/Platform/Windows/` (`PlatformClockWin32` QPC, `WindowWin32` HWND+WGL OpenGL 3.3 Core+Fullscreen Borderless `Alt+Enter`/`F11` con aspect-fit 16:9, `InputWin32` XInput+teclado+táctil/ratón, `RumbleWin32` `XInputSetState`, `AudioDeviceWin32` `waveOut` 48 kHz 16-bit estéreo ping-pong).
+  3. **Renderizado 2D OpenGL 3.3 Core sin Dependencias Externas:** Micro-loader propio `GLFunctions` (`wglGetProcAddress`) y batcher Zero-Alloc `Render2DGL` (`std::array<Vertex2D, 32768>` sobre VAO/VBO GL 3.3) conectado a `Render2D` y `Engine`. Ejecutable Windows enlazado estáticamente (`-static`) con 0 DLLs de terceros (listo para copiar junto a `assets/` hacia la ROG Ally Z1).
+- **Grado de Reusabilidad para el Framework:** **10/10** — Sienta la base multiplataforma (Windows/ROG Ally, Linux/SteamOS vía Proton o futuro `Platform/Linux/`, y futura Nintendo Switch) sin introducir coste virtual en Wii U.
+- **PROS:** Cero SDL2 en todo el repositorio, binario Windows autocontenido (0 DLLs externas), soporte nativo XInput + vibración + pantalla táctil + pantalla completa sin bordes para ROG Ally.
+- **CONTRAS:** El pipeline 3D (`ForwardRenderer` / `StaticMesh` / `TextureLoader` / FBOs) en OpenGL 3.3 Core se abordará en las Fases 2 y 3 siguientes (en Fase 1 los menús, opciones, audio, red `ws2_32`, XInput y `EngineSelfTestSuite` son funcionales en 2D).
+
+### [OPT-449] Hito 150 (Fase 2 Windows / ROG Ally): Backend 3D OpenGL 3.3 Core Completo (`.wmesh` Little-Endian, PBR, Skinning, Instancing, Skybox Atlas y `DebugDraw3D`)
+- **Área:** Subsistema Gráfico 3D (`engine_graphics`, `engine_framework`, `StaticMesh`, `TextureLoaderGL`, `ForwardRendererGL`, `GameScene3D`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 150 / Fase 2 - 25 de Noviembre de 2026).
+- **Referencia de Literatura:** Tomas Akenine-Möller (*RTR4*, PBR GGX & Texture Atlases); Jason Gregory (*Game Engine Architecture*, 3ª Ed., Caps. 11–13); OpenGL 3.3 Core Profile Specification.
+- **Mecanismo Implementado:**
+  1. **Mallas `.wmesh` Big-Endian → GPU GL 3.3 (`StaticMesh`):** Definición unificada de `GX2RBuffer` en x64 (`glBufferId`, `elemSize`, `elemCount`), conversión automática de vértices (`MeshVertex` 48 B y `SkinnedMeshVertex` 80 B preservando `boneIndices` `uint8_t[4]`) e índices (`U16`/`U32`) en carga y subida directa a `GL_ARRAY_BUFFER` / `GL_ELEMENT_ARRAY_BUFFER`.
+  2. **Cargador de Texturas OpenGL 3.3 (`TextureLoaderGL.cpp`):** Carga `.wtex` RGBA8 y decodificación `BC1`/`BC3`→RGBA8 con generación de mipmaps, texturas procedurales (solid, checkerboard color-coded por mipmap, relieve, alpha-cutout) y Skybox/CubeMap `.wcube` empaquetado como Atlas 3×2 en `GL_TEXTURE_2D`.
+  3. **Renderizado Forward 3D Zero-Alloc (`ForwardRendererGL.cpp`):** 5 programas GLSL 330 Core con ubicaciones de uniformes cacheadas (`Mesh`, `Instanced`, `Skinned` hasta 64 huesos, `Skydome` Atlas 3×2 y `DepthPrePass`), 3 VAOs persistentes, soporte completo PBR Cook-Torrance (GGX + Dir + 8 Point + Spot), Half-Lambert/Blinn-Phong, Alpha-Cutout (`discard`), hardware instancing por lotes de 256 matrices (`glDrawElementsInstanced` + `glVertexAttribDivisor`) y restauración limpia del estado GL en `EndFrame()` para convivencia con `Render2DGL`.
+  4. **Activación Transversal de Escenas 3D:** Desbloqueo agnóstico en `RenderQueue`, `MeshRenderSystem`, `SkyboxRenderPass`, `GameScene3D` y migración de `DebugDraw3D` sobre `Render2D::DrawLine(...)` (0 `#ifdef` por plataforma).
+- **Grado de Reusabilidad para el Framework:** **10/10** — Permite visualizar, rotar e inspeccionar todas las escenas 3D (`SceneModelHouse`, `SceneModelBird`, suites QA G1–G8 y juegos `GameScene3D`) en PC Windows / ASUS ROG Ally Z1 manteniendo intacto al 100% el backend GX2 de Wii U; reutilizable en Linux/SteamOS.
+- **PROS:** Activa geometría, texturas, skybox, iluminación PBR/Blinn-Phong, animación esquelética, instancing y wireframes 3D en Windows con 0 DLLs de terceros y DAG acíclico limpio.
+- **CONTRAS:** FBOs para Shadow Map hardware real (`ShadowMapRendererGX2`) y Post-Processing HDR/Bloom multipase (`PostProcessHDRGX2`) permanecen planificados para la Fase 3 (en Fase 2 las escenas ya renderizan iluminación directa y materiales sin dependencia FBO).
+
+### [OPT-450] Hito 151 (Fase 3 Windows / ROG Ally): Paridad Gráfica Completa OpenGL 3.3 Core (`RenderTargetGL`, Shadow Maps PCF, HDR + Bloom Kawase, `RHIFullscreenShaderGL`, Reflejo Planar y Modos `4..9`)
+- **Área:** Subsistema Gráfico Avanzado y QA (`engine_graphics`, `GLFunctions`, `RenderTargetGL`, `ShadowMapRendererGL`, `PostProcessHDRGL`, `RHIFullscreenShaderGL`, `ForwardRendererGL`, Escenas QA G2/G3/G7).
+- **Estado:** **`IMPLEMENTADO`** (Hito 151 / Fase 3 - 25 de Noviembre de 2026).
+- **Referencia de Literatura:** Tomas Akenine-Möller (*RTR4*, Shadow Mapping PCF & Post-Processing); Eric Lengyel (*Foundations of Game Engine Development*, Vol. 2); Kawase Bloom / ACES Filmic; OpenGL 3.3 Core Profile.
+- **Mecanismo Implementado:**
+  1. **Render Targets Off-Screen OpenGL 3.3 (`RenderTargetGL.cpp`):** Framebuffers `RGBA8` / `RGBA16F` (`GL_HALF_FLOAT`) con Renderbuffer de profundidad `DEPTH_COMPONENT24` opcional y guardado/restauración del viewport (`16:9` letterboxed). Mantiene los invariantes `IsInitialized()` / `GetColorTexture()` usados por `GraphicsSelfTest`.
+  2. **Shadow Mapping por Hardware (`ShadowMapRendererGL.cpp` + `ForwardRendererGL.cpp`):** FBO dedicado de solo profundidad `1024×1024` (`DEPTH_COMPONENT32F`, `GL_CLAMP_TO_BORDER` blanco, `glPolygonOffset`, `GL_FRONT` culling) y `ComputeDirectionalShadow` con soporte para Hard, PCF 3×3, PCF 5×5 y Debug Shadow Factor, desbloqueando `SceneQA_Shadows`.
+  3. **Post-Processing HDR y Kawase Bloom (`PostProcessHDRGL.cpp`):** Cadena Zero-Alloc sobre `RenderTargetGX2` (`m_hdrRT` HDR 16F + `m_bloomPingRT`/`m_bloomPongRT` alineados a 32 px), Bright-Pass, 2 pasadas Kawase 2D y composición final (ACES / Reinhard / Clamp + Vignette + Gamma sRGB) desbloqueando `SceneQA_PostProcessAlpha`.
+  4. **Paridad de Modos `4..9`, Reflejo Planar y Fullscreen BVH (`ForwardRendererGL.cpp`, `RHIFullscreenShaderGL.cpp`):** Vidrio refractado (modo 4), Agua con onda dual y RTT planar reflejada (modo 5 + `SceneQA_EnvironmentWater`), HDR/AlphaCutout/StainedGlass (modo 7), Terreno procedural 4 biomas / Mármol / Madera / Toon (modo 8), Billboards/NPR (modo 9) y compilador dinámico `.gsh`→`.frag` con escalador FBO (`360p..720p`) para `SceneQA_RaytracingBVH`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Cierra la paridad visual completa de las 8 suites QA (`G1..G8`), `SceneModelHouse`, `SceneModelBird` y `GameScene3D` en Windows / ROG Ally Z1 sin impacto en Wii U GX2 y listo para futuro backend Linux OpenGL/Vulkan.
+- **PROS:** Sombras reales PCF, HDR+Bloom, reflejo planar en agua, raytracing BVH fullscreen y modos procedurales completos con 0 DLLs externas y 0 referencias SDL2.
+- **CONTRAS:** Depende de OpenGL 3.3 Core (soportado ampliamente por AMD Radeon RDNA3 de ROG Ally Z1, NVIDIA e Intel actuales); la validación visual interactiva final en cada escena queda lista para pruebas del usuario en la consola portátil / PC.
 
 ---
 

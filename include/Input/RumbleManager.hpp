@@ -27,11 +27,11 @@ enum class RumblePreset : uint8_t {
 
 /**
  * @brief [Jason Gregory Cap. 8.2 & 8.4]
- * Gestor Central de Vibración y Hápticos para Consola (Wii U) y PC (SDL2).
+ * Gestor Central de Vibración y Hápticos Multiplataforma (Wii U / Windows XInput).
  * 
  * Controla de forma no bloqueante los actuadores de rotación excéntrica (ERM)
  * del GamePad DRC (VPAD), Wii Remote y Wii U Pro Controller (WPAD), así como
- * mandos conectados por SDL en PC. Implementa apagado automático de seguridad
+ * mandos nativos en escritorio (XInput). Implementa apagado automático de seguridad
  * y respeto a la configuración global de EngineConfig.
  */
 class RumbleManager {

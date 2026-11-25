@@ -192,6 +192,7 @@ bool RHIFullscreenShader::EnableOffscreenScaler(uint32_t maxWidth, uint32_t maxH
 #endif
 }
 
+#if defined(__WIIU__) || defined(__wiiu__)
 int32_t RHIFullscreenShader::FindPixelUniformOffset(const GX2PixelShader* ps, const char* uniformName) noexcept {
     if (!ps || !ps->uniformVars || !uniformName) {
         return -1;
@@ -203,6 +204,7 @@ int32_t RHIFullscreenShader::FindPixelUniformOffset(const GX2PixelShader* ps, co
     }
     return -1;
 }
+#endif
 
 int32_t RHIFullscreenShader::GetPixelUniformOffset(const char* uniformName) const noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)

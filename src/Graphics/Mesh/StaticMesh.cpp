@@ -3,6 +3,12 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <cmath>
+#if defined(__WIIU__) || defined(__wiiu__)
+#include <gx2/mem.h>
+#else
+#include "Graphics/GL/GLFunctions.hpp"
+#endif
 
 namespace WiiU {
 
@@ -31,19 +37,12 @@ inline float SwapFloat(float val) noexcept {
 } // namespace
 
 StaticMesh::StaticMesh(StaticMesh&& other) noexcept
-    : m_header(other.m_header), m_loaded(other.m_loaded) {
-#if defined(__WIIU__) || defined(__wiiu__)
-    m_vbo = other.m_vbo;
-    m_ibo = other.m_ibo;
+    : m_header(other.m_header),
+      m_loaded(other.m_loaded),
+      m_vbo(other.m_vbo),
+      m_ibo(other.m_ibo) {
     std::memset(&other.m_vbo, 0, sizeof(other.m_vbo));
     std::memset(&other.m_ibo, 0, sizeof(other.m_ibo));
-#else
-    m_vboMock = other.m_vboMock;
-    m_iboMock = other.m_iboMock;
-    m_hostMemory = std::move(other.m_hostMemory);
-    other.m_vboMock = nullptr;
-    other.m_iboMock = nullptr;
-#endif
     other.m_loaded = false;
     std::memset(&other.m_header, 0, sizeof(other.m_header));
 }
@@ -54,19 +53,11 @@ StaticMesh& StaticMesh::operator=(StaticMesh&& other) noexcept {
 
         m_header = other.m_header;
         m_loaded = other.m_loaded;
-
-#if defined(__WIIU__) || defined(__wiiu__)
         m_vbo = other.m_vbo;
         m_ibo = other.m_ibo;
+
         std::memset(&other.m_vbo, 0, sizeof(other.m_vbo));
         std::memset(&other.m_ibo, 0, sizeof(other.m_ibo));
-#else
-        m_vboMock = other.m_vboMock;
-        m_iboMock = other.m_iboMock;
-        m_hostMemory = std::move(other.m_hostMemory);
-        other.m_vboMock = nullptr;
-        other.m_iboMock = nullptr;
-#endif
         other.m_loaded = false;
         std::memset(&other.m_header, 0, sizeof(other.m_header));
     }
@@ -134,20 +125,84 @@ bool StaticMesh::LoadFromMemory(const uint8_t* data, size_t size) {
         m_header.submeshCount = Swap32(m_header.submeshCount);
     }
 
-    // Validaciones de seguridad de formato y límites
-    if (m_header.version != WMESH_VERSION_CURRENT) {
+    // Validaciones de seguridad de formato, recuentos no nulos y límites en 64 bits (anti-overflow 32-bit)
+    if (m_header.version != WMESH_VERSION_CURRENT ||
+        m_header.vertexCount == 0u ||
+        m_header.indexCount == 0u ||
+        m_header.vertexStride < sizeof(MeshVertex) ||
+        m_header.indexFormat > 1u) {
+        std::memset(&m_header, 0, sizeof(m_header));
         return false;
     }
 
-    if (static_cast<size_t>(m_header.vboOffset) + static_cast<size_t>(m_header.vboSize) > size ||
-        static_cast<size_t>(m_header.iboOffset) + static_cast<size_t>(m_header.iboSize) > size) {
+    const uint64_t elemSize64 = (m_header.indexFormat == 1u) ? sizeof(uint32_t) : sizeof(uint16_t);
+    const uint64_t gpuVboBytes64 = static_cast<uint64_t>(m_header.vertexCount) * static_cast<uint64_t>(m_header.vertexStride);
+    const uint64_t gpuIboBytes64 = static_cast<uint64_t>(m_header.indexCount) * elemSize64;
+    if (gpuVboBytes64 > static_cast<uint64_t>(m_header.vboSize) ||
+        gpuIboBytes64 > static_cast<uint64_t>(m_header.iboSize) ||
+        static_cast<uint64_t>(m_header.vboOffset) + static_cast<uint64_t>(m_header.vboSize) > static_cast<uint64_t>(size) ||
+        static_cast<uint64_t>(m_header.iboOffset) + static_cast<uint64_t>(m_header.iboSize) > static_cast<uint64_t>(size)) {
+        std::memset(&m_header, 0, sizeof(m_header));
         return false;
     }
 
     const uint8_t* vboData = data + m_header.vboOffset;
     const uint8_t* iboData = data + m_header.iboOffset;
+    uint32_t uploadVboSize = m_header.vboSize;
+    uint32_t uploadIboSize = m_header.iboSize;
 
-    if (!UploadToGPU(vboData, m_header.vboSize, iboData, m_header.iboSize)) {
+#if !defined(__WIIU__) && !defined(__wiiu__)
+    std::vector<uint8_t> swappedVbo;
+    std::vector<uint8_t> swappedIbo;
+    if (needsSwap) {
+        const size_t vboBytes = static_cast<size_t>(gpuVboBytes64);
+        const size_t iboBytes = static_cast<size_t>(gpuIboBytes64);
+        swappedVbo.assign(vboData, vboData + vboBytes);
+        swappedIbo.assign(iboData, iboData + iboBytes);
+
+        const bool isSkinned = ((m_header.flags & MESH_FLAG_SKINNED) != 0u) ||
+                               (m_header.vertexStride >= sizeof(SkinnedMeshVertex));
+        const uint32_t stride = m_header.vertexStride;
+        for (uint32_t v = 0u; v < m_header.vertexCount; ++v) {
+            uint8_t* vert = swappedVbo.data() + static_cast<size_t>(v) * stride;
+            for (uint32_t off = 0u; off + 4u <= stride; off += 4u) {
+                // SkinnedMeshVertex offset 48..51 es uint8_t boneIndices[4]: no permutar bytes
+                if (isSkinned && off == 48u) {
+                    continue;
+                }
+                uint32_t w = 0u;
+                std::memcpy(&w, vert + off, sizeof(w));
+                w = Swap32(w);
+                std::memcpy(vert + off, &w, sizeof(w));
+            }
+        }
+
+        if (m_header.indexFormat == 1u) {
+            for (uint32_t idx = 0u; idx < m_header.indexCount; ++idx) {
+                uint32_t val = 0u;
+                const size_t byteOff = static_cast<size_t>(idx) * sizeof(uint32_t);
+                std::memcpy(&val, swappedIbo.data() + byteOff, sizeof(val));
+                val = Swap32(val);
+                std::memcpy(swappedIbo.data() + byteOff, &val, sizeof(val));
+            }
+        } else {
+            for (uint32_t idx = 0u; idx < m_header.indexCount; ++idx) {
+                uint16_t val = 0u;
+                const size_t byteOff = static_cast<size_t>(idx) * sizeof(uint16_t);
+                std::memcpy(&val, swappedIbo.data() + byteOff, sizeof(val));
+                val = Swap16(val);
+                std::memcpy(swappedIbo.data() + byteOff, &val, sizeof(val));
+            }
+        }
+
+        vboData = swappedVbo.data();
+        iboData = swappedIbo.data();
+        uploadVboSize = static_cast<uint32_t>(vboBytes);
+        uploadIboSize = static_cast<uint32_t>(iboBytes);
+    }
+#endif
+
+    if (!UploadToGPU(vboData, uploadVboSize, iboData, uploadIboSize)) {
         Destroy();
         return false;
     }
@@ -208,6 +263,26 @@ bool StaticMesh::CreateFromVertices(const std::vector<MeshVertex>& vertices, con
 
 bool StaticMesh::UploadToGPU(const uint8_t* vboData, uint32_t vboSize,
                             const uint8_t* iboData, uint32_t iboSize) {
+    if (!vboData || !iboData ||
+        m_header.vertexCount == 0u || m_header.indexCount == 0u ||
+        m_header.vertexStride < sizeof(MeshVertex) || m_header.indexFormat > 1u) {
+        return false;
+    }
+
+    const uint32_t elemSize = (m_header.indexFormat == 1u)
+        ? static_cast<uint32_t>(sizeof(uint32_t))
+        : static_cast<uint32_t>(sizeof(uint16_t));
+    const uint64_t gpuVboBytes64 = static_cast<uint64_t>(m_header.vertexCount) * static_cast<uint64_t>(m_header.vertexStride);
+    const uint64_t gpuIboBytes64 = static_cast<uint64_t>(m_header.indexCount) * static_cast<uint64_t>(elemSize);
+    if (gpuVboBytes64 > static_cast<uint64_t>(vboSize) ||
+        gpuIboBytes64 > static_cast<uint64_t>(iboSize) ||
+        gpuVboBytes64 > 0xFFFFFFFFULL ||
+        gpuIboBytes64 > 0xFFFFFFFFULL) {
+        return false;
+    }
+    const uint32_t gpuVboBytes = static_cast<uint32_t>(gpuVboBytes64);
+    const uint32_t gpuIboBytes = static_cast<uint32_t>(gpuIboBytes64);
+
 #if defined(__WIIU__) || defined(__wiiu__)
     std::memset(&m_vbo, 0, sizeof(m_vbo));
     std::memset(&m_ibo, 0, sizeof(m_ibo));
@@ -231,15 +306,16 @@ bool StaticMesh::UploadToGPU(const uint8_t* vboData, uint32_t vboSize,
         std::memset(&m_vbo, 0, sizeof(m_vbo));
         return false;
     }
-    std::memcpy(pVbo, vboData, vboSize);
-    GX2RUnlockBufferEx(&m_vbo, GX2R_RESOURCE_BIND_NONE);
+    std::memcpy(pVbo, vboData, gpuVboBytes);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_ATTRIBUTE_BUFFER, pVbo, gpuVboBytes);
+    GX2RUnlockBufferEx(&m_vbo, GX2R_RESOURCE_DISABLE_CPU_INVALIDATE);
 
     m_ibo.flags = static_cast<GX2RResourceFlags>(
         GX2R_RESOURCE_BIND_INDEX_BUFFER |
         GX2R_RESOURCE_USAGE_CPU_WRITE |
         GX2R_RESOURCE_USAGE_GPU_READ
     );
-    m_ibo.elemSize = (m_header.indexFormat == 0) ? sizeof(uint16_t) : sizeof(uint32_t);
+    m_ibo.elemSize = elemSize;
     m_ibo.elemCount = m_header.indexCount;
 
     if (!GX2RCreateBuffer(&m_ibo)) {
@@ -257,16 +333,54 @@ bool StaticMesh::UploadToGPU(const uint8_t* vboData, uint32_t vboSize,
         std::memset(&m_vbo, 0, sizeof(m_vbo));
         return false;
     }
-    std::memcpy(pIbo, iboData, iboSize);
-    GX2RUnlockBufferEx(&m_ibo, GX2R_RESOURCE_BIND_NONE);
+    std::memcpy(pIbo, iboData, gpuIboBytes);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU, pIbo, gpuIboBytes);
+    GX2RUnlockBufferEx(&m_ibo, GX2R_RESOURCE_DISABLE_CPU_INVALIDATE);
 
     return true;
 #else
-    m_hostMemory.resize(vboSize + iboSize);
-    std::memcpy(m_hostMemory.data(), vboData, vboSize);
-    std::memcpy(m_hostMemory.data() + vboSize, iboData, iboSize);
-    m_vboMock = m_hostMemory.data();
-    m_iboMock = m_hostMemory.data() + vboSize;
+    (void)vboSize;
+    (void)iboSize;
+    std::memset(&m_vbo, 0, sizeof(m_vbo));
+    std::memset(&m_ibo, 0, sizeof(m_ibo));
+    m_vbo.elemSize = m_header.vertexStride;
+    m_vbo.elemCount = m_header.vertexCount;
+    m_ibo.elemSize = elemSize;
+    m_ibo.elemCount = m_header.indexCount;
+
+    if (Graphics::GL::IsLoaded()) {
+        const auto& gl = Graphics::GL::GetFunctions();
+        if (!gl.GenBuffers || !gl.BindBuffer || !gl.BufferData) {
+            return false;
+        }
+        Graphics::GL::GLuint vboId = 0u;
+        Graphics::GL::GLuint iboId = 0u;
+        gl.GenBuffers(1, &vboId);
+        gl.GenBuffers(1, &iboId);
+        if (vboId == 0u || iboId == 0u) {
+            if (gl.DeleteBuffers) {
+                if (vboId != 0u) gl.DeleteBuffers(1, &vboId);
+                if (iboId != 0u) gl.DeleteBuffers(1, &iboId);
+            }
+            return false;
+        }
+
+        gl.BindBuffer(Graphics::GL::GL_ARRAY_BUFFER_VAL, vboId);
+        gl.BufferData(Graphics::GL::GL_ARRAY_BUFFER_VAL,
+                      static_cast<Graphics::GL::GLsizeiptr>(gpuVboBytes),
+                      vboData,
+                      Graphics::GL::GL_STATIC_DRAW_VAL);
+
+        gl.BindBuffer(Graphics::GL::GL_ARRAY_BUFFER_VAL, iboId);
+        gl.BufferData(Graphics::GL::GL_ARRAY_BUFFER_VAL,
+                      static_cast<Graphics::GL::GLsizeiptr>(gpuIboBytes),
+                      iboData,
+                      Graphics::GL::GL_STATIC_DRAW_VAL);
+        gl.BindBuffer(Graphics::GL::GL_ARRAY_BUFFER_VAL, 0u);
+
+        m_vbo.glBufferId = vboId;
+        m_ibo.glBufferId = iboId;
+    }
     return true;
 #endif
 }
@@ -277,27 +391,31 @@ void StaticMesh::Destroy() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
     GX2RDestroyBufferEx(&m_vbo, GX2R_RESOURCE_BIND_NONE);
     GX2RDestroyBufferEx(&m_ibo, GX2R_RESOURCE_BIND_NONE);
+#else
+    if (Graphics::GL::IsLoaded()) {
+        const auto& gl = Graphics::GL::GetFunctions();
+        if (gl.DeleteBuffers) {
+            if (m_vbo.glBufferId != 0u) {
+                const Graphics::GL::GLuint id = m_vbo.glBufferId;
+                gl.DeleteBuffers(1, &id);
+            }
+            if (m_ibo.glBufferId != 0u) {
+                const Graphics::GL::GLuint id = m_ibo.glBufferId;
+                gl.DeleteBuffers(1, &id);
+            }
+        }
+    }
+#endif
     std::memset(&m_vbo, 0, sizeof(m_vbo));
     std::memset(&m_ibo, 0, sizeof(m_ibo));
-#else
-    m_hostMemory.clear();
-    m_hostMemory.shrink_to_fit();
-    m_vboMock = nullptr;
-    m_iboMock = nullptr;
-#endif
 
     std::memset(&m_header, 0, sizeof(m_header));
     m_loaded = false;
 }
 
 void StaticMesh::PopulateMeshComponent(MeshComponent& outMesh) const noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
     outMesh.vbo = const_cast<GX2RBuffer*>(&m_vbo);
     outMesh.ibo = const_cast<GX2RBuffer*>(&m_ibo);
-#else
-    outMesh.vbo = m_vboMock;
-    outMesh.ibo = m_iboMock;
-#endif
     outMesh.indexCount = m_header.indexCount;
     outMesh.vertexCount = m_header.vertexCount;
     outMesh.vertexStride = static_cast<uint16_t>(m_header.vertexStride);

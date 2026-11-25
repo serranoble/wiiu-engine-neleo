@@ -10,12 +10,8 @@ bool SkyboxRenderPass::Render(ECSWorld& world, ForwardRendererGX2& renderer) {
             if (rendered || !sky.enabled || !sky.mesh || !sky.skyTexture) {
                 return;
             }
-#if defined(__WIIU__) || defined(__wiiu__)
             renderer.RenderSkydome(*sky.mesh, static_cast<GX2Texture*>(sky.skyTexture));
             rendered = true;
-#else
-            (void)renderer;
-#endif
         }
     );
     return rendered;

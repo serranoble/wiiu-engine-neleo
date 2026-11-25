@@ -12,6 +12,12 @@
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2r/buffer.h>
 #include <gx2/enum.h>
+#else
+struct GX2RBuffer {
+    uint32_t glBufferId{0u};
+    uint32_t elemSize{0u};
+    uint32_t elemCount{0u};
+};
 #endif
 
 namespace WiiU {
@@ -83,17 +89,10 @@ public:
         return m_header.boundingSphere[3];
     }
 
-#if defined(__WIIU__) || defined(__wiiu__)
     [[nodiscard]] GX2RBuffer* GetVBO() noexcept { return &m_vbo; }
     [[nodiscard]] GX2RBuffer* GetIBO() noexcept { return &m_ibo; }
     [[nodiscard]] const GX2RBuffer* GetVBO() const noexcept { return &m_vbo; }
     [[nodiscard]] const GX2RBuffer* GetIBO() const noexcept { return &m_ibo; }
-#else
-    [[nodiscard]] void* GetVBO() noexcept { return m_vboMock; }
-    [[nodiscard]] void* GetIBO() noexcept { return m_iboMock; }
-    [[nodiscard]] const void* GetVBO() const noexcept { return m_vboMock; }
-    [[nodiscard]] const void* GetIBO() const noexcept { return m_iboMock; }
-#endif
 
     /**
      * @brief Suite de autodiagnóstico en tiempo de arranque para validar la integridad del subsistema de mallas.
@@ -107,14 +106,8 @@ private:
     MeshHeader m_header{};
     bool m_loaded{false};
 
-#if defined(__WIIU__) || defined(__wiiu__)
     GX2RBuffer m_vbo{};
     GX2RBuffer m_ibo{};
-#else
-    void* m_vboMock{nullptr};
-    void* m_iboMock{nullptr};
-    std::vector<uint8_t> m_hostMemory;
-#endif
 };
 
 } // namespace WiiU
