@@ -1,14 +1,15 @@
-# 🎮 Wii U 3D Graphics & Game Engine (C++20)
+# 🎮 Multi-Platform 3D Graphics & Game Engine (C++20 — Wii U & Windows OpenGL 3.3 Core)
 
-Motor de videojuegos modular de alto rendimiento y suite de demos gráficas para **Nintendo Wii U**, desarrollado en **C++20** y orientado al entorno **Aroma (Homebrew)**. El motor aprovecha la arquitectura heterogénea de la consola (CPU tri-núcleo IBM Espresso PowerPC 750CL y GPU AMD Latte GX2 con memoria eDRAM de 560 GB/s), combinando un framework ECS orientado a datos (DOD) con renderizado GX2 nativo en silicio, audio posicional 3D, cámara orbital anti-colisiones y animación esquelética con *Linear Blend Skinning* (LBS).
+Motor de videojuegos modular de alto rendimiento y suite de demos gráficas en **C++20**, con soporte nativo para **Nintendo Wii U** (entorno **Aroma**, CPU tri-núcleo IBM Espresso PowerPC 750CL y GPU AMD Latte GX2 con eDRAM de 560 GB/s) y **Windows x64 / ASUS ROG Ally Z1** (**Win32 WGL OpenGL 3.3 Core**, **0 SDL2** y **0 DLLs de terceros**), manteniendo arquitectura desacoplada orientada a consola/PC (Wii U / Windows-ROG Ally / Linux).
 
 ---
 
 > [!TIP]
-> **📘 MOTOR MODULAR OPEN SOURCE PARA NINTENDO WII U (C++20 / GX2):**
+> **📘 MOTOR MODULAR OPEN SOURCE MULTIPLATAFORMA (C++20 / GX2 + OPENGL 3.3 CORE):**
+> - **Tutorial Práctico Multiplataforma:** [`docs/TUTORIAL_PRIMER_JUEGO_MULTIPLATAFORMA.md`](docs/TUTORIAL_PRIMER_JUEGO_MULTIPLATAFORMA.md) (crear tu escena `GameScene3D`, ECS, física, PBR/sombras, cooker y compilar en Wii U + Windows).
 > - **Sitio Web de Documentación (GitHub Pages):** [`docs/index.html`](docs/index.html) (activar en *Settings → Pages → Branch → `/docs`*).
 > - **Umbrella Header Público:** [`include/WiiUEngine.hpp`](include/WiiUEngine.hpp) expone los **8 módulos estáticos** desacoplados del motor (`engine_core`, `engine_physics`, `engine_audio`, `engine_input`, `engine_ai`, `engine_graphics`, `engine_framework`, `engine_net`).
-> - **Plan Maestro de Calidad Gráfica (CGP + RTR4):** **8/8 Suites (G1–G8)** validadas en Cemu 2.6 y **Nintendo Wii U real** + **43/43 pruebas** en `EngineSelfTestSuite` — ver [`docs/GRAPHICS_QUALITY_PLAN_AUDIT.md`](docs/GRAPHICS_QUALITY_PLAN_AUDIT.md).
+> - **Plan Maestro de Calidad Gráfica (CGP + RTR4):** **8/8 Suites (G1–G8)** validadas en **Nintendo Wii U real**, Cemu 2.6 y **Windows x64 OpenGL 3.3 Core** + **44/44 pruebas** en `EngineSelfTestSuite` — ver [`docs/GRAPHICS_QUALITY_PLAN_AUDIT.md`](docs/GRAPHICS_QUALITY_PLAN_AUDIT.md).
 > - **Guía de Framework y Contribución:** Lee [`docs/FRAMEWORK_ENGINE_GUIDE.md`](docs/FRAMEWORK_ENGINE_GUIDE.md), [`CONTRIBUTING.md`](CONTRIBUTING.md) y la licencia [`LICENSE`](LICENSE) (Apache 2.0).
 > - **Auditoría Jason Gregory (*Game Engine Architecture*, 3ª Ed.):** **98.0% Core Engine / 93.0% Libro Completo** — ver [`docs/JASON_GREGORY_COMPLETION_AUDIT.md`](docs/JASON_GREGORY_COMPLETION_AUDIT.md).
 
@@ -19,12 +20,12 @@ Motor de videojuegos modular de alto rendimiento y suite de demos gráficas para
 1. [Arquitectura Modular del Motor y Características](#-arquitectura-modular-del-motor-y-características)
 2. [Estructura del Repositorio](#-estructura-del-repositorio)
 3. [Requisitos del Entorno de Desarrollo](#-requisitos-del-entorno-de-desarrollo)
-4. [Compilación y Generación del Paquete (.wuhb)](#-compilación-y-generación-del-paquete-wuhb)
+4. [Compilación Dual: Nintendo Wii U (.wuhb) y Windows x64 (.exe)](#-compilación-dual-nintendo-wii-u-wuhb-y-windows-x64-exe)
 5. [Pipeline Universal de Modelos 3D (Cooker)](#-pipeline-universal-de-modelos-3d-cooker)
 6. [Pipeline de Shaders CafeGLSL](#-pipeline-de-shaders-cafeglsl)
 7. [Despliegue en Consola Física vía FTP](#-despliegue-en-consola-física-vía-ftp)
 8. [Pruebas y Depuración en Emulador (Cemu)](#-pruebas-y-depuración-en-emulador-cemu)
-9. [Cómo Crear una Nueva Escena en el Motor](#-cómo-crear-una-nueva-escena-en-el-motor)
+9. [Cómo Crear una Nueva Escena y Tutorial](#-cómo-crear-una-nueva-escena-y-arrancar-un-proyecto-externo)
 10. [Reglas y Directivas de Desarrollo](#-reglas-y-directivas-de-desarrollo)
 
 ---
@@ -35,14 +36,14 @@ El motor está desacoplado en **8 librerías estáticas CMake** independientes (
 
 | Librería CMake | Namespace / Subsistema | Responsabilidad Principal |
 | :--- | :--- | :--- |
-| **`engine_core`** | `WiiU` (`Core/`, `ECS/`, `Spatial/`, `Time/`, `Events/`, `Storage/`, `Config/`) | Loop base, `ECSWorld` DOD, `MemoryManager`/`ResourcePool`, `JobSystem` SMP, `ViewFrustum`, `StacklessBVH`, `GameClock`, `GameplayEventBus`, `StorageManager` SAL/VFS + `SaveFileAsync()`, `EngineConfig::SaveToFileAsync()`. Cero cabeceras `<gx2/*.h>`. |
+| **`engine_core`** | `WiiU` (`Core/`, `ECS/`, `Spatial/`, `Time/`, `Events/`, `Storage/`, `Config/`, `Platform/`) | Loop base, PAL (`WindowWiiU` / `WindowWin32` WGL, `PlatformClock`), `ECSWorld` DOD, `MemoryManager`, `JobSystem` SMP, `ViewFrustum`, `StacklessBVH`, `GameClock`, `GameplayEventBus`, `StorageManager` + `SaveFileAsync()`. Cero cabeceras `<gx2/*.h>`, `<windows.h>` o `<GL/`. |
 | **`engine_physics`** | `WiiU` (`CollisionSystem`, `KinematicCharacterSystem`, `RigidBodyPhysicsSystem`) | Barrido cinemático KCC, detección continua, cuerpos rígidos SO(3), impulsos secuenciales + fricción de Coulomb y restricciones XPBD. |
-| **`engine_audio`** | `WiiU` (`AudioManager`, `AudioEngine3D`, `AudioSpatialSystem`) | Mixer 32 voces (`sndcore2` AX), paneo azimutal, LPF oclusión, efecto Doppler físico, *sidechain ducking* por buses y reverberación estéreo Schroeder. |
-| **`engine_input`** | `WiiU` (`InputManager`, `RumbleManager`, `SoftwareKeyboard`) | HAL unificado VPAD/WPAD/Pro Controller, curvas de respuesta no lineales, contexto jerárquico de acciones, háptica ADSR y teclado nativo `nn::swkbd` con calibración táctil `VPADGetTPCalibratedPoint`. |
-| **`engine_ai`** | `WiiU::AI` (`NavGraph`, `AStarPathfinder`, `SteeringBehaviors`, `AISteeringSystem`) | Navegación A* en memoria de pila, comportamientos de Craig Reynolds y máquina de estados cognitiva FSM. |
-| **`engine_graphics`** | `WiiU` / `WiiU::Graphics` (`RHI/`, `ForwardRendererGX2`, `RenderTargetGX2`, `PostProcessHDRGX2`, `TextureLoaderGX2`, `ShadowSystem`, `MeshLODGroup`, `ParticleSystem3D`, `Render2DGX2`, `DebugDraw3D`, `UIToolkit`) | Renderizado hardware AMD Latte GX2, PBR Cook-Torrance, Shadow Maps 2-Pass PCF, Skybox Atlas 2D 3×2 + Agua Planar RTT, HDR `RGBA16F` + Bloom Kawase 5-Tap, Instancing Ring Buffer lock-free, Terreno Heightmap, Toon NPR y Ray Tracing BVH. |
-| **`engine_net`** | `WiiU::Net` (`NetSocket`, `NetBitStream`, `NetSession`, `NetReplication`) | Sockets no bloqueantes `nsysnet`/`Winsock2`, serialización endian-safe, framing TCP + datagramas UDP `WUN1`, replicación de snapshots 50B con LERP/SLERP y telemetría RTT/SRTT/Jitter. |
-| **`engine_framework`** | `WiiU` (`Engine`, `SceneManager`, `GameScene3D`, `HUDOverlay`, `ResourceMonitor`, `EngineSelfTestSuite`) | Orquestación de arranque con escena inyectable `Engine::Init(std::unique_ptr<IScene>)`, navegación desacoplada por fábricas, suite de **43/43 pruebas automatizadas** y sincronización de VSync/ProcUI. |
+| **`engine_audio`** | `WiiU` (`AudioManager`, `AudioEngine3D`, `AudioSpatialSystem`, `AudioDeviceWin32`) | Mixer 32 voces (`sndcore2` AX en Wii U / `waveOut` 48 kHz nativo en Windows), paneo azimutal, LPF oclusión, efecto Doppler físico, *sidechain ducking* y reverberación Schroeder. |
+| **`engine_input`** | `WiiU` (`InputManager`, `RumbleManager`, `SoftwareKeyboard`, `InputWin32`, `RumbleWin32`) | HAL unificado: VPAD/WPAD/Pro Controller en Wii U + XInput, teclado, ratón y táctil en Windows/ROG Ally; curvas radiales, contexto jerárquico, háptica ADSR y teclado táctil/nativo. |
+| **`engine_ai`** | `WiiU::AI` (`NavGraph`, `AStarPathfinder`, `SteeringBehaviors`, `AISteeringSystem`) | Navegación A* en memoria de pila, comportamientos de Craig Reynolds y máquina de estados cognitiva FSM / Behavior Trees. |
+| **`engine_graphics`** | `WiiU` / `WiiU::Graphics` (`RHI/`, `ForwardRenderer*`, `RenderTarget*`, `PostProcessHDR*`, `ShadowMapRenderer*`, `TextureLoader*`, `Render2D*`, `DebugDraw3D`, `UIToolkit`) | Renderizado dual nativo por tiempo de enlace (**AMD Latte GX2** + **OpenGL 3.3 Core**): PBR Cook-Torrance, Shadow Maps 2-Pass PCF 3×3/5×5, Skybox Atlas 2D 3×2 + Agua Planar RTT, HDR `RGBA16F` + Bloom Kawase, Instancing HW, Terreno 4 biomas, Toon NPR y Ray Tracing BVH. |
+| **`engine_net`** | `WiiU::Net` (`NetSocket`, `NetBitStream`, `NetSession`, `NetReplication`) | Sockets no bloqueantes `nsysnet` (Wii U) / `ws2_32` (Windows), serialización endian-safe, framing TCP + datagramas UDP `WUN1`, replicación de snapshots 50B con LERP/SLERP y telemetría RTT/SRTT/Jitter. |
+| **`engine_framework`** | `WiiU` (`Engine`, `SceneManager`, `GameScene3D`, `HUDOverlay`, `ResourceMonitor`, `EngineSelfTestSuite`) | Orquestación de arranque con escena inyectable `Engine::Init(std::unique_ptr<IScene>)`, navegación desacoplada por fábricas, suite de **44/44 pruebas automatizadas** y sincronización de VSync/ProcUI. |
 
 ### Suites de Validación Gráfica (G1–G8) — Benchmarks Reales en Wii U
 
@@ -66,9 +67,9 @@ El motor está desacoplado en **8 librerías estáticas CMake** independientes (
 - **Escalón VSync 60→30 Hz y GPRs en `pbr_mesh_gx2.frag`:** Con VSync ON, cualquier frame que supere `16.67 ms` cae a 30 FPS exactos; el uber-shader PBR (36 GPRs) limita G2 a ~32 FPS en fillrate puro en AMD Latte R700. Especializar variantes livianas del shader es una mejora planificada.
 - **Ray Tracing GPU (G8):** La GPU AMD Latte (~0.35 TFLOPS) carece de RT Cores; a 720p cae a ~20–25 FPS, mientras que con Render Scale `≤ 540p` sostiene 30 FPS.
 
-* **Renderizado Dual:**
-  - **GX2 Nativo en Silicio:** Control directo del procesador de comandos de la GPU AMD Latte GX2, pases de render en eDRAM (MEM1 32 MB), z-buffer jerárquico HiZ y shaders CafeGLSL directos.
-  - **SDL2 Fallback:** Ruta de renderizado 2D/3D por software para pruebas y menús clásicos.
+* **Renderizado Multiplataforma Nativo (0 SDL2 / 0 DLLs Externas):**
+  - **Wii U (`__WIIU__` — AMD Latte GX2 Nativo):** Control directo del procesador de comandos GX2, pases en eDRAM (MEM1 32 MB), Z-buffer jerárquico HiZ y shaders CafeGLSL directos (`.gsh`).
+  - **Windows x64 / ASUS ROG Ally (`GL` — OpenGL 3.3 Core + Win32 PAL):** Contexto WGL OpenGL 3.3 Core con carga dinámica propia (`GLFunctions`), `ForwardRendererGL` (modos `0..9`), `RenderTargetGL`, `ShadowMapRendererGL` PCF, `PostProcessHDRGL` (HDR + Bloom Kawase), `RHIFullscreenShaderGL` (BVH) y `Render2DGL` en un binario único sin DLLs de terceros.
 * **Arquitectura ECS (Entity Component System):**
   - Entidades y componentes orientados a datos (`TransformComponent`, `MeshComponent`, `SkeletalMeshComponent`, `AnimatorComponent`, `IKRigComponent`, `CameraComponent`, `SpringArmComponent`, `StudioTurntableComponent`, `MaterialComponent`, `BoundingVolumeComponent`, `RigidBodyComponent`, `AudioEmitterComponent`).
   - Sistemas desacoplados ejecutados por frame (`AnimationSystem`, `IKSystem`, `TransformSystem`, `CameraSystem`, `SpringArmSystem`, `OrbitCameraSystem`, `StudioTurntableSystem`, `CullingSystem`, `MeshRenderSystem`).
@@ -90,13 +91,17 @@ El motor está desacoplado en **8 librerías estáticas CMake** independientes (
 | `include/WiiUEngine.hpp` | **Umbrella Header Público**: único punto de entrada recomendado para proyectos y contribuidores. |
 | `include/Core/`, `src/Core/` | Bucle principal (`Engine`), `ECSWorld`, componentes, sistemas, reloj (`GameClock`), `GameplayEventBus`, `StorageManager` y `EngineConfig`. |
 | `include/Core/AI/`, `src/Core/AI/` | Inteligencia Artificial: grafos espaciales (`NavGraph`), A* en stack, Craig Reynolds y FSM. |
-| `include/Graphics/`, `src/Graphics/` | RHI de GX2, `ForwardRendererGX2`, `TextureLoaderGX2` (`.wtex`/`.wcube`), `StaticMesh`, `ShadowSystem`, `Render2DGX2` y `UIToolkit`. |
+| `include/Platform/`, `src/Platform/` | Capa PAL por plataforma (`WiiU/WindowWiiU`, `WiiU/PlatformClockWiiU`, `Windows/WindowWin32`, `InputWin32`, `RumbleWin32`, `AudioDeviceWin32`, `PlatformClockWin32`). |
+| `include/Graphics/`, `src/Graphics/` | RHI compartido, `ForwardRendererGX2`, `TextureLoaderGX2`, `StaticMesh` (BE + BE→LE), `ShadowSystem`, `Render2D*` y `UIToolkit`. |
+| `include/Graphics/GL/`, `src/Graphics/GL/` | Backend completo **OpenGL 3.3 Core** para Windows / escritorio (`GLFunctions`, `Render2DGL`, `ForwardRendererGL`, `TextureLoaderGL`, `RenderTargetGL`, `ShadowMapRendererGL`, `PostProcessHDRGL`, `RHIFullscreenShaderGL`). |
 | `include/Graphics/Animation/` | Estructuras de `Skeleton`, `AnimationClip`, `JointTrack` y `AnimationLoader` binario. |
 | `include/Scene/`, `src/Scene/` | `IScene`, `GameScene3D`, `SceneManager`, `HUDOverlay` + escenas showcase opcionales (`WIIU_ENGINE_BUILD_DEMOS`). |
-| `include/Input/`, `src/Input/` | Abstracción de mandos Wii U GamePad (VPAD), Pro Controller y Wiimote (WPAD). |
-| `include/Audio/`, `src/Audio/` | `AudioEngine3D`: Doppler físico, buses con *ducking*, reverberación Schroeder y streaming BGM. |
+| `include/Input/`, `src/Input/` | Abstracción unificada de mandos Wii U GamePad (VPAD), Pro Controller / Wiimote (WPAD) y Windows XInput / teclado / táctil. |
+| `include/Audio/`, `src/Audio/` | `AudioEngine3D`: Doppler físico, buses con *ducking*, reverberación Schroeder y streaming BGM (`sndcore2` AX / `waveOut`). |
 | `assets/models/` | Activos 3D cocinados listos para distribución (`.wmesh`, `.wskel`, `.wanim`, `.wtex`, `.wcube`). |
-| `assets/shaders/` | Código fuente CafeGLSL (`.vert`, `.frag`) y contenedores compilados GFD (`.gsh`). |
+| `assets/shaders/` | Código fuente CafeGLSL / GLSL (`.vert`, `.frag`) y contenedores compilados GFD (`.gsh`). |
+| `scripts/agent_harness.py` | Harness determinista: compilación dual (`build --all`) y 8 gates estáticos (`CRLF_CHECK`, `CORE_HEADER_LEAKS`, `ZERO_SDL_SOURCE_REFS`, `GX2_INVARIANTS`, `GL_INVARIANTS`, `COOKED_WMESH_CHECK`, `ELF_SDL_SYMBOLS`, `WIN_DLL_CHECK`). |
+| `docs/TUTORIAL_PRIMER_JUEGO_MULTIPLATAFORMA.md` | Tutorial completo paso a paso para crear un juego 3D multiplataforma con el motor. |
 | `tools/cooker/` | Pipeline universal de activos (`cook_model.py`, `fbx_parser.py`, `mesh_cooker.py`). |
 | `tools/cafeglsl/` | Compilador oficial de shaders CafeGLSL de Nintendo para Windows. |
 | `tools/EmbedGsh.ps1` | Script para embeber contenedores `.gsh` como arreglos C++ de fallback. |
@@ -108,30 +113,42 @@ El motor está desacoplado en **8 librerías estáticas CMake** independientes (
 
 ## 🛠️ Requisitos del Entorno de Desarrollo
 
-### 1. Toolchain de Consola (devkitPro para Wii U)
-Instalar [devkitPro Updater](https://devkitpro.org/wiki/Getting_Started) en Windows (ruta recomendada: `C:\devkitPro`). Desde la terminal de **devkitPro MSYS2**, instalar los paquetes necesarios:
+### 1. Toolchain de Consola (devkitPro para Wii U — 0 SDL2)
+Instalar [devkitPro Updater](https://devkitpro.org/wiki/Getting_Started) en Windows (ruta recomendada: `C:\devkitPro`). Desde la terminal de **devkitPro MSYS2**, instalar los paquetes nativos (ya **no** se utiliza `wiiu-sdl2`):
 
 ```bash
 pacman -Syu
-pacman -S wut-tools wut-developer wiiu-sdl2
+pacman -S wut-tools wut-developer
 ```
 
 Variables de entorno esperadas:
 * `DEVKITPRO=/opt/devkitpro` (dentro de MSYS2) o `C:\devkitPro` (en Windows).
 * `DEVKITPPC=/opt/devkitpro/devkitPPC`.
 
-### 2. Herramientas de Compilación en Host
+### 2. Toolchain Nativo Windows x64 / ASUS ROG Ally (0 DLLs Externas)
+* **MinGW-w64 UCRT64 (`g++` C++20)** — probado con **WinLibs POSIX UCRT** o **MSYS2 UCRT64** + **Ninja** / **MinGW Makefiles**.
+* Solo enlaza librerías estándar de Windows (`opengl32`, `gdi32`, `user32`, `winmm`, `ws2_32`, `xinput`) de forma estática (`-static`). El binario resultante `build-win/wiiu_demos.exe` **no requiere SDL2 ni ninguna DLL de terceros**.
+
+### 3. Herramientas de Compilación en Host
 * **CMake** $\ge 3.24$
 * **Python** $\ge 3.10$ con biblioteca `Pillow` (`pip install Pillow`) para el procesamiento de texturas en el cooker.
 * **Make** o **Ninja**
 
 ---
 
-## 🔨 Compilación y Generación del Paquete (.wuhb)
+## 🔨 Compilación Dual: Nintendo Wii U (.wuhb) y Windows x64 (.exe)
 
-Toda la compilación del motor se realiza mediante CMake configurado con el toolchain de Nintendo Wii U provisto por devkitPro.
+Puedes compilar ambos destinos de forma directa con CMake o en un único comando mediante el harness del proyecto:
 
-### Paso 1: Configurar el Directorio de Compilación (CMake)
+```powershell
+# Compilar ambas plataformas (Wii U + Windows x64) y verificar binarios
+python scripts/agent_harness.py build --all
+
+# Verificar los 8 gates estáticos (LF, DAG, 0 SDL2, GX2/GL Invariants, COOKED_WMESH, WIN_DLL_CHECK)
+python scripts/agent_harness.py check
+```
+
+### Compilación Manual para Nintendo Wii U
 Abrir la terminal (MSYS2 o PowerShell con toolchain en PATH) en la raíz del proyecto:
 
 ```bash
@@ -141,16 +158,21 @@ cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/WiiU.cmake -DCMA
 
 > **Nota:** Si estás en PowerShell en Windows usando rutas de Windows, la ruta al toolchain suele ser `C:/devkitPro/cmake/WiiU.cmake`.
 
-### Paso 2: Compilar el Ejecutable y Empaquetar WUHB
-Ejecutar la compilación incremental:
-
 ```bash
 cmake --build build
 ```
 
-El proceso compila los objetos C++ con optimizaciones `powerpc-eabi-g++ -O3 -ffast-math`, enlaza el ejecutable `wiiu_demos.elf`, lo convierte en ejecutable de Wii U `wiiu_demos.rpx`, sincroniza los activos hacia `build/assets/` y `build/content/`, y genera finalmente el paquete listo para Aroma:
-* **`build/wiiu_demos.wuhb`** (Paquete distribuible de Wii U)
-* **`build/wiiu_demos.rpx`** (Binario ejecutable)
+El proceso compila los objetos C++ con optimizaciones `powerpc-eabi-g++ -O3 -ffast-math`, enlaza `wiiu_demos.elf`, genera `build/wiiu_demos.rpx`, sincroniza `assets/` hacia `build/assets/` y `build/content/`, y empaqueta **`build/wiiu_demos.wuhb`**.
+
+### Compilación Manual para Windows x64 / ASUS ROG Ally
+Desde PowerShell en la raíz del repositorio:
+
+```powershell
+cmake -S . -B build-win -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-win -j4
+```
+
+Genera **`build-win/wiiu_demos.exe`** (binario autocontenido con **0 DLLs externas**). Para ejecutarlo en otra PC o en tu **ASUS ROG Ally Z1**, copia `build-win/wiiu_demos.exe` junto con la carpeta `assets/` en el mismo directorio (`F11` alterna pantalla completa sin bordes; soporta XInput, ratón/táctil y teclado).
 
 ### Forzar Re-empaquetado tras Modificar Activos
 Si modificas texturas, mallas o shaders y deseas regenerar el `.wuhb` sin recompilar todo el código C++:
@@ -162,20 +184,20 @@ cmake --build build --target wiiu_demos_wuhb
 ```
 
 ### Integración en Otros Proyectos (Modo Librería `-DWIIU_ENGINE_BUILD_DEMOS=OFF`)
-Si deseas reutilizar el motor como librería estática en tu propio videojuego Wii U sin compilar el ejecutable showcase `wiiu_demos`:
+Si deseas reutilizar el motor como librería estática en tu propio videojuego multiplataforma (Wii U o Windows x64) sin compilar el ejecutable showcase `wiiu_demos`:
 
 ```cmake
 # En el CMakeLists.txt de tu proyecto externo:
 set(WIIU_ENGINE_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 add_subdirectory(extern/wiiu_engine) # ruta a este repositorio
 
-add_executable(mi_juego.elf src/main.cpp src/Scene/SceneMiJuego.cpp)
-target_link_libraries(mi_juego.elf PRIVATE engine_framework)
+add_executable(mi_juego src/main.cpp src/Scene/SceneMiJuego.cpp)
+target_link_libraries(mi_juego PRIVATE engine_framework)
 ```
 
-> `engine_framework` propaga transitivamente los directorios de cabeceras públicos (`include/`), la definición `-D__WIIU__` y las 6 librerías subyacentes (`engine_graphics`, `engine_physics`, `engine_audio`, `engine_input`, `engine_ai`, `engine_core`), de modo que tu proyecto solo necesita `#include "WiiUEngine.hpp"`.
+> `engine_framework` propaga transitivamente los directorios de cabeceras públicos (`include/`) y las **8 librerías estáticas** (`engine_graphics`, `engine_physics`, `engine_audio`, `engine_input`, `engine_ai`, `engine_net`, `engine_core`), seleccionando automáticamente Wii U GX2 (`if(WUT)`) o Windows OpenGL 3.3 Core (`else()`). Tu proyecto solo necesita `#include "WiiUEngine.hpp"`.
 
-También puedes compilar únicamente las 7 librerías estáticas desde línea de comandos:
+También puedes compilar únicamente las 8 librerías estáticas desde línea de comandos:
 ```bash
 cmake -S . -B build_lib -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/WiiU.cmake -DWIIU_ENGINE_BUILD_DEMOS=OFF
 cmake --build build_lib -j4
@@ -322,21 +344,30 @@ Para iterar rápidamente sin encender la consola física:
 
 ## 🏗️ Cómo Crear una Nueva Escena y Arrancar un Proyecto Externo
 
-La forma más rápida de construir un juego 3D reutilizando el pipeline GX2, cámara orbital anti-colisiones, luces, sombras y texturas es heredar de [`GameScene3D`](include/Scene/GameScene3D.hpp) usando [`include/WiiUEngine.hpp`](include/WiiUEngine.hpp):
+> **Tutorial Completo Paso a Paso:** Consulta [`docs/TUTORIAL_PRIMER_JUEGO_MULTIPLATAFORMA.md`](docs/TUTORIAL_PRIMER_JUEGO_MULTIPLATAFORMA.md) para ver un ejemplo completo con carga asíncrona, PBR/sombras, cámara orbital, entrada unificada (GamePad + XInput + táctil), ECS/física, audio 3D y compilación dual.
+
+La forma más rápida de construir un juego 3D multiplataforma (idéntico código para **Wii U GX2** y **Windows x64 OpenGL 3.3 Core**) reutilizando cámara orbital anti-colisiones, luces, sombras y texturas es heredar de [`GameScene3D`](include/Scene/GameScene3D.hpp) usando [`include/WiiUEngine.hpp`](include/WiiUEngine.hpp):
 
 1. **Crear tu Escena heredando de `GameScene3D` (`SceneMiJuego.hpp`):**
    ```cpp
    #pragma once
    #include "WiiUEngine.hpp"
+   #include <vector>
 
    class SceneMiJuego : public WiiU::GameScene3D {
    public:
        void LoadAsync() override {
-           m_mesh.LoadFromFile("content:/models/dutch_house_complete.wmesh");
+           // Lectura segura en Core 2 (Wii U) o hilo trabajador (Windows)
+           WiiU::AssetManager::LoadBinaryFile("models/dutch_house.wmesh", m_stagedMesh);
+           WiiU::AssetManager::LoadBinaryFile("models/dutch_house.wtex", m_stagedTex);
        }
 
        void OnGameInit() override {
-           m_albedo = LoadSceneTexture("content:/models/dutch_house.wtex");
+           // Carga a VRAM en hilo principal (GX2 en Wii U / OpenGL 3.3 VBO-Texture en Windows)
+           m_mesh.LoadFromMemory(m_stagedMesh.data(), m_stagedMesh.size());
+           m_albedo = LoadSceneTextureFromMemory(m_stagedTex.data(), m_stagedTex.size(), "HouseTex");
+           std::vector<uint8_t>{}.swap(m_stagedMesh);
+           std::vector<uint8_t>{}.swap(m_stagedTex);
        }
 
        void OnGameUpdate(float dt) override {
@@ -357,6 +388,8 @@ La forma más rápida de construir un juego 3D reutilizando el pipeline GX2, cá
        WiiU::StaticMesh m_mesh;
        WiiU::ResourceHandle<GX2Texture> m_albedo; // Liberación RAII automática en OnExit()
        WiiU::GameClock m_clock;
+       std::vector<uint8_t> m_stagedMesh;
+       std::vector<uint8_t> m_stagedTex;
    };
    ```
 
@@ -369,7 +402,7 @@ La forma más rápida de construir un juego 3D reutilizando el pipeline GX2, cá
    int main(int argc, char* argv[]) {
        (void)argc; (void)argv;
        {
-           WiiU::Engine engine; // Ámbito RAII para apagar GX2/SDL/Audio antes de salir
+           WiiU::Engine engine; // Ámbito RAII para apagar GX2/OpenGL/Audio antes de salir
            if (engine.Init(std::make_unique<SceneMiJuego>())) {
                engine.Run();
            }
@@ -390,7 +423,7 @@ El desarrollo de este motor se rige por directivas de ingeniería de software ob
 
 1. **Regla 1 (FTP Controlado):** Jamás desplegar automáticamente a la consola física vía FTP sin orden explícita.
 2. **Regla 2 (Revisión en Cascada de 2 Fases):** Todo cambio en el código o pipeline de activos debe someterse a revisión por los subagentes especializados:
-   - **Fase 1 (`graphics_code_reviewer`):** Silicio Latte GX2, eDRAM, shaders, VBO/IBO, texturas y VSync.
-   - **Fase 2 (`engine_clean_code_reviewer`):** Arquitectura de motor, Clean Code C++20, RAII, DOD/ECS y cero asignaciones en caliente.
-3. **Regla 3 (Actualización de Handoff):** Cada hito completado debe documentarse en [`HANDOFF_ANTIGRAVITY.md`](HANDOFF_ANTIGRAVITY.md) con saltos de línea LF puros (`\n`).
-4. **Regla 4 (Autonomía de Workspace):** Plena autonomía para ejecutar CMake, compilaciones y manipulaciones de archivos dentro del repositorio; autorización previa obligatoria para comandos a nivel de sistema operativo fuera del workspace.
+   - **Fase 1 (`graphics_code_reviewer`):** Silicio Latte GX2, eDRAM, shaders, VBO/IBO, texturas, VSync **y OpenGL 3.3 Core / Win32 PAL**.
+   - **Fase 2 (`engine_clean_code_reviewer`):** Arquitectura de motor (DAG de 8 librerías), Clean Code C++20, RAII, DOD/ECS, 0 SDL2 y cero asignaciones en caliente.
+3. **Regla 3 (Actualización de Handoff):** Cada hito completado debe documentarse en [`HANDOFF_ANTIGRAVITY.md`](HANDOFF_ANTIGRAVITY.md) y [`ANEXO_OPTIMIZACIONES_PENDIENTES.md`](ANEXO_OPTIMIZACIONES_PENDIENTES.md) con saltos de línea LF puros (`\n`).
+4. **Regla 4 (Autonomía de Workspace):** Plena autonomía para ejecutar `scripts/agent_harness.py` (`check`, `build --all`), CMake y manipulaciones dentro del repositorio; autorización previa obligatoria para despliegues FTP o comandos fuera del workspace.

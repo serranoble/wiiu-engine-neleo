@@ -105,7 +105,7 @@ Diseñado para permitir que cualquier juego homebrew o proyecto de terceros enla
 
 ## Optimizaciones de Prioridad Alta a Nivel de Motor (Hito 142 — 20 Subsistemas Core/RHI/AI/Physics/Audio)
 
-Implementadas directamente sobre las 7 librerías estáticas (`engine_core`, `engine_input`, `engine_audio`, `engine_physics`, `engine_ai`, `engine_graphics`, `engine_framework`) con **0 alocaciones dinámicas a 60 FPS** y **`0` cabeceras `<gx2/*.h>` en `include/Core/`**.
+Implementadas directamente sobre las **8 librerías estáticas** (`engine_core`, `engine_input`, `engine_audio`, `engine_physics`, `engine_ai`, `engine_graphics`, `engine_net`, `engine_framework`) con **0 alocaciones dinámicas a 60 FPS**, **0 SDL2** en todo el motor y **`0` cabeceras `<gx2/*.h>` o `<GL/` en `include/Core/`**.
 
 ### 1. Almacenamiento, VFS, CVars y Seguridad (`engine_core`)
 - **`VirtualFileSystem` (`include/Core/Storage/VirtualFileSystem.hpp`):** Rutas virtuales `content:/` y `save:/`, lecturas síncronas/asíncronas en Core 2 con alineación potencia-de-2 (defecto 256B) + `DCFlushRange` e invariante `jobCounter == 0` libre de carreras.
@@ -139,3 +139,24 @@ Implementadas directamente sobre las 7 librerías estáticas (`engine_core`, `en
 ### 7. Overlays Modales y Grafo de Build (`engine_framework`, `CMakeLists.txt`)
 - **`ModalStack` (`include/Scene/ModalStack.hpp`):** Pila de hasta 8 `ISceneOverlay` compositados sobre la escena activa (seguro ante auto-cierre en `Update()`).
 - **CMake Asset Graph (`OPT-141`):** `file(GLOB_RECURSE CONFIGURE_DEPENDS)` + target `sync_assets` con sello de tiempo para regeneración automática de `wiiu_demos.wuhb` al modificar cualquier asset.
+
+---
+
+## Capa PAL Multiplataforma y Backend OpenGL 3.3 Core (Hitos 149–151 — `OPT-448`..`OPT-450`)
+
+El motor compila de forma nativa tanto para **Nintendo Wii U (`WUT` / GX2 / Cafe OS)** como para **Windows x64 / ASUS ROG Ally Z1 (Win32 WGL OpenGL 3.3 Core)** mediante polimorfismo en tiempo de enlace en [`CMakeLists.txt`](../CMakeLists.txt), manteniendo **0 SDL2** y **0 DLLs de terceros** en Windows.
+
+- **Capa PAL OS (`src/Platform/WiiU/` vs `src/Platform/Windows/`):**
+  - `WindowWiiU` / `WindowWin32` (contexto WGL 3.3 Core, `F11` fullscreen sin bordes, letterbox 16:9).
+  - `PlatformClockWiiU` / `PlatformClockWin32` (reloj de alta resolución).
+  - `InputWin32` + `Win32InputBridge` (XInput, teclado, ratón y táctil mapeados a `VirtualGamepad` / `VirtualButton`).
+  - `RumbleWin32` (vibración XInput dual) y `AudioDeviceWin32` (`waveOut` 48 kHz lock-free).
+  - `engine_net`: `nsysnet` en Wii U y `ws2_32` (Winsock2) en Windows.
+- **Backend Gráfico OpenGL 3.3 Core (`src/Graphics/GL/`):**
+  - `GLFunctions`: cargador propio vía `wglGetProcAddress` sin GLEW/GLAD ni `<GL/gl.h>` en cabeceras públicas.
+  - `Render2DGL`: batcher 2D Zero-Alloc (`32,768` vértices) para HUD, tipografía pixel y `DebugDraw3D`.
+  - `TextureLoaderGL` y `StaticMesh`: decodificación de `.wtex` (`RGBA8`/`BC1`/`BC3`), atlas Skybox 3×2 `.wcube` y conversión `.wmesh` Big-Endian → Little-Endian (vértices 48B/80B e índices U16/U32) en carga.
+  - `ForwardRendererGL`: programas GLSL 330 con VAOs aislados, skinning 64 huesos, hardware instancing, Early-Z, iluminación PBR + sombras PCF 3×3/5×5, reflejo planar y modos `0..9`.
+  - `RenderTargetGL`, `ShadowMapRendererGL`, `PostProcessHDRGL` (HDR 16F + Bloom Kawase) y `RHIFullscreenShaderGL` (compilación `.gsh`→`.frag` + escalador BVH `360p..720p`) preservando el viewport 16:9 letterboxed de `FBO 0`.
+
+> **Tutorial práctico paso a paso:** Consulta [`TUTORIAL_PRIMER_JUEGO_MULTIPLATAFORMA.md`](TUTORIAL_PRIMER_JUEGO_MULTIPLATAFORMA.md) para construir tu primer proyecto en ambas plataformas usando estas APIs.
