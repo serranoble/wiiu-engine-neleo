@@ -1,17 +1,5 @@
 #pragma once
 
-#if !defined(__WIIU__) && !defined(__wiiu__)
-#include <SDL2/SDL.h>
-#else
-#include <coreinit/fastmutex.h>
-#include <coreinit/cache.h>
-#include <coreinit/memorymap.h>
-#include <coreinit/thread.h>
-#include <coreinit/time.h>
-#include <sndcore2/core.h>
-#include <sndcore2/voice.h>
-#include <sndcore2/device.h>
-#endif
 #include <array>
 #include <cstdio>
 #include <vector>
@@ -20,6 +8,8 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+
+struct AXVoice;
 
 namespace WiiU {
 
@@ -94,6 +84,7 @@ private:
     AudioManager();
     ~AudioManager();
 
+    static void HostAudioCallback(void* userdata, uint8_t* stream, int len);
     static void AudioCallback(void* userdata, uint8_t* stream, int len);
     void GenerateFallbackSamples();
     void GenerateFallbackBGMSamples(std::vector<int16_t>& out);
@@ -151,7 +142,7 @@ private:
     void AudioMixThreadWorker();
     static void AXFrameCallbackStatic();
 
-    OSFastMutex m_deviceMutex{};
+    alignas(8) std::array<uint8_t, 64> m_deviceMutexStorage{};
     int16_t* m_axDmaBuffer{nullptr};
     int16_t* m_axMixBufs[2]{nullptr, nullptr};
     std::array<int16_t, AX_BUFFER_SAMPLES * 2u> m_axInterleavedScratch{};
@@ -162,6 +153,8 @@ private:
     std::atomic<bool> m_axMixThreadRunning{false};
     std::thread m_axMixThread;
     bool m_axCallbackRegistered{false};
+#else
+    std::mutex m_hostAudioMutex;
 #endif
 
     // Proteccion de Hilos para Cadenas de Texto

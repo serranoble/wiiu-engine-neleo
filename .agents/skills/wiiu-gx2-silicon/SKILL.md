@@ -3,12 +3,12 @@ name: wiiu-gx2-silicon
 description: Hardware invariants for Nintendo Wii U (IBM Espresso PPC 750CL, AMD Latte GX2, Cafe OS ProcUI, sndcore2/AX). Load before editing graphics, window/swapchain, audio DMA, shaders, or threading code.
 ---
 
-# Wii U Silicon & Cafe OS Invariants (Hito 144 — 100% Nativo)
+# Wii U Silicon & Cafe OS Invariants (100% Nativo — 0 SDL2)
 
-## 1. Zero SDL2 on Wii U
-- Wii U builds (`#if defined(__WIIU__) || defined(__wiiu__)`) must have **0** `SDL_` symbols in `wiiu_demos.elf`.
-- All PC/SDL2 code must stay isolated under `#if !defined(__WIIU__) && !defined(__wiiu__)`.
-- Use `OSGetSystemTime()` / `OSTimerClockSpeed` for timing and `std::FILE` for I/O.
+## 1. Zero SDL2 & Link-Time PAL
+- **0** `SDL_` symbols or `#include <SDL2/` across **all** platforms (`ZERO_SDL_SOURCE_REFS: PASS (0)` and `ELF_SDL_SYMBOLS: PASS (0)`).
+- Platform-specific PC/Windows code lives in `src/Platform/Win32/` and `src/Graphics/GL/` via link-time PAL (`CMakeLists.txt`).
+- Use `OSGetSystemTime()` / `OSTimerClockSpeed` for timing and `std::FILE` for I/O on Wii U.
 
 ## 2. ProcUI & Foreground Guards (Menú HOME)
 - **Never** call `GX2DrawDone()` or teardown GPU buffers without checking:

@@ -27,8 +27,6 @@
 #include <malloc.h>
 #include <proc_ui/procui.h>
 #include <sysapp/launch.h>
-#else
-#include <SDL2/SDL.h>
 #endif
 
 namespace WiiU {
@@ -142,10 +140,6 @@ uint32_t OnProcUISaveCallback(void* /*arg*/) {
     return 0u;
 }
 
-#else
-
-SDL_Renderer* s_activeRenderer = nullptr;
-
 #endif
 
 } // namespace
@@ -155,39 +149,6 @@ Window::Window(const std::string& title, int width, int height)
 
 Window::~Window() {
     Shutdown();
-}
-
-Window::Window(Window&& other) noexcept
-    : m_title(std::move(other.m_title)),
-      m_width(other.m_width),
-      m_height(other.m_height)
-#if !defined(__WIIU__) && !defined(__wiiu__)
-      , m_window(other.m_window),
-      m_renderer(other.m_renderer)
-#endif
-{
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    other.m_window = nullptr;
-    other.m_renderer = nullptr;
-    s_activeRenderer = m_renderer;
-#endif
-}
-
-Window& Window::operator=(Window&& other) noexcept {
-    if (this != &other) {
-        Shutdown();
-        m_title = std::move(other.m_title);
-        m_width = other.m_width;
-        m_height = other.m_height;
-#if !defined(__WIIU__) && !defined(__wiiu__)
-        m_window = other.m_window;
-        m_renderer = other.m_renderer;
-        other.m_window = nullptr;
-        other.m_renderer = nullptr;
-        s_activeRenderer = m_renderer;
-#endif
-    }
-    return *this;
 }
 
 void* Window::GetActiveNativeColorBuffer() noexcept {
@@ -214,12 +175,8 @@ void* Window::GetActiveNativeContextState() noexcept {
 #endif
 }
 
-void* Window::GetActiveRendererHandle() noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
+void* Window::GetActiveNativeWindowHandle() noexcept {
     return nullptr;
-#else
-    return static_cast<void*>(s_activeRenderer);
-#endif
 }
 
 bool Window::HasForeground() noexcept {
@@ -242,6 +199,14 @@ void Window::NotifyExitingProcUI() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
     s_exitingProcUI.store(true, std::memory_order_release);
 #endif
+}
+
+void Window::PumpPlatformEvents() noexcept {
+    // En Wii U los mensajes de ProcUI se bombean explícitamente en InputManager::PollPlatformEvents()
+}
+
+void Window::ToggleFullscreen() noexcept {
+    // No aplicable en consola Wii U (TV + DRC fijos)
 }
 
 void Window::AcquireForeground() noexcept {
@@ -413,7 +378,7 @@ void Window::ReleaseForeground() noexcept {
 
     DestroyForegroundHeaps();
 
-    // Preservar señales TV/DRC encendidas como en WIIU_ForegroundReleased (SDL_wiiuvideo.o) para que el Menú HOME sea visible
+    // Preservar señales TV/DRC encendidas para que el Menú HOME sea visible
     GX2SetTVEnable(TRUE);
     GX2SetDRCEnable(TRUE);
 
@@ -427,6 +392,7 @@ void Window::ReleaseForeground() noexcept {
 bool Window::Init() {
     Shutdown();
 #if defined(__WIIU__) || defined(__wiiu__)
+    m_ownsWindow = true;
     s_exitingProcUI.store(false, std::memory_order_release);
     if (!ProcUIIsRunning()) {
         s_procUICallbacksRegistered = false;
@@ -513,23 +479,7 @@ bool Window::Init() {
     s_lastSubmittedTs = 0;
     return true;
 #else
-    m_window = SDL_CreateWindow(m_title.c_str(),
-                                SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                m_width, m_height, 0);
-    if (!m_window) return false;
-
-    m_renderer = SDL_CreateRenderer(m_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!m_renderer) {
-        m_renderer = SDL_CreateRenderer(m_window, -1, SDL_RENDERER_ACCELERATED);
-    }
-    if (!m_renderer) {
-        Shutdown();
-        return false;
-    }
-
-    SDL_SetRenderDrawBlendMode(m_renderer, SDL_BLENDMODE_BLEND);
-    s_activeRenderer = m_renderer;
-    return true;
+    return false;
 #endif
 }
 
@@ -558,9 +508,7 @@ void Window::Clear(const ColorRGBA& color) {
     GX2SetAlphaTest(FALSE, GX2_COMPARE_FUNC_ALWAYS, 0.0f);
     GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x01, FALSE, TRUE);
 #else
-    if (!m_renderer) return;
-    SDL_SetRenderDrawColor(m_renderer, color.r, color.g, color.b, color.a);
-    SDL_RenderClear(m_renderer);
+    (void)color;
 #endif
 }
 
@@ -601,10 +549,6 @@ void Window::Present() {
         }
         GX2WaitForVsync();
     }
-#else
-    if (m_renderer) {
-        SDL_RenderPresent(m_renderer);
-    }
 #endif
 }
 
@@ -615,13 +559,13 @@ void Window::SetSwapInterval(int interval) noexcept {
         GX2SetSwapInterval(s_swapInterval);
     }
 #else
-    if (m_renderer) {
-        SDL_RenderSetVSync(m_renderer, (interval > 0) ? 1 : 0);
-    }
+    (void)interval;
 #endif
 }
 
 void Window::Shutdown() {
+    if (!m_ownsWindow) return;
+    m_ownsWindow = false;
 #if defined(__WIIU__) || defined(__wiiu__)
     if (s_gx2Initialized) {
         if (ProcUIIsRunning() && !s_exitingProcUI.load(std::memory_order_acquire)) {
@@ -658,18 +602,6 @@ void Window::Shutdown() {
     }
     s_prevSubmittedTs = 0;
     s_lastSubmittedTs = 0;
-#else
-    if (m_renderer) {
-        if (s_activeRenderer == m_renderer) {
-            s_activeRenderer = nullptr;
-        }
-        SDL_DestroyRenderer(m_renderer);
-        m_renderer = nullptr;
-    }
-    if (m_window) {
-        SDL_DestroyWindow(m_window);
-        m_window = nullptr;
-    }
 #endif
 }
 

@@ -172,7 +172,7 @@ void SceneOptions::RefreshControls() {
                     case ControllerType::WiiRemote:         devName = "WII REMOTE"; break;
                     case ControllerType::WiiRemoteNunchuk:  devName = "WII REMOTE + NUNCHUK"; break;
                     case ControllerType::KeyboardMouse:     devName = "TECLADO / RATON PC"; break;
-                    case ControllerType::GenericSDL:        devName = "MANDO USB GENERICO"; break;
+                    case ControllerType::NativeGamepad:     devName = "MANDO NATIVO (XINPUT)"; break;
                     default:                                devName = "MANDO CONECTADO"; break;
                 }
             }

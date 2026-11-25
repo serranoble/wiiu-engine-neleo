@@ -16,8 +16,8 @@ enum class ControllerType : uint8_t {
     WiiRemote = 3,           // Wii Remote estándar (WPAD_EXT_CORE) en modo vertical u horizontal
     WiiRemoteNunchuk = 4,    // Wii Remote + Nunchuk (WPAD_EXT_NUNCHUK)
     ClassicController = 5,   // Mando Clásico / Clásico Pro (WPAD_EXT_CLASSIC)
-    KeyboardMouse = 6,       // Teclado y ratón de desarrollo PC (SDL2)
-    GenericSDL = 7           // Mando genérico PC (SDL_GameController)
+    KeyboardMouse = 6,       // Teclado y ratón nativos de escritorio (Win32/Desktop)
+    NativeGamepad = 7        // Mando nativo de escritorio (XInput / ROG Ally / HID)
 };
 
 /**
@@ -71,8 +71,8 @@ struct AnalogStick {
  * @brief Gatillos analógicos normalizados.
  */
 struct AnalogTriggers {
-    float left{0.0f};   // [0.0f, 1.0f] (Gatillo L analógico de Classic Controller o SDL)
-    float right{0.0f};  // [0.0f, 1.0f] (Gatillo R analógico de Classic Controller o SDL)
+    float left{0.0f};   // [0.0f, 1.0f] (Gatillo L analógico de Classic Controller o XInput)
+    float right{0.0f};  // [0.0f, 1.0f] (Gatillo R analógico de Classic Controller o XInput)
 };
 
 /**

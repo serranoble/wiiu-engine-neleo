@@ -118,8 +118,7 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
                                  size_t size,
                                  GX2Texture& outTex,
                                  const char* debugLabel) noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
-    if (!data || size < 16) {
+    if (!data || size < 16u) {
         return false;
     }
 
@@ -127,44 +126,68 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
     const uint32_t width = ReadBE32(data + 4);
     const uint32_t height = ReadBE32(data + 8);
     const uint32_t rawMipAndFmt = ReadBE32(data + 12);
+    const uint32_t rawMips = rawMipAndFmt & 0xFFFFu;
+    const uint32_t mipCount = (rawMips >= 1u && rawMips <= 13u) ? rawMips : 1u;
     uint32_t fmtCode = (rawMipAndFmt >> 16) & 0xFFFFu;
-    if (fmtCode == 0) {
-        fmtCode = 1;
+    if (fmtCode == 0u) {
+        fmtCode = 1u;
     }
 
-    const bool isBC1 = (fmtCode == 2);
-    const bool isBC3 = (fmtCode == 3);
+    if (magic != WTEX_MAGIC || width == 0u || height == 0u || width > 2048u || height > 2048u || fmtCode > 3u) {
+        return false;
+    }
+
+    const bool isBC1 = (fmtCode == 2u);
+    const bool isBC3 = (fmtCode == 3u);
     const bool isBlockCompressed = isBC1 || isBC3;
     const uint32_t blockBytes = isBC1 ? 8u : (isBC3 ? 16u : 4u);
 
-    if (magic != WTEX_MAGIC || width == 0 || height == 0 || width > 2048 || height > 2048) {
+    auto calcLevelBytes = [&](uint32_t w, uint32_t h) noexcept -> size_t {
+        const uint32_t bw = isBlockCompressed ? ((w + 3u) >> 2u) : w;
+        const uint32_t bh = isBlockCompressed ? ((h + 3u) >> 2u) : h;
+        return static_cast<size_t>(bw) * static_cast<size_t>(bh) * static_cast<size_t>(blockBytes);
+    };
+
+    const size_t level0Bytes = calcLevelBytes(width, height);
+    if (size < (16ULL + level0Bytes)) {
         return false;
     }
 
-    const uint32_t blocksW0 = isBlockCompressed ? ((width + 3u) >> 2) : width;
-    const uint32_t blocksH0 = isBlockCompressed ? ((height + 3u) >> 2) : height;
-    const size_t baseBytes = static_cast<size_t>(blocksW0) * static_cast<size_t>(blocksH0) * static_cast<size_t>(blockBytes);
-    if (size < (16ULL + baseBytes)) {
-        return false;
+    // Para texturas 2048x2048 BC1/BC3 con mipmaps en disco, usar Mip 1 (1024x1024) decodificado a RGBA8:
+    // conserva 4 MB exactos en MEM2, decodifica en ~2 ms en Espresso y elimina el riesgo de bloqueo de BC1/BC3
+    // sobre GX2_TILE_MODE_LINEAR_ALIGNED y el desajuste Little-Endian vs 8IN16 en AMD Latte R700.
+    uint32_t srcW = width;
+    uint32_t srcH = height;
+    size_t srcOffset = 16ULL;
+    size_t srcBytes = level0Bytes;
+    if (isBlockCompressed && (width > 1024u || height > 1024u) && mipCount >= 2u) {
+        const uint32_t m1W = (width > 1u) ? (width >> 1u) : 1u;
+        const uint32_t m1H = (height > 1u) ? (height >> 1u) : 1u;
+        const size_t m1Bytes = calcLevelBytes(m1W, m1H);
+        if (size >= (16ULL + level0Bytes + m1Bytes)) {
+            srcW = m1W;
+            srcH = m1H;
+            srcOffset = 16ULL + level0Bytes;
+            srcBytes = m1Bytes;
+        }
     }
 
+#if defined(__WIIU__) || defined(__wiiu__)
     DestroyTexture(outTex);
     std::memset(&outTex, 0, sizeof(GX2Texture));
 
     outTex.surface.dim = GX2_SURFACE_DIM_TEXTURE_2D;
-    outTex.surface.width = width;
-    outTex.surface.height = height;
-    outTex.surface.depth = 1;
-    outTex.surface.mipLevels = 1;
-    outTex.surface.format = isBC1 ? GX2_SURFACE_FORMAT_UNORM_BC1
-                          : (isBC3 ? GX2_SURFACE_FORMAT_UNORM_BC3
-                                   : GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8);
+    outTex.surface.width = srcW;
+    outTex.surface.height = srcH;
+    outTex.surface.depth = 1u;
+    outTex.surface.mipLevels = 1u;
+    outTex.surface.format = GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8;
     outTex.surface.aa = GX2_AA_MODE1X;
     outTex.surface.use = GX2_SURFACE_USE_TEXTURE;
     outTex.surface.tileMode = GX2_TILE_MODE_LINEAR_ALIGNED;
 
     GX2CalcSurfaceSizeAndAlignment(&outTex.surface);
-    const uint32_t surfAlign = outTex.surface.alignment > 256 ? outTex.surface.alignment : 256;
+    const uint32_t surfAlign = outTex.surface.alignment > 256u ? outTex.surface.alignment : 256u;
     outTex.surface.image = MemoryManager::Instance().AllocAligned(
         surfAlign,
         outTex.surface.imageSize,
@@ -175,34 +198,156 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
         return false;
     }
 
-    const uint8_t* srcCursor = data + 16;
+    const uint8_t* srcCursor = data + srcOffset;
     uint8_t* dstImage = static_cast<uint8_t*>(outTex.surface.image);
-    const uint32_t pitchBytes0 = outTex.surface.pitch * blockBytes;
-    const uint32_t rowBytes0 = blocksW0 * blockBytes;
-    if (rowBytes0 > pitchBytes0 ||
-        static_cast<size_t>(blocksH0) * static_cast<size_t>(pitchBytes0) > outTex.surface.imageSize) {
+    const uint32_t pitchBytes = outTex.surface.pitch * 4u;
+    const uint32_t dstRowBytes = srcW * 4u;
+    if (dstRowBytes > pitchBytes ||
+        static_cast<size_t>(srcH) * static_cast<size_t>(pitchBytes) > outTex.surface.imageSize ||
+        srcOffset + srcBytes > size) {
         DestroyTexture(outTex);
         return false;
     }
 
     std::memset(dstImage, 0, outTex.surface.imageSize);
-    for (uint32_t y = 0; y < blocksH0; ++y) {
-        std::memcpy(dstImage + y * pitchBytes0, srcCursor + y * rowBytes0, rowBytes0);
+
+    if (!isBlockCompressed) {
+        for (uint32_t y = 0u; y < srcH; ++y) {
+            std::memcpy(dstImage + static_cast<size_t>(y) * pitchBytes,
+                        srcCursor + static_cast<size_t>(y) * dstRowBytes,
+                        dstRowBytes);
+        }
+    } else {
+        // Decodificación determinista Zero-Alloc de bloques BC1 (DXT1) / BC3 (DXT5) Little-Endian -> RGBA8
+        const uint32_t bw = (srcW + 3u) >> 2u;
+        const uint32_t bh = (srcH + 3u) >> 2u;
+        const uint8_t* blkPtr = srcCursor;
+
+        for (uint32_t by = 0u; by < bh; ++by) {
+            const uint32_t y0 = by * 4u;
+            for (uint32_t bx = 0u; bx < bw; ++bx) {
+                const uint32_t x0 = bx * 4u;
+
+                uint8_t aLut[8] = {255u, 255u, 255u, 255u, 255u, 255u, 255u, 255u};
+                uint64_t alphaBits = 0u;
+                const uint8_t* colorBlk = blkPtr;
+
+                if (isBC3) {
+                    const uint8_t a0 = blkPtr[0];
+                    const uint8_t a1 = blkPtr[1];
+                    aLut[0] = a0;
+                    aLut[1] = a1;
+                    if (a0 > a1) {
+                        aLut[2] = static_cast<uint8_t>((6u * a0 + 1u * a1 + 3u) / 7u);
+                        aLut[3] = static_cast<uint8_t>((5u * a0 + 2u * a1 + 3u) / 7u);
+                        aLut[4] = static_cast<uint8_t>((4u * a0 + 3u * a1 + 3u) / 7u);
+                        aLut[5] = static_cast<uint8_t>((3u * a0 + 4u * a1 + 3u) / 7u);
+                        aLut[6] = static_cast<uint8_t>((2u * a0 + 5u * a1 + 3u) / 7u);
+                        aLut[7] = static_cast<uint8_t>((1u * a0 + 6u * a1 + 3u) / 7u);
+                    } else {
+                        aLut[2] = static_cast<uint8_t>((4u * a0 + 1u * a1 + 2u) / 5u);
+                        aLut[3] = static_cast<uint8_t>((3u * a0 + 2u * a1 + 2u) / 5u);
+                        aLut[4] = static_cast<uint8_t>((2u * a0 + 3u * a1 + 2u) / 5u);
+                        aLut[5] = static_cast<uint8_t>((1u * a0 + 4u * a1 + 2u) / 5u);
+                        aLut[6] = 0u;
+                        aLut[7] = 255u;
+                    }
+                    for (uint32_t ab = 0u; ab < 6u; ++ab) {
+                        alphaBits |= (static_cast<uint64_t>(blkPtr[2u + ab]) << (8u * ab));
+                    }
+                    colorBlk = blkPtr + 8u;
+                }
+
+                const uint16_t c0 = static_cast<uint16_t>(colorBlk[0]) |
+                                    static_cast<uint16_t>(static_cast<uint16_t>(colorBlk[1]) << 8u);
+                const uint16_t c1 = static_cast<uint16_t>(colorBlk[2]) |
+                                    static_cast<uint16_t>(static_cast<uint16_t>(colorBlk[3]) << 8u);
+
+                const uint32_t r0 = (((c0 >> 11u) & 0x1Fu) * 527u + 23u) >> 6u;
+                const uint32_t g0 = (((c0 >>  5u) & 0x3Fu) * 259u + 33u) >> 6u;
+                const uint32_t b0 = (( c0         & 0x1Fu) * 527u + 23u) >> 6u;
+
+                const uint32_t r1 = (((c1 >> 11u) & 0x1Fu) * 527u + 23u) >> 6u;
+                const uint32_t g1 = (((c1 >>  5u) & 0x3Fu) * 259u + 33u) >> 6u;
+                const uint32_t b1 = (( c1         & 0x1Fu) * 527u + 23u) >> 6u;
+
+                uint8_t pal[4][4];
+                pal[0][0] = static_cast<uint8_t>(r0);
+                pal[0][1] = static_cast<uint8_t>(g0);
+                pal[0][2] = static_cast<uint8_t>(b0);
+                pal[0][3] = 255u;
+
+                pal[1][0] = static_cast<uint8_t>(r1);
+                pal[1][1] = static_cast<uint8_t>(g1);
+                pal[1][2] = static_cast<uint8_t>(b1);
+                pal[1][3] = 255u;
+
+                if (c0 > c1 || isBC3) {
+                    pal[2][0] = static_cast<uint8_t>((2u * r0 + r1 + 1u) / 3u);
+                    pal[2][1] = static_cast<uint8_t>((2u * g0 + g1 + 1u) / 3u);
+                    pal[2][2] = static_cast<uint8_t>((2u * b0 + b1 + 1u) / 3u);
+                    pal[2][3] = 255u;
+
+                    pal[3][0] = static_cast<uint8_t>((r0 + 2u * r1 + 1u) / 3u);
+                    pal[3][1] = static_cast<uint8_t>((g0 + 2u * g1 + 1u) / 3u);
+                    pal[3][2] = static_cast<uint8_t>((b0 + 2u * b1 + 1u) / 3u);
+                    pal[3][3] = 255u;
+                } else {
+                    pal[2][0] = static_cast<uint8_t>((r0 + r1) >> 1u);
+                    pal[2][1] = static_cast<uint8_t>((g0 + g1) >> 1u);
+                    pal[2][2] = static_cast<uint8_t>((b0 + b1) >> 1u);
+                    pal[2][3] = 255u;
+
+                    pal[3][0] = 0u;
+                    pal[3][1] = 0u;
+                    pal[3][2] = 0u;
+                    pal[3][3] = 0u;
+                }
+
+                const uint32_t cBits = static_cast<uint32_t>(colorBlk[4]) |
+                                      (static_cast<uint32_t>(colorBlk[5]) << 8u) |
+                                      (static_cast<uint32_t>(colorBlk[6]) << 16u) |
+                                      (static_cast<uint32_t>(colorBlk[7]) << 24u);
+
+                for (uint32_t dy = 0u; dy < 4u; ++dy) {
+                    const uint32_t py = y0 + dy;
+                    if (py >= srcH) break;
+                    uint8_t* dstRow = dstImage + static_cast<size_t>(py) * pitchBytes;
+                    for (uint32_t dx = 0u; dx < 4u; ++dx) {
+                        const uint32_t px = x0 + dx;
+                        if (px >= srcW) break;
+                        const uint32_t idx = dy * 4u + dx;
+                        const uint32_t cCode = (cBits >> (2u * idx)) & 0x3u;
+                        uint8_t* outPx = dstRow + static_cast<size_t>(px) * 4u;
+                        outPx[0] = pal[cCode][0];
+                        outPx[1] = pal[cCode][1];
+                        outPx[2] = pal[cCode][2];
+                        outPx[3] = isBC3
+                            ? aLut[static_cast<uint32_t>((alphaBits >> (3u * idx)) & 0x7ULL)]
+                            : pal[cCode][3];
+                    }
+                }
+
+                blkPtr += blockBytes;
+            }
+        }
     }
 
     GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, outTex.surface.image, outTex.surface.imageSize);
 
     outTex.surface.mipmaps = nullptr;
-    outTex.surface.mipmapSize = 0;
-    outTex.viewFirstMip = 0;
-    outTex.viewNumMips = 1;
-    outTex.viewFirstSlice = 0;
-    outTex.viewNumSlices = 1;
-    outTex.compMap = 0x00010203;
+    outTex.surface.mipmapSize = 0u;
+    outTex.viewFirstMip = 0u;
+    outTex.viewNumMips = 1u;
+    outTex.viewFirstSlice = 0u;
+    outTex.viewNumSlices = 1u;
+    outTex.compMap = 0x00010203u;
     GX2InitTextureRegs(&outTex);
     return true;
 #else
-    (void)data; (void)size; (void)outTex; (void)debugLabel;
+    (void)srcW; (void)srcH; (void)srcOffset; (void)srcBytes;
+    (void)outTex; (void)debugLabel;
+    outTex.dummy = 1;
     return true;
 #endif
 }

@@ -171,15 +171,23 @@ void SceneQA_Shadows::OnQARender3D(const Matrix4x4& /*viewMatrix*/, const Matrix
     const float shaderBias  = (m_biasPreset == 0u) ? 0.0f : ((m_biasPreset == 1u) ? 0.0022f : 0.038f);
 
     // =========================================================================
-    // PASE 1: SHADOW MAP DEPTH PASS (Z-ONLY EN AMD LATTE GX2)
+    // PASE 1: SHADOW MAP DEPTH PASS (Z-ONLY EN AMD LATTE GX2 / OPENGL 3.3)
     // =========================================================================
-#if defined(__WIIU__) || defined(__wiiu__)
     auto& shadowMgr = ShadowMapRendererGX2::Instance();
     if (m_shadowMode > 0u && shadowMgr.IsReady()) {
+#if defined(__WIIU__) || defined(__wiiu__)
         auto* ctx = static_cast<GX2ContextState*>(Window::GetActiveNativeContextState());
         auto* mainColor = static_cast<GX2ColorBuffer*>(Window::GetActiveNativeColorBuffer());
         auto* mainDepth = static_cast<GX2DepthBuffer*>(Window::GetActiveNativeDepthBuffer());
-
+        const uint32_t restoreW = mainColor ? mainColor->surface.width : 1280u;
+        const uint32_t restoreH = mainColor ? mainColor->surface.height : 720u;
+#else
+        void* ctx = nullptr;
+        void* mainColor = nullptr;
+        void* mainDepth = nullptr;
+        const uint32_t restoreW = 1280u;
+        const uint32_t restoreH = 720u;
+#endif
         if (shadowMgr.BeginShadowPass(lightVP, ctx, m_cullFrontFaces, hwBiasUnits, hwBiasSlope)) {
             for (uint32_t i = 0u; i < 4u; ++i) {
                 shadowMgr.RenderCaster(m_pillarMesh, pillarModels[i]);
@@ -189,12 +197,9 @@ void SceneQA_Shadows::OnQARender3D(const Matrix4x4& /*viewMatrix*/, const Matrix
             shadowMgr.RenderCaster(m_lintelMesh, lintelSideR);
             shadowMgr.RenderCaster(m_floatingBoxMesh, floatingBoxModel);
             shadowMgr.RenderCaster(m_centerSphereMesh, sphereModel);
-            shadowMgr.EndShadowPass(ctx, mainColor, mainDepth,
-                                    mainColor ? mainColor->surface.width : 1280u,
-                                    mainColor ? mainColor->surface.height : 720u);
+            shadowMgr.EndShadowPass(ctx, mainColor, mainDepth, restoreW, restoreH);
         }
     }
-#endif
 
     // =========================================================================
     // PASE 2: RENDERIZADO PRINCIPAL PBR + RECEPCIÓN DE SOMBRAS

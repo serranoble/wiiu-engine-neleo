@@ -6,10 +6,27 @@
 #include "Core/Config/CVarRegistry.hpp"
 #if defined(__WIIU__) || defined(__wiiu__)
 #include "Core/Window.hpp"
+#include <coreinit/fastmutex.h>
+#include <coreinit/cache.h>
+#include <coreinit/memorymap.h>
+#include <coreinit/thread.h>
+#include <coreinit/time.h>
+#include <sndcore2/core.h>
+#include <sndcore2/voice.h>
+#include <sndcore2/device.h>
+#include <new>
 #endif
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+
+#if !defined(__WIIU__) && !defined(__wiiu__)
+namespace WiiU::Platform {
+using HostAudioFillFn = void (*)(void* userData, uint8_t* outPcm, int numBytes);
+bool OpenWin32AudioDevice(int sampleRate, int channels, HostAudioFillFn fillFn, void* userData) noexcept;
+void CloseWin32AudioDevice() noexcept;
+} // namespace WiiU::Platform
+#endif
 
 namespace WiiU {
 
@@ -17,6 +34,12 @@ namespace {
 
 #if defined(__WIIU__) || defined(__wiiu__)
 std::atomic<AudioManager*> s_axInstance{nullptr};
+
+inline OSFastMutex* DeviceMutexFromStorage(std::array<uint8_t, 64>& storage) noexcept {
+    static_assert(sizeof(OSFastMutex) <= 64, "m_deviceMutexStorage debe contener OSFastMutex");
+    static_assert(alignof(OSFastMutex) <= 8, "Alineacion de OSFastMutex excede alignas(8)");
+    return std::launder(reinterpret_cast<OSFastMutex*>(storage.data()));
+}
 #endif
 
 inline uint16_t ReadLE16(const uint8_t* p) noexcept {
@@ -34,7 +57,8 @@ inline uint32_t ReadLE32(const uint8_t* p) noexcept {
 
 AudioManager::AudioManager() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    OSFastMutex_Init(&m_deviceMutex, "WiiU_AudioDeviceMutex");
+    OSFastMutex* mtx = new (m_deviceMutexStorage.data()) OSFastMutex{};
+    OSFastMutex_Init(mtx, "WiiU_AudioDeviceMutex");
 #endif
 }
 
@@ -47,17 +71,17 @@ AudioManager::~AudioManager() {
 
 void AudioManager::LockAudioDevice() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
-    OSFastMutex_Lock(&m_deviceMutex);
+    OSFastMutex_Lock(DeviceMutexFromStorage(m_deviceMutexStorage));
 #else
-    SDL_LockAudio();
+    m_hostAudioMutex.lock();
 #endif
 }
 
 void AudioManager::UnlockAudioDevice() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
-    OSFastMutex_Unlock(&m_deviceMutex);
+    OSFastMutex_Unlock(DeviceMutexFromStorage(m_deviceMutexStorage));
 #else
-    SDL_UnlockAudio();
+    m_hostAudioMutex.unlock();
 #endif
 }
 
@@ -134,7 +158,7 @@ bool AudioManager::LoadWAVProgressive(const std::string& filepath, std::vector<i
         return false;
     }
 
-    // Parser nativo RIFF/WAVE endian-safe (sin SDL_RWops ni SDL_LoadWAV)
+    // Parser nativo RIFF/WAVE endian-safe de cero dependencias externas
     if (fileBuffer.size() < 44 ||
         std::memcmp(fileBuffer.data(), "RIFF", 4) != 0 ||
         std::memcmp(fileBuffer.data() + 8, "WAVE", 4) != 0) {
@@ -490,30 +514,17 @@ void AudioManager::AudioMixThreadWorker() {
 #endif
 
 void AudioManager::BackgroundLoadWorker() {
-#if !defined(__WIIU__) && !defined(__wiiu__)
+#if defined(_WIN32) && !defined(__WIIU__) && !defined(__wiiu__)
     if (!m_audioOpened.load(std::memory_order_acquire)) {
         SetCurrentAssetLabel("INICIALIZANDO HARDWARE DE AUDIO...");
-        SDL_AudioSpec desiredSpec;
-        std::memset(&desiredSpec, 0, sizeof(desiredSpec));
-        desiredSpec.freq = 48000;
-        desiredSpec.format = AUDIO_S16SYS;
-        desiredSpec.channels = 2; // Stereo
-        desiredSpec.samples = 2048;
-        desiredSpec.callback = AudioCallback;
-        desiredSpec.userdata = this;
-
-        SDL_AudioSpec obtainedSpec;
-        std::memset(&obtainedSpec, 0, sizeof(obtainedSpec));
-
-        if (SDL_OpenAudio(&desiredSpec, &obtainedSpec) == 0) {
-            m_actualFreq = obtainedSpec.freq > 0 ? obtainedSpec.freq : 48000;
-            m_actualChannels = obtainedSpec.channels > 0 ? obtainedSpec.channels : 2;
-            m_actualFormat = obtainedSpec.format != 0 ? obtainedSpec.format : AUDIO_S16SYS;
-
-            AudioEngine3D::Instance().Init();
+        m_actualFreq = 48000;
+        m_actualChannels = 2;
+        m_actualFormat = 0x8010u; // PCM S16
+        AudioEngine3D::Instance().Init();
+        if (Platform::OpenWin32AudioDevice(m_actualFreq, m_actualChannels, &AudioManager::HostAudioCallback, this)) {
             m_audioOpened.store(true, std::memory_order_release);
             std::lock_guard<std::mutex> lock(m_stringMutex);
-            m_statusString = "AUDIO OK (" + std::to_string(m_actualFreq) + "Hz " + std::to_string(m_actualChannels) + "ch)";
+            m_statusString = "AUDIO WIN32 OK (48000Hz 2ch)";
         }
     }
 #endif
@@ -565,12 +576,6 @@ void AudioManager::BackgroundLoadWorker() {
             UnlockAudioDevice();
         }
     }
-
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    if (m_audioOpened) {
-        SDL_PauseAudio(0);
-    }
-#endif
 
     // Garantizar que bytesLoaded iguale el total planeado al 100%
     m_bytesLoaded.store(m_totalBytesToLoad.load(std::memory_order_relaxed), std::memory_order_relaxed);
@@ -631,8 +636,8 @@ void AudioManager::Shutdown() {
         }
         m_axMixBufs[0] = nullptr;
         m_axMixBufs[1] = nullptr;
-#else
-        SDL_CloseAudio();
+#elif defined(_WIN32)
+        Platform::CloseWin32AudioDevice();
 #endif
     }
 }
@@ -1003,11 +1008,6 @@ bool AudioManager::LoadBGM(const std::string& filepath) {
 
 void AudioManager::PlayBGM() {
     m_bgmPlaying.store(true, std::memory_order_release);
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    if (m_audioOpened.load(std::memory_order_acquire) && m_musicEnabled.load(std::memory_order_acquire)) {
-        SDL_PauseAudio(0);
-    }
-#endif
 }
 
 void AudioManager::RestartBGM() {
@@ -1046,11 +1046,6 @@ void AudioManager::RestartBGM() {
         m_bgmPlaying.store(true, std::memory_order_release);
         UnlockAudioDevice();
     }
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    if (m_audioOpened.load(std::memory_order_acquire) && m_musicEnabled.load(std::memory_order_acquire)) {
-        SDL_PauseAudio(0);
-    }
-#endif
 }
 
 void AudioManager::StopBGM() {
@@ -1070,13 +1065,6 @@ void AudioManager::SetMasterVolume(float volume) {
 
 void AudioManager::SetMusicEnabled(bool enabled) {
     m_musicEnabled.store(enabled, std::memory_order_release);
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    if (enabled) {
-        if (m_audioOpened.load(std::memory_order_acquire) && m_bgmPlaying.load(std::memory_order_acquire)) {
-            SDL_PauseAudio(0);
-        }
-    }
-#endif
 }
 
 void AudioManager::ToggleMusic() {
@@ -1108,11 +1096,18 @@ void AudioManager::PlayClick() {
     m_sfxPlayIndex = 0;
     m_sfxPlaying = true;
     UnlockAudioDevice();
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    if (m_audioOpened.load(std::memory_order_acquire)) {
-        SDL_PauseAudio(0);
+}
+
+void AudioManager::HostAudioCallback(void* userdata, uint8_t* stream, int len) {
+    if (!stream || len <= 0) return;
+    auto* self = static_cast<AudioManager*>(userdata);
+    if (!self) {
+        std::memset(stream, 0, static_cast<size_t>(len));
+        return;
     }
-#endif
+    self->LockAudioDevice();
+    AudioCallback(userdata, stream, len);
+    self->UnlockAudioDevice();
 }
 
 void AudioManager::AudioCallback(void* userdata, uint8_t* stream, int len) {

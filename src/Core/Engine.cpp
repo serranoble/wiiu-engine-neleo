@@ -14,6 +14,10 @@
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/ShadowMapRendererGX2.hpp"
 #include "Graphics/Render2DGX2.hpp"
+#if !defined(__WIIU__) && !defined(__wiiu__)
+#include "Graphics/GL/GLFunctions.hpp"
+#include "Graphics/GL/Render2DGL.hpp"
+#endif
 #include "Graphics/RHI/RHIPipelineState.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
 #include "Graphics/RHI/RHIRenderPass.hpp"
@@ -28,14 +32,10 @@
 #include "Net/NetSocket.hpp"
 #include "Graphics/Mesh/StaticMesh.hpp"
 #include "Graphics/UI/UIToolkit.hpp"
+#include "Platform/PlatformClock.hpp"
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/event.h>
 #include <proc_ui/procui.h>
-#include <coreinit/thread.h>
-#include <coreinit/time.h>
-#include <coreinit/systeminfo.h>
-#else
-#include <SDL2/SDL.h>
 #endif
 
 namespace WiiU {
@@ -118,11 +118,6 @@ bool Engine::Init(std::unique_ptr<IScene> initialScene) {
     if (m_initialized) {
         return true;
     }
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) < 0) {
-        return false;
-    }
-#endif
     m_initialized = true;
 
     if (!m_window.Init()) {
@@ -157,6 +152,11 @@ bool Engine::Init(std::unique_ptr<IScene> initialScene) {
 #if defined(__WIIU__) || defined(__wiiu__)
     // Inicializar el pipeline 2D GX2 nativo después de las pruebas RHI de VerifyCrossSubsystemIntegrity()
     if (!Render2DGX2::Instance().Init()) {
+        Shutdown();
+        return false;
+    }
+#else
+    if (!Render2DGL::Instance().Init()) {
         Shutdown();
         return false;
     }
@@ -242,15 +242,9 @@ bool Engine::Init(std::unique_ptr<IScene> initialScene) {
 }
 
 void Engine::Run() {
-#if defined(__WIIU__) || defined(__wiiu__)
-    const uint64_t rawFreq = static_cast<uint64_t>(OSTimerClockSpeed);
-    const uint64_t perfFreq = (rawFreq > 0) ? rawFreq : 1ULL;
-    uint64_t lastPerfCounter = static_cast<uint64_t>(OSGetSystemTime());
-#else
-    Uint64 perfFreq = SDL_GetPerformanceFrequency();
-    if (perfFreq == 0) perfFreq = 1;
-    Uint64 lastPerfCounter = SDL_GetPerformanceCounter();
-#endif
+    const uint64_t rawFreq = PlatformClock::GetPerformanceFrequency();
+    const uint64_t perfFreq = (rawFreq > 0ULL) ? rawFreq : 1ULL;
+    uint64_t lastPerfCounter = PlatformClock::GetPerformanceCounter();
 
     float dtHistory[4] = { 0.016667f, 0.016667f, 0.016667f, 0.016667f };
     int dtIdx = 0;
@@ -259,11 +253,7 @@ void Engine::Run() {
         // [OPT-43] Liberacion O(1) del arena efimera de cuadro al inicio de cada iteracion
         MemoryManager::Instance().GetFrameArena().Reset();
 
-#if defined(__WIIU__) || defined(__wiiu__)
-        uint64_t currentPerfCounter = static_cast<uint64_t>(OSGetSystemTime());
-#else
-        Uint64 currentPerfCounter = SDL_GetPerformanceCounter();
-#endif
+        const uint64_t currentPerfCounter = PlatformClock::GetPerformanceCounter();
         float rawDt = static_cast<float>(currentPerfCounter - lastPerfCounter) / static_cast<float>(perfFreq);
         lastPerfCounter = currentPerfCounter;
 
@@ -287,11 +277,7 @@ void Engine::Run() {
 
         if (ApplicationLifecycle::Instance().IsFrameAbortRequested()) {
             // Cuando la aplicación está en segundo plano (Menú HOME activo), ceder CPU pasivamente
-#if defined(__WIIU__) || defined(__wiiu__)
-            OSSleepTicks(OSMillisecondsToTicks(16));
-#else
-            SDL_Delay(16);
-#endif
+            PlatformClock::SleepMs(16u);
             continue;
         }
 
@@ -379,9 +365,16 @@ void Engine::Shutdown() {
     }
 #endif
 
+#if defined(__WIIU__) || defined(__wiiu__)
     Render2DGX2::Instance().Shutdown();
+#else
+    Render2DGL::Instance().Shutdown();
+#endif
     ShadowMapRendererGX2::Instance().Shutdown();
     ForwardRendererGX2::Instance().Shutdown();
+#if !defined(__WIIU__) && !defined(__wiiu__)
+    Graphics::GL::ResetFunctions();
+#endif
     AudioManager::Instance().Shutdown();
     NetPlatform::Shutdown();
     VirtualFileSystem::Instance().Shutdown();
@@ -395,8 +388,6 @@ void Engine::Shutdown() {
     if (ProcUIIsRunning()) {
         ProcUIShutdown();
     }
-#else
-    SDL_Quit();
 #endif
 }
 

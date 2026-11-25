@@ -1,22 +1,24 @@
 ---
 name: cpp20-ecs-dod
-description: C++20 Clean Code, Data-Oriented Design (DOD/ECS), 7-library DAG boundaries, and Zero-Alloc 60 FPS rules for the Wii U multi-console engine. Load before designing or refactoring engine modules.
+description: C++20 Clean Code, Data-Oriented Design (DOD/ECS), 8-library DAG boundaries, link-time PAL, and Zero-Alloc 60 FPS rules for the multi-platform Wii U / Windows / Linux engine. Load before designing or refactoring engine modules.
 ---
 
 # C++20 Engine Architecture & DOD/ECS Conventions
 
-## 1. Acyclic 7-Library DAG (`CMakeLists.txt`)
-1. `engine_core` — **0** includes of `<gx2/`, `<gx2r/`, `<SDL2/`, `Audio/`, `Input/`, or `Scene/`. Uses forward declarations (`struct GX2Texture;`) and DIP callbacks (`ObserverSlot[16]` in `EngineConfig`).
+## 1. Acyclic 8-Library DAG (`CMakeLists.txt`)
+1. `engine_core` — **0** includes of `<gx2/`, `<gx2r/`, `<SDL2/`, `<windows.h>`, `<winsock2.h>`, `<GL/`, `Audio/`, `Input/`, or `Scene/`. Uses forward declarations (`struct GX2Texture;`) and DIP callbacks (`ObserverSlot[16]` in `EngineConfig`).
 2. `engine_physics` -> `engine_core`
 3. `engine_audio` -> `engine_core`
 4. `engine_input` -> `engine_core`
 5. `engine_graphics` -> `engine_core` (keep UI/rendering decoupled from scene flow)
 6. `engine_ai` -> `engine_core`, `engine_physics`
 7. `engine_framework` -> orchestrates all subsystems (`Engine`, `Window`, `SceneManager`, `GameScene3D`, `ModalStack`, `ResourceMonitor`).
+8. `engine_net` -> `engine_core` (UDP/TCP multiplayer transport: `nsysnet` on Wii U / `ws2_32` on Windows).
 
-## 2. Multi-Console Reusability Gate
+## 2. Multi-Console Link-Time PAL & Reusability Gate
 - Build reusable engine components/systems, never single-scene demo hacks.
-- Scenes (`GameScene3D` / `IScene`) only orchestrate data and input mappings — no raw `VPAD_*`/`WPAD_*` masks (use `VirtualButton` and `InputManager::GetGamepad(p)` across `0..MAX_PLAYERS-1`).
+- Platform/API backends are selected at link time in `CMakeLists.txt` (`src/Platform/{WiiU,Win32}` and `*GX2.cpp` vs `src/Graphics/GL/*GL.cpp`). **Never** include `<windows.h>`, `<winsock2.h>`, or `<GL/gl.h>` in public headers under `include/`.
+- Scenes (`GameScene3D` / `IScene`) only orchestrate data and input mappings — no raw `VPAD_*`/`WPAD_*`/`XINPUT_*` masks (use `VirtualButton` and `InputManager::GetGamepad(p)` across `0..MAX_PLAYERS-1`).
 - Keep public headers clean: no `using namespace`, prefer forward declarations, mark non-mutating queries `[[nodiscard]] ... const noexcept`.
 
 ## 3. Zero Hot Allocations (60 FPS Budget)
@@ -31,4 +33,4 @@ description: C++20 Clean Code, Data-Oriented Design (DOD/ECS), 7-library DAG bou
 
 ## 5. Line Endings & Verification
 - Strictly **LF (`0 CRLF`)** on all source, script, config, and markdown files.
-- Before requesting reviewer audits, run `python scripts/agent_harness.py check` and `python scripts/agent_harness.py build`.
+- Before requesting reviewer audits, run `python scripts/agent_harness.py check` and `python scripts/agent_harness.py build --all` (verifies both Wii U and Windows x64).

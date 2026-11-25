@@ -8,9 +8,11 @@ structured summaries.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -109,7 +111,7 @@ def check_crlf(fix: bool) -> list[str]:
 def check_core_leaks() -> list[str]:
     core_dir = ROOT / "include" / "Core"
     leaks: list[str] = []
-    pattern = re.compile(r'#\s*include\s*[<"](gx2|gx2r|SDL2)/')
+    pattern = re.compile(r'#\s*include\s*[<"](?:gx2|gx2r|SDL2|GL)/|#\s*include\s*[<"](?:windows|winsock2)\.h[>"]')
     if not core_dir.exists():
         return leaks
     for p in core_dir.rglob("*.hpp"):
@@ -118,6 +120,94 @@ def check_core_leaks() -> list[str]:
             if pattern.search(line):
                 leaks.append(f"{p.relative_to(ROOT)}:{idx}: {line.strip()}")
     return leaks
+
+
+def check_gl_invariants() -> list[str]:
+    issues: list[str] = []
+    inc_dir = ROOT / "include"
+    hdr_leak_pat = re.compile(r'#\s*include\s*[<"](?:windows\.h|winsock2\.h|GL/)')
+    if inc_dir.exists():
+        for p in inc_dir.rglob("*"):
+            if not p.is_file() or p.suffix.lower() not in {".hpp", ".h"}:
+                continue
+            text = p.read_text(encoding="utf-8", errors="replace")
+            for idx, line in enumerate(text.splitlines(), start=1):
+                if hdr_leak_pat.search(line):
+                    issues.append(f"{p.relative_to(ROOT)}:{idx}: public header leaks OS/GL include '{line.strip()}'")
+
+    fwd_gl = ROOT / "src" / "Graphics" / "GL" / "ForwardRendererGL.cpp"
+    if fwd_gl.exists():
+        ftext = fwd_gl.read_text(encoding="utf-8", errors="replace")
+        for sym in ("GL_TEXTURE2_VAL", "GL_TEXTURE1_VAL", "GL_TEXTURE0_VAL"):
+            if sym not in ftext:
+                issues.append(f"src/Graphics/GL/ForwardRendererGL.cpp: missing texture unit cleanup '{sym}'")
+
+    for fbo_file in (
+        "src/Graphics/GL/RenderTargetGL.cpp",
+        "src/Graphics/GL/ShadowMapRendererGL.cpp",
+        "src/Graphics/GL/RHIFullscreenShaderGL.cpp",
+    ):
+        p = ROOT / fbo_file
+        if p.exists():
+            text = p.read_text(encoding="utf-8", errors="replace")
+            if "GL_VIEWPORT_VAL" not in text:
+                issues.append(f"{fbo_file}: missing GL_VIEWPORT_VAL save/restore guard for 16:9 letterbox")
+
+    post_gl = ROOT / "src" / "Graphics" / "GL" / "PostProcessHDRGL.cpp"
+    if post_gl.exists():
+        ptext = post_gl.read_text(encoding="utf-8", errors="replace")
+        if "GL_VIEWPORT_VAL" not in ptext and "m_hdrRT.EndPass(" not in ptext:
+            issues.append("src/Graphics/GL/PostProcessHDRGL.cpp: missing viewport restore (GL_VIEWPORT_VAL or m_hdrRT.EndPass)")
+    return issues
+
+
+def check_win_dlls() -> tuple[str, list[str]]:
+    exe = ROOT / "build-win" / "wiiu_demos.exe"
+    if not exe.exists():
+        return "SKIP (no build-win/wiiu_demos.exe)", []
+
+    objdump_bin: str | None = None
+    win_bin = find_win_toolchain_bin()
+    if win_bin and (win_bin / "objdump.exe").exists():
+        objdump_bin = str(win_bin / "objdump.exe")
+    else:
+        found = shutil.which("objdump")
+        if found:
+            objdump_bin = found
+
+    if not objdump_bin:
+        return "SKIP (objdump not found)", []
+
+    code, out, _ = run_cmd([objdump_bin, "-p", str(exe)])
+    if code != 0:
+        return "ERROR (objdump failed)", ["objdump failed"]
+
+    allowed_exact = {
+        "kernel32.dll",
+        "user32.dll",
+        "gdi32.dll",
+        "opengl32.dll",
+        "winmm.dll",
+        "ws2_32.dll",
+        "advapi32.dll",
+        "shell32.dll",
+        "ntdll.dll",
+        "ucrtbase.dll",
+    }
+    allowed_prefixes = ("api-ms-win-crt-", "xinput")
+
+    unexpected: list[str] = []
+    for line in out.splitlines():
+        m = re.search(r"DLL Name:\s*(\S+)", line, re.IGNORECASE)
+        if not m:
+            continue
+        dll = m.group(1).strip()
+        low = dll.lower()
+        if low in allowed_exact or low.startswith(allowed_prefixes):
+            continue
+        unexpected.append(dll)
+
+    return ("PASS" if not unexpected else "FAIL"), unexpected
 
 
 def check_sdl_symbols() -> tuple[str, int]:
@@ -147,7 +237,7 @@ def check_sdl_symbols() -> tuple[str, int]:
 
 
 def report_binaries() -> None:
-    for rel in ("build/wiiu_demos.rpx", "build/wiiu_demos.wuhb"):
+    for rel in ("build/wiiu_demos.rpx", "build/wiiu_demos.wuhb", "build-win/wiiu_demos.exe"):
         p = ROOT / rel
         if p.exists():
             size = p.stat().st_size
@@ -156,24 +246,49 @@ def report_binaries() -> None:
             print(f"BINARY {rel}: MISSING")
 
 
+def check_zero_sdl_source_refs() -> list[str]:
+    hits: list[str] = []
+    pattern = re.compile(r"#\s*include\s*[<\"][^>\"]*SDL|\bSDL_[A-Za-z0-9_]+")
+    for scan_dir in (ROOT / "include", ROOT / "src"):
+        if not scan_dir.exists():
+            continue
+        for p in scan_dir.rglob("*"):
+            if not p.is_file() or p.suffix.lower() not in {".hpp", ".h", ".cpp", ".c"}:
+                continue
+            text = p.read_text(encoding="utf-8", errors="replace")
+            for idx, line in enumerate(text.splitlines(), start=1):
+                if pattern.search(line):
+                    hits.append(f"{p.relative_to(ROOT)}:{idx}: {line.strip()}")
+    return hits
+
+
 def check_gx2_invariants() -> list[str]:
     issues: list[str] = []
-    win_cpp = ROOT / "src" / "Core" / "Window.cpp"
+    win_cpp = ROOT / "src" / "Platform" / "WiiU" / "WindowWiiU.cpp"
+    if not win_cpp.exists():
+        win_cpp = ROOT / "src" / "Core" / "Window.cpp"
     if win_cpp.exists():
         text = win_cpp.read_text(encoding="utf-8", errors="replace")
         for sym in ("GX2SetColorBuffer", "GX2SetDepthBuffer", "GX2ClearDepthStencilEx", "GX2InitDepthBufferRegs"):
             if sym not in text:
-                issues.append(f"src/Core/Window.cpp: missing required GX2 invariant '{sym}'")
+                issues.append(f"{win_cpp.relative_to(ROOT)}: missing required GX2 invariant '{sym}'")
         idx_regs = text.find("GX2InitDepthBufferRegs")
         idx_hiz = text.find("GX2InitDepthBufferHiZEnable")
         if idx_regs != -1 and idx_hiz != -1 and idx_hiz < idx_regs:
-            issues.append("src/Core/Window.cpp: GX2InitDepthBufferHiZEnable must appear AFTER GX2InitDepthBufferRegs")
+            issues.append(f"{win_cpp.relative_to(ROOT)}: GX2InitDepthBufferHiZEnable must appear AFTER GX2InitDepthBufferRegs")
 
     shadow_cpp = ROOT / "src" / "Graphics" / "ShadowMapRendererGX2.cpp"
     if shadow_cpp.exists():
         stext = shadow_cpp.read_text(encoding="utf-8", errors="replace")
         if "GX2SetPixelShader(nullptr)" in stext:
             issues.append("src/Graphics/ShadowMapRendererGX2.cpp: GX2SetPixelShader(nullptr) crashes Cemu 2.6 HLE (0xc0000005)")
+
+    fwd_cpp = ROOT / "src" / "Graphics" / "ForwardRendererGX2.cpp"
+    if fwd_cpp.exists():
+        ftext = fwd_cpp.read_text(encoding="utf-8", errors="replace")
+        for sym in ("m_meshNoMipSampler", "BindMeshTextureAndSampler"):
+            if sym not in ftext:
+                issues.append(f"src/Graphics/ForwardRendererGX2.cpp: missing single-mip sampler guard '{sym}'")
 
     for scan_dir in (ROOT / "src" / "Scene", ROOT / "src" / "Graphics"):
         if scan_dir.exists():
@@ -187,11 +302,77 @@ def check_gx2_invariants() -> list[str]:
     return issues
 
 
+def check_cooked_wmesh() -> tuple[int, list[str]]:
+    issues: list[str] = []
+    models_dir = ROOT / "assets" / "models"
+    if not models_dir.exists():
+        return 0, issues
+
+    wmesh_files = sorted(models_dir.glob("*.wmesh"))
+    for p in wmesh_files:
+        rel = p.relative_to(ROOT)
+        data = p.read_bytes()
+        if len(data) < 96:
+            issues.append(f"{rel}: file smaller than 96B MeshHeader ({len(data)} B)")
+            continue
+        magic, ver, _flags, vcnt, icnt, stride, ifmt, voff, vsz, ioff, isz = struct.unpack(">IHHIIIIIIII", data[:40])
+        if magic != 0x574D5348:
+            issues.append(f"{rel}: invalid magic 0x{magic:08X} (expected Big-Endian 0x574D5348)")
+            continue
+        if ver != 1:
+            issues.append(f"{rel}: unsupported version {ver} (expected 1)")
+            continue
+        if stride not in (48, 80):
+            issues.append(f"{rel}: unexpected vertexStride {stride} (expected 48 or 80)")
+            continue
+        if ifmt not in (0, 1):
+            issues.append(f"{rel}: invalid indexFormat {ifmt} (expected 0=U16 or 1=U32)")
+            continue
+        if voff < 96 or ioff < 96 or (voff % 256) != 0 or (ioff % 32) != 0:
+            issues.append(f"{rel}: misaligned offsets voff={voff} (256B), ioff={ioff} (32B)")
+            continue
+        if voff + vsz > len(data) or ioff + isz > len(data):
+            issues.append(f"{rel}: buffer bounds overflow (vbo/ibo exceeds {len(data)} B)")
+            continue
+        if vsz != vcnt * stride:
+            issues.append(f"{rel}: vboSize {vsz} != vertexCount*stride ({vcnt * stride})")
+            continue
+        idx_elem = 4 if ifmt == 1 else 2
+        if isz < icnt * idx_elem:
+            issues.append(f"{rel}: iboSize {isz} < indexCount*{idx_elem} ({icnt * idx_elem})")
+            continue
+
+        if icnt > 0 and vcnt > 0:
+            idx_fmt_char = "I" if ifmt == 1 else "H"
+            idxs = struct.unpack(">" + idx_fmt_char * icnt, data[ioff:ioff + icnt * idx_elem])
+            if max(idxs) >= vcnt:
+                issues.append(f"{rel}: IBO index {max(idxs)} >= vertexCount ({vcnt})")
+                continue
+
+        if stride == 80:
+            for vi in range(vcnt):
+                base = voff + vi * 80
+                bi = struct.unpack("4B", data[base + 48:base + 52])
+                bw = struct.unpack(">4f", data[base + 52:base + 68])
+                if any(b >= 24 for b in bi):
+                    issues.append(f"{rel}: vertex {vi} boneIndex >= 24 ({bi})")
+                    break
+                if any(math.isnan(w) or math.isinf(w) for w in bw):
+                    issues.append(f"{rel}: vertex {vi} NaN/Inf boneWeight ({bw})")
+                    break
+
+    return len(wmesh_files), issues
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     crlf = check_crlf(fix=args.fix_lf)
     leaks = check_core_leaks()
+    zero_sdl_src = check_zero_sdl_source_refs()
     gx2_issues = check_gx2_invariants()
+    gl_issues = check_gl_invariants()
+    wmesh_count, wmesh_issues = check_cooked_wmesh()
     sdl_status, sdl_count = check_sdl_symbols()
+    dll_status, dll_unexpected = check_win_dlls()
 
     print(f"CRLF_CHECK: {'PASS (0)' if not crlf else f'FAIL ({len(crlf)})'}")
     for f in crlf[:15]:
@@ -201,14 +382,40 @@ def cmd_check(args: argparse.Namespace) -> int:
     for l in leaks[:15]:
         print(f"  LEAK: {l}")
 
+    print(f"ZERO_SDL_SOURCE_REFS: {'PASS (0)' if not zero_sdl_src else f'FAIL ({len(zero_sdl_src)})'}")
+    for zs in zero_sdl_src[:15]:
+        print(f"  SDL: {zs}")
+
     print(f"GX2_INVARIANTS: {'PASS (0)' if not gx2_issues else f'FAIL ({len(gx2_issues)})'}")
     for gi in gx2_issues[:15]:
         print(f"  GX2: {gi}")
 
+    print(f"GL_INVARIANTS: {'PASS (0)' if not gl_issues else f'FAIL ({len(gl_issues)})'}")
+    for gl_i in gl_issues[:15]:
+        print(f"  GL:  {gl_i}")
+
+    print(f"COOKED_WMESH_CHECK: {'PASS' if not wmesh_issues else 'FAIL'} ({wmesh_count} files, {len(wmesh_issues)} issues)")
+    for wi in wmesh_issues[:15]:
+        print(f"  WMESH: {wi}")
+
     print(f"ELF_SDL_SYMBOLS: {sdl_status} ({sdl_count})")
+    print(f"WIN_DLL_CHECK: {dll_status} ({len(dll_unexpected)})")
+    for du in dll_unexpected[:15]:
+        print(f"  DLL: {du}")
+
     report_binaries()
 
-    failed = bool(crlf) or bool(leaks) or bool(gx2_issues) or (sdl_count > 0)
+    failed = (
+        bool(crlf)
+        or bool(leaks)
+        or bool(zero_sdl_src)
+        or bool(gx2_issues)
+        or bool(gl_issues)
+        or bool(wmesh_issues)
+        or (sdl_count > 0)
+        or bool(dll_unexpected)
+        or dll_status.startswith("ERROR")
+    )
     return 1 if failed else 0
 
 
@@ -256,7 +463,73 @@ def run_filtered_build(build_dir: str, target: str | None) -> int:
     return code
 
 
+def find_win_toolchain_bin() -> Path | None:
+    winget_root = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages"
+    if winget_root.exists():
+        for match in sorted(winget_root.glob("BrechtSanders.WinLibs*/mingw64/bin/g++.exe")):
+            return match.parent
+    for cand in (Path(r"C:\devkitPro\msys2\ucrt64\bin"), Path(r"C:\msys64\ucrt64\bin")):
+        if (cand / "g++.exe").exists():
+            return cand
+    gpp = shutil.which("g++")
+    if gpp:
+        return Path(gpp).parent
+    return None
+
+
+def _build_win(target: str | None) -> int:
+    win_bin = find_win_toolchain_bin()
+    if not win_bin:
+        print("BUILD build-win: ERROR (Windows MinGW-w64 UCRT64 g++.exe not found)")
+        return 1
+    cmake_bin = str(win_bin / "cmake.exe") if (win_bin / "cmake.exe").exists() else (shutil.which("cmake") or "cmake")
+    build_win = ROOT / "build-win"
+    if not (build_win / "CMakeCache.txt").exists():
+        cfg_cmd = [
+            cmake_bin,
+            "-S", str(ROOT),
+            "-B", str(build_win),
+            "-DCMAKE_C_COMPILER=" + str(win_bin / "gcc.exe"),
+            "-DCMAKE_CXX_COMPILER=" + str(win_bin / "g++.exe"),
+        ]
+        if (win_bin / "ninja.exe").exists():
+            cfg_cmd.extend(["-G", "Ninja", "-DCMAKE_MAKE_PROGRAM=" + str(win_bin / "ninja.exe")])
+        else:
+            cfg_cmd.extend(["-G", "MinGW Makefiles", "-DCMAKE_MAKE_PROGRAM=" + str(win_bin / "mingw32-make.exe")])
+        rc_cfg, out_cfg, err_cfg = run_cmd(cfg_cmd)
+        if rc_cfg != 0:
+            print("CMAKE CONFIGURE build-win FAILED:")
+            print(out_cfg)
+            print(err_cfg)
+            return rc_cfg
+    win_target = None if target == "wiiu_demos_wuhb" else target
+    old_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = str(win_bin) + os.pathsep + old_path
+    try:
+        return run_filtered_build("build-win", win_target)
+    finally:
+        os.environ["PATH"] = old_path
+
+
 def cmd_build(args: argparse.Namespace) -> int:
+    if args.all:
+        rc_wiiu = run_filtered_build("build", args.target)
+        if rc_wiiu == 0 and args.lib:
+            if (ROOT / "build_lib").exists():
+                rc_wiiu = run_filtered_build("build_lib", None)
+            else:
+                print("BUILD build_lib: SKIP (directory not configured)")
+        rc_win = _build_win(args.target) if rc_wiiu == 0 else rc_wiiu
+        if rc_wiiu == 0 and rc_win == 0:
+            report_binaries()
+        return rc_wiiu if rc_wiiu != 0 else rc_win
+
+    if args.win:
+        rc = _build_win(args.target)
+        if rc == 0:
+            report_binaries()
+        return rc
+
     rc = run_filtered_build("build", args.target)
     if rc == 0 and args.lib:
         if (ROOT / "build_lib").exists():
@@ -279,15 +552,21 @@ def cmd_opt(args: argparse.Namespace) -> int:
 
     if query == "TAIL":
         opt_re = re.compile(r"^\|\s*\*\*OPT-(\d+)\*\*\s*\|")
-        numbered: list[tuple[int, str]] = []
-        for l in lines:
+        numbered: list[tuple[int, int, str]] = []
+        protocol_line = -1
+        for idx, l in enumerate(lines, start=1):
             m = opt_re.match(l)
             if m:
-                numbered.append((int(m.group(1)), l))
-        numbered.sort(key=lambda pair: pair[0])
+                numbered.append((int(m.group(1)), idx, l))
+            if protocol_line == -1 and l.startswith("## ") and "PROTOCOLO DE MANTENIMIENTO" in l:
+                protocol_line = idx
+        last_table_line = max((line_no for _, line_no, _ in numbered), default=-1)
+        numbered.sort(key=lambda item: item[0])
         print(f"TOTAL_OPT_ROWS: {len(numbered)}")
+        print(f"LAST_TABLE_LINE: {last_table_line}")
+        print(f"PROTOCOL_HEADER_LINE: {protocol_line}")
         print("LAST_5_OPT_ROWS:")
-        for _, row in numbered[-5:]:
+        for _, _, row in numbered[-5:]:
             print(f"  {row}")
         return 0
 
@@ -337,6 +616,8 @@ def main() -> int:
     p_bld = sub.add_parser("build", help="Filtered CMake build output")
     p_bld.add_argument("--target", default="wiiu_demos_wuhb", help="CMake target for build/")
     p_bld.add_argument("--lib", action="store_true", help="Also build build_lib/")
+    p_bld.add_argument("--win", action="store_true", help="Configure and build Windows native target in build-win/")
+    p_bld.add_argument("--all", action="store_true", help="Build both Wii U (build/) and Windows native (build-win/)")
     p_bld.set_defaults(func=cmd_build)
 
     p_opt = sub.add_parser("opt", help="Query OPT-XXX or 'tail' in ANEXO without reading full file")

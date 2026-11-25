@@ -65,7 +65,7 @@ public:
     void SetSubmerged(bool isSubmerged);
     [[nodiscard]] bool IsSubmerged() const;
 
-    // Bucle de mezcla de bajo nivel (Invocado desde AudioCallback de SDL2)
+    // Bucle de mezcla de bajo nivel (Invocado desde AudioCallback nativo)
     void MixAudio(int16_t* outStereoStream, int numFrames, float masterVolume);
 
     // Telemetría para HUD / OSD

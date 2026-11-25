@@ -1,20 +1,14 @@
 #pragma once
 
-#if !defined(__WIIU__) && !defined(__wiiu__)
-#include <SDL2/SDL.h>
-#else
-#include <vpad/input.h>
-#include <padscore/kpad.h>
-#include <padscore/wpad.h>
-#endif
+#include "Core/StackString.hpp"
 #include "Input/VirtualGamepad.hpp"
 #include "Input/ActionMapping.hpp"
 #include "Input/InputContextStack.hpp"
 #include "Input/RumbleManager.hpp"
 #include <atomic>
 #include <array>
-#include <string>
 #include <cstddef>
+#include <string_view>
 
 namespace WiiU {
 
@@ -34,7 +28,7 @@ struct StickState {
  * - Wii Remote independiente en modo vertical u horizontal (WPAD_EXT_CORE)
  * - Wii Remote + Nunchuk (WPAD_EXT_NUNCHUK)
  * - Classic Controller / Classic Controller Pro (WPAD_EXT_CLASSIC)
- * - Teclado, ratón y mandos de desarrollo PC en SDL2
+ * - Teclado, ratón, táctil y mandos XInput nativos en Windows / ROG Ally
  * 
  * Proporciona filtrado de zona muerta radial continuo, flancos de subida y bajada,
  * y mapeo abstracto de acciones para desacoplar el hardware de la simulación 3D.
@@ -123,14 +117,14 @@ public:
     // MÉTODOS DE RETROCOMPATIBILIDAD (100% PRESERVADOS)
     // =========================================================================
     [[nodiscard]] bool WasActionTriggeredThisFrame() const noexcept { return m_actionTriggeredThisFrame; }
-    void TriggerAction(const std::string& sourceName);
+    void TriggerAction(std::string_view sourceName);
 
     [[nodiscard]] const TouchState& GetTouchState() const noexcept { return m_touchState; }
     [[nodiscard]] const StickState& GetLeftStick() const noexcept { return m_leftStick; }
     [[nodiscard]] const StickState& GetRightStick() const noexcept { return m_rightStick; }
     [[nodiscard]] bool IsButtonHeld() const noexcept { return m_buttonHeld; }
     [[nodiscard]] int GetButtonPressCount() const noexcept { return m_buttonPressCount; }
-    [[nodiscard]] const std::string& GetLastButtonName() const noexcept { return m_lastButtonName; }
+    [[nodiscard]] const StackString<32>& GetLastButtonName() const noexcept { return m_lastButtonName; }
     [[nodiscard]] float GetFlashTimer() const noexcept { return m_flashTimer; }
     [[nodiscard]] bool IsBackRequested() const noexcept { return m_backRequested; }
     [[nodiscard]] bool IsPauseRequested() const noexcept { return m_pauseRequested; }
@@ -149,11 +143,9 @@ private:
     InputManager() = default;
     ~InputManager();
 
-    void OpenConnectedControllers();
-    void CloseConnectedControllers() noexcept;
     void PollPlatformEvents(bool& outRunning);
     void PollWiiUHardware(float dt);
-    void PollSDLHardware(bool& outRunning);
+    void PollDesktopHardware(bool& outRunning);
 
     VirtualGamepad m_gamepads[MAX_PLAYERS]{};
     bool m_prevConnected[MAX_PLAYERS]{};
@@ -165,10 +157,6 @@ private:
     void* m_disconnectUserData{nullptr};
     ActionSoundCallback m_actionSoundCallback{nullptr};
     void* m_actionSoundUserData{nullptr};
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    std::array<SDL_GameController*, MAX_PLAYERS> m_sdlControllers{};
-    std::array<SDL_Joystick*, MAX_PLAYERS> m_sdlJoysticks{};
-#endif
 
     bool m_actionTriggeredThisFrame{false};
     bool m_backRequested{false};
@@ -184,7 +172,7 @@ private:
     bool m_prevTouched{false};
     bool m_prevMousePressed{false};
     int m_buttonPressCount{0};
-    std::string m_lastButtonName{"NINGUNO"};
+    StackString<32> m_lastButtonName{"NINGUNO"};
     float m_flashTimer{0.0f};
     float m_touchDebounceTimer{0.0f};
 };

@@ -3,6 +3,7 @@
 #include "Graphics/Math3D.hpp"
 #include "Graphics/ShadowSystem.hpp"
 #include "Graphics/Mesh/StaticMesh.hpp"
+#include "Graphics/Texture/TextureLoaderGX2.hpp"
 #include <cstdint>
 
 #if defined(__WIIU__) || defined(__wiiu__)
@@ -81,6 +82,28 @@ public:
     [[nodiscard]] GX2Texture* GetShadowTexture() noexcept { return m_initialized ? &m_shadowTexture : nullptr; }
     [[nodiscard]] GX2Sampler* GetShadowSampler() noexcept { return m_initialized ? &m_shadowSampler : nullptr; }
     [[nodiscard]] GX2DepthBuffer* GetShadowDepthBuffer() noexcept { return m_initialized ? &m_shadowDepthBuffer : nullptr; }
+#else
+    bool BeginShadowPass(const Matrix4x4& lightViewProj, void* contextState,
+                         bool cullFrontFaces = true,
+                         float depthBiasUnits = 2.0f,
+                         float depthBiasSlope = 1.5f);
+
+    void RenderCaster(const StaticMesh& mesh, const Matrix4x4& modelMatrix);
+
+    void RenderCasterBuffers(GX2RBuffer& vbo, GX2RBuffer& ibo, uint32_t indexCount,
+                             uint32_t vertexStride, const Matrix4x4& modelMatrix,
+                             bool use32BitIndices = false);
+
+    void EndShadowPass(void* contextState,
+                       void* restoreColor,
+                       void* restoreDepth,
+                       uint32_t restoreWidth = 1280,
+                       uint32_t restoreHeight = 720);
+
+    void BindShadowMap(uint32_t texSlot = 2, uint32_t samplerSlot = 2) const;
+    void BindShadowMapRaw(uint32_t texSlot = 2, uint32_t samplerSlot = 2) const;
+
+    [[nodiscard]] GX2Texture* GetShadowTexture() noexcept { return m_initialized ? &m_shadowTexture : nullptr; }
 #endif
 
 private:
@@ -108,6 +131,15 @@ private:
     GX2FetchShader m_depthFs{};
     void* m_depthFsProgram{nullptr};
     bool m_shaderLoaded{false};
+#else
+    GX2Texture m_shadowTexture{};
+    uint32_t m_shadowFbo{0u};
+    uint32_t m_depthProgram{0u};
+    uint32_t m_shadowVao{0u};
+    int32_t m_mvpLoc{-1};
+    int32_t m_savedViewport[4]{0, 0, 1280, 720};
+    bool m_hasSavedViewport{false};
+    bool m_inShadowPass{false};
 #endif
 };
 

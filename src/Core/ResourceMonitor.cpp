@@ -4,43 +4,16 @@
 #include "Audio/AudioEngine3D.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
 #include "Graphics/Render2D.hpp"
+#include "Platform/PlatformClock.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
 
-#if defined(__WIIU__) || defined(__wiiu__)
-#include <coreinit/systeminfo.h>
-#include <coreinit/time.h>
-#else
-#include <SDL2/SDL.h>
-#endif
-
 namespace WiiU {
 
-namespace {
-
-inline uint64_t GetPlatformCounterFreq() noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
-    const uint64_t freq = static_cast<uint64_t>(OSTimerClockSpeed);
-    return (freq > 0u) ? freq : 1u;
-#else
-    const uint64_t freq = static_cast<uint64_t>(SDL_GetPerformanceFrequency());
-    return (freq > 0u) ? freq : 1u;
-#endif
-}
-
-inline uint64_t GetPlatformCounterValue() noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
-    return static_cast<uint64_t>(OSGetSystemTime());
-#else
-    return static_cast<uint64_t>(SDL_GetPerformanceCounter());
-#endif
-}
-
-} // namespace
-
 ResourceMonitor::ResourceMonitor() noexcept {
-    m_perfFreq = GetPlatformCounterFreq();
+    const uint64_t freq = PlatformClock::GetPerformanceFrequency();
+    m_perfFreq = (freq > 0ULL) ? freq : 1ULL;
 }
 
 void ResourceMonitor::SetVisible(bool visible) noexcept {
@@ -53,11 +26,11 @@ void ResourceMonitor::SetVisible(bool visible) noexcept {
 }
 
 void ResourceMonitor::BeginFrame() {
-    m_frameStartCounter = GetPlatformCounterValue();
+    m_frameStartCounter = PlatformClock::GetPerformanceCounter();
 }
 
 void ResourceMonitor::MarkCPUEnd() {
-    m_cpuEndCounter = GetPlatformCounterValue();
+    m_cpuEndCounter = PlatformClock::GetPerformanceCounter();
     if (m_frameStartCounter != 0 && m_cpuEndCounter >= m_frameStartCounter) {
         float instCpuMs = static_cast<float>(m_cpuEndCounter - m_frameStartCounter) * 1000.0f / static_cast<float>(m_perfFreq);
         if (instCpuMs > 100.0f) instCpuMs = 100.0f;
@@ -66,7 +39,7 @@ void ResourceMonitor::MarkCPUEnd() {
 }
 
 void ResourceMonitor::MarkGPUEnd() {
-    m_gpuEndCounter = GetPlatformCounterValue();
+    m_gpuEndCounter = PlatformClock::GetPerformanceCounter();
     if (m_cpuEndCounter != 0 && m_gpuEndCounter >= m_cpuEndCounter) {
         float instGpuMs = static_cast<float>(m_gpuEndCounter - m_cpuEndCounter) * 1000.0f / static_cast<float>(m_perfFreq);
         if (instGpuMs > 100.0f) instGpuMs = 100.0f;

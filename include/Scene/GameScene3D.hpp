@@ -19,7 +19,6 @@
 #include <gx2/surface.h>
 #include <gx2/context.h>
 #else
-struct GX2Texture;
 struct GX2ContextState;
 #endif
 
@@ -289,15 +288,16 @@ protected:
     float m_fpsTimer{0.0f};
     int m_frameCount{0};
 
+    ResourcePool<GX2Texture, 16> m_sceneTexturePool{};
+    GX2Texture m_sceneCubeMap{};
+    bool m_sceneCubeMapCreated{false};
+
 #if defined(__WIIU__) || defined(__wiiu__)
     GX2DepthBuffer m_depthBuffer{};
     void* m_hiZBuffer{nullptr};
     bool m_depthBufferCreated{false};
     GX2ContextState* m_nativeContextState{nullptr};
     GX2ColorBuffer* m_pColorBuffer{nullptr};
-    ResourcePool<GX2Texture, 16> m_sceneTexturePool{};
-    GX2Texture m_sceneCubeMap{};
-    bool m_sceneCubeMapCreated{false};
 #else
     void* m_pColorBuffer{nullptr};
 #endif

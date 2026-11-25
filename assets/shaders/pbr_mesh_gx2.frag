@@ -542,6 +542,9 @@ void main() {
     }
 
     vec4 texColor = texture(uTexture, vTexCoord);
+    if (uPsData[3].w > 0.5 && texColor.a < 0.5) {
+        discard;
+    }
     bool hasTex = dot(texColor.rgb, vec3(1.0)) >= 0.01;
     vec3 baseAlbedo = hasTex ? (texColor.rgb * uPsData[3].rgb) : (vColor.rgb * uPsData[3].rgb);
     vec3 albedoLin = pow(clamp(baseAlbedo, 0.0, 1.0), vec3(2.2));

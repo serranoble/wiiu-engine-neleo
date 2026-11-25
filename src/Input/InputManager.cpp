@@ -1,13 +1,14 @@
 #include "Input/InputManager.hpp"
 #include "Core/Config/EngineConfig.hpp"
 #include "Core/Config/CVarRegistry.hpp"
-#if defined(__WIIU__) || defined(__wiiu__)
 #include "Core/Window.hpp"
-#endif
 #include <cmath>
 #include <algorithm>
 
 #if defined(__WIIU__) || defined(__wiiu__)
+#include <vpad/input.h>
+#include <padscore/kpad.h>
+#include <padscore/wpad.h>
 #include <proc_ui/procui.h>
 #include <coreinit/systeminfo.h>
 #include <coreinit/thread.h>
@@ -37,51 +38,9 @@ void InputManager::Init() {
     ProcUIRegisterCallback(PROCUI_CALLBACK_HOME_BUTTON_DENIED, HomeButtonDeniedCallback, nullptr, 100);
 #endif
     RumbleManager::Instance().Init();
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    OpenConnectedControllers();
-#endif
 }
 
-InputManager::~InputManager() {
-    CloseConnectedControllers();
-}
-
-void InputManager::CloseConnectedControllers() noexcept {
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    for (size_t i = 0; i < MAX_PLAYERS; ++i) {
-        if (m_sdlControllers[i]) {
-            SDL_GameControllerClose(m_sdlControllers[i]);
-            m_sdlControllers[i] = nullptr;
-        }
-        if (m_sdlJoysticks[i]) {
-            SDL_JoystickClose(m_sdlJoysticks[i]);
-            m_sdlJoysticks[i] = nullptr;
-        }
-    }
-#endif
-}
-
-void InputManager::OpenConnectedControllers() {
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    CloseConnectedControllers();
-    const int numJoysticks = SDL_NumJoysticks();
-    for (int i = 0; i < numJoysticks && i < static_cast<int>(MAX_PLAYERS); ++i) {
-        if (SDL_IsGameController(i)) {
-            m_sdlControllers[i] = SDL_GameControllerOpen(i);
-            if (m_sdlControllers[i]) {
-                m_gamepads[i].isConnected = true;
-                m_gamepads[i].type = ControllerType::GenericSDL;
-            }
-        } else {
-            m_sdlJoysticks[i] = SDL_JoystickOpen(i);
-            if (m_sdlJoysticks[i]) {
-                m_gamepads[i].isConnected = true;
-                m_gamepads[i].type = ControllerType::GenericSDL;
-            }
-        }
-    }
-#endif
-}
+InputManager::~InputManager() = default;
 
 size_t InputManager::GetConnectedGamepadCount() const noexcept {
     size_t count = 0;
@@ -93,7 +52,7 @@ size_t InputManager::GetConnectedGamepadCount() const noexcept {
     return count > 0 ? count : 1;
 }
 
-void InputManager::TriggerAction(const std::string& sourceName) {
+void InputManager::TriggerAction(std::string_view sourceName) {
     if (m_actionTriggeredThisFrame) return;
     m_actionTriggeredThisFrame = true;
 
@@ -101,7 +60,11 @@ void InputManager::TriggerAction(const std::string& sourceName) {
         m_actionSoundCallback(m_actionSoundUserData);
     }
     m_buttonPressCount++;
-    m_lastButtonName = sourceName;
+    if (sourceName.empty()) {
+        m_lastButtonName.Clear();
+    } else {
+        m_lastButtonName.Format("%.*s", static_cast<int>(sourceName.size()), sourceName.data());
+    }
     m_flashTimer = 0.5f;
 
     // Disparo háptico sutil al interactuar con la interfaz (Jason Gregory Cap. 8.2)
@@ -109,7 +72,7 @@ void InputManager::TriggerAction(const std::string& sourceName) {
 }
 
 void InputManager::Update(bool& outRunning, float dt) {
-    // 1. Bombear eventos de sistema/plataforma (ProcUI directo en Wii U o SDL_PollEvent en PC).
+    // 1. Bombear eventos de sistema/plataforma (ProcUI directo en Wii U o bucle Win32 en Windows).
     PollPlatformEvents(outRunning);
 
     if (m_exitRequested.load(std::memory_order_acquire)) {
@@ -160,11 +123,11 @@ void InputManager::Update(bool& outRunning, float dt) {
         m_gamepads[i].touch = TouchState{};
     }
 
-    // 4. Muestrear hardware nativo Wii U (VPAD y KPAD) o periféricos PC (SDL2)
+    // 4. Muestrear hardware nativo Wii U (VPAD y KPAD) o periféricos nativos de escritorio (Win32 + XInput)
 #if defined(__WIIU__) || defined(__wiiu__)
     PollWiiUHardware(dt);
 #else
-    PollSDLHardware(outRunning);
+    PollDesktopHardware(outRunning);
 #endif
 
     // 4.5 [OPT-401] Guardia de desconexion HID asincrona e invalidacion limpia
@@ -221,7 +184,7 @@ void InputManager::Update(bool& outRunning, float dt) {
         }
 #if !defined(__WIIU__) && !defined(__wiiu__)
         if (pad.WasJustPressed(VirtualButton::Home)) {
-            m_exitRequested = true;
+            m_exitRequested.store(true, std::memory_order_release);
             outRunning = false;
         }
 #endif
@@ -505,155 +468,15 @@ void InputManager::PollPlatformEvents(bool& outRunning) {
         Window::AcquireForeground();
     }
 #else
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_QUIT) {
-            m_exitRequested = true;
-            outRunning = false;
-        }
-        if (event.type == SDL_CONTROLLERDEVICEADDED || event.type == SDL_JOYDEVICEADDED) {
-            OpenConnectedControllers();
-        }
-        auto& pad0 = m_gamepads[0];
-        if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
-            SDL_Keycode k = event.key.keysym.sym;
-            if (k == SDLK_p || k == SDLK_PAUSE || k == SDLK_ESCAPE) {
-                m_pauseRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Plus);
-            } else if (k == SDLK_MINUS || k == SDLK_KP_MINUS || k == SDLK_TAB) {
-                m_resourceMonitorRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Minus);
-            } else if (k == SDLK_b || k == SDLK_BACKSPACE) {
-                m_backRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::B);
-            } else if (k == SDLK_RETURN || k == SDLK_SPACE) {
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::A);
-            } else if (k == SDLK_HOME) {
-                m_exitRequested = true;
-                outRunning = false;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Home);
-            }
-            if (k != SDLK_UP && k != SDLK_DOWN && k != SDLK_LEFT && k != SDLK_RIGHT &&
-                k != SDLK_i && k != SDLK_j && k != SDLK_k && k != SDLK_l) {
-                TriggerAction("TECLADO");
-            }
-        }
-        if (event.type == SDL_CONTROLLERBUTTONDOWN) {
-            TriggerAction("MANDO BOTON");
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_B) {
-                m_backRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::B);
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::A);
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
-                m_pauseRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Plus);
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) {
-                m_resourceMonitorRequested = true;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Minus);
-            }
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
-                m_exitRequested = true;
-                outRunning = false;
-                pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Home);
-            }
-        }
-        if (event.type == SDL_JOYBUTTONDOWN) {
-            TriggerAction("JOYSTICK BOTON");
-        }
-        if (event.type == SDL_JOYHATMOTION && event.jhat.value != SDL_HAT_CENTERED) {
-            TriggerAction("CRUZETA DPAD");
-        }
-        if (event.type == SDL_JOYAXISMOTION) {
-            const float deadzone = EngineConfig::Instance().GetControls().deadzoneRadius;
-            float val = static_cast<float>(event.jaxis.value) / 32767.0f;
-            float lx = pad0.leftStick.x, ly = pad0.leftStick.y;
-            float rx = pad0.rightStick.x, ry = pad0.rightStick.y;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_LEFTX || event.jaxis.axis == 0)  lx = val;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_LEFTY || event.jaxis.axis == 1)  ly = -val;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_RIGHTX || event.jaxis.axis == 2) rx = val;
-            if (event.jaxis.axis == SDL_CONTROLLER_AXIS_RIGHTY || event.jaxis.axis == 3) ry = -val;
-
-            pad0.leftStick = ApplyRadialDeadzone(lx, ly, deadzone);
-            pad0.rightStick = ApplyRadialDeadzone(rx, ry, deadzone);
-        }
-    }
-#endif
-}
-
-void InputManager::PollSDLHardware(bool& outRunning) {
     (void)outRunning;
-#if !defined(__WIIU__) && !defined(__wiiu__)
-    auto& pad0 = m_gamepads[0];
-    pad0.isConnected = true;
-    if (pad0.type == ControllerType::Disconnected) {
-        pad0.type = ControllerType::KeyboardMouse;
-    }
-
-    // =========================================================================
-    // RATÓN PC (SDL2)
-    // =========================================================================
-    int mouseX = 0, mouseY = 0;
-    Uint32 mouseButtons = SDL_GetMouseState(&mouseX, &mouseY);
-    if (mouseButtons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-        pad0.touch.active = true;
-        pad0.touch.x = static_cast<float>(mouseX);
-        pad0.touch.y = static_cast<float>(mouseY);
-        pad0.buttonsHold |= static_cast<uint32_t>(VirtualButton::Touch);
-
-        if (!m_prevMousePressed && !pad0.touch.justPressed && m_touchDebounceTimer <= 0.0f) {
-            pad0.touch.justPressed = true;
-            pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::Touch);
-            m_touchDebounceTimer = 0.22f;
-            TriggerAction("RATON TOUCH");
-        }
-        m_prevMousePressed = true;
-    } else {
-        if (m_prevMousePressed) {
-            pad0.buttonsRelease |= static_cast<uint32_t>(VirtualButton::Touch);
-        }
-        m_prevMousePressed = false;
-    }
-
-    // =========================================================================
-    // TECLADO PC (SDL2): WASD, Flechas, Q/E, ESPACIO, ENTER
-    // =========================================================================
-    const Uint8* keyState = SDL_GetKeyboardState(NULL);
-    if (keyState) {
-        float kLeftX = 0.0f, kLeftY = 0.0f;
-        if (keyState[SDL_SCANCODE_D]) kLeftX += 1.0f;
-        if (keyState[SDL_SCANCODE_A]) kLeftX -= 1.0f;
-        if (keyState[SDL_SCANCODE_W]) kLeftY += 1.0f;
-        if (keyState[SDL_SCANCODE_S]) kLeftY -= 1.0f;
-        if (kLeftX != 0.0f || kLeftY != 0.0f || pad0.type == ControllerType::KeyboardMouse) {
-            pad0.leftStick = ApplyRadialDeadzone(kLeftX, kLeftY, 0.0f);
-        }
-
-        float kRightX = 0.0f, kRightY = 0.0f;
-        if (keyState[SDL_SCANCODE_RIGHT] || keyState[SDL_SCANCODE_L]) kRightX += 1.0f;
-        if (keyState[SDL_SCANCODE_LEFT]  || keyState[SDL_SCANCODE_J]) kRightX -= 1.0f;
-        if (keyState[SDL_SCANCODE_UP]    || keyState[SDL_SCANCODE_I]) kRightY += 1.0f;
-        if (keyState[SDL_SCANCODE_DOWN]  || keyState[SDL_SCANCODE_K]) kRightY -= 1.0f;
-        if (kRightX != 0.0f || kRightY != 0.0f || pad0.type == ControllerType::KeyboardMouse) {
-            pad0.rightStick = ApplyRadialDeadzone(kRightX, kRightY, 0.0f);
-        }
-
-        if (keyState[SDL_SCANCODE_Q] || keyState[SDL_SCANCODE_Z]) {
-            pad0.buttonsHold |= static_cast<uint32_t>(VirtualButton::ZL);
-        } else {
-            pad0.buttonsHold &= ~static_cast<uint32_t>(VirtualButton::ZL);
-        }
-        if (keyState[SDL_SCANCODE_E] || keyState[SDL_SCANCODE_X]) {
-            pad0.buttonsHold |= static_cast<uint32_t>(VirtualButton::ZR);
-        } else {
-            pad0.buttonsHold &= ~static_cast<uint32_t>(VirtualButton::ZR);
-        }
-        if (keyState[SDL_SCANCODE_R]) pad0.buttonsTrigger |= static_cast<uint32_t>(VirtualButton::StickR);
-    }
+    Window::PumpPlatformEvents();
 #endif
 }
+
+#if defined(__WIIU__) || defined(__wiiu__)
+void InputManager::PollDesktopHardware(bool& outRunning) {
+    (void)outRunning;
+}
+#endif
 
 } // namespace WiiU

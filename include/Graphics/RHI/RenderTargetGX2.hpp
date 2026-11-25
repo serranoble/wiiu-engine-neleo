@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/Texture/TextureLoaderGX2.hpp"
 #include <cstdint>
 
 #if defined(__WIIU__) || defined(__wiiu__)
@@ -74,6 +75,20 @@ public:
     [[nodiscard]] GX2DepthBuffer* GetDepthBuffer() noexcept { return (m_initialized && m_withDepth) ? &m_depthBuffer : nullptr; }
     [[nodiscard]] const GX2ColorBuffer* GetColorBuffer() const noexcept { return m_initialized ? &m_colorBuffer : nullptr; }
     [[nodiscard]] const GX2DepthBuffer* GetDepthBuffer() const noexcept { return (m_initialized && m_withDepth) ? &m_depthBuffer : nullptr; }
+#else
+    [[nodiscard]] bool BeginPass(float clearR = 0.0f,
+                                 float clearG = 0.0f,
+                                 float clearB = 0.0f,
+                                 float clearA = 1.0f,
+                                 float clearDepth = 1.0f);
+    void EndPass(void* restoreContext,
+                 void* restoreColor,
+                 void* restoreDepth,
+                 uint32_t restoreWidth = 1280u,
+                 uint32_t restoreHeight = 720u);
+    void FlushForSampling();
+
+    [[nodiscard]] GX2Texture* GetColorTexture() noexcept { return m_initialized ? &m_colorTexture : nullptr; }
 #endif
 
 private:
@@ -90,6 +105,12 @@ private:
     GX2ContextState* m_contextState{nullptr};
     bool m_colorCreated{false};
     bool m_depthCreated{false};
+#else
+    GX2Texture m_colorTexture{};
+    uint32_t m_fbo{0u};
+    uint32_t m_depthRbo{0u};
+    int32_t m_savedViewport[4]{0, 0, 1280, 720};
+    bool m_hasSavedViewport{false};
 #endif
 };
 

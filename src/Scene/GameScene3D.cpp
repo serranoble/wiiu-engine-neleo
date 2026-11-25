@@ -1,5 +1,6 @@
 #include "Scene/GameScene3D.hpp"
 #include "Core/Window.hpp"
+#include "Graphics/Render2D.hpp"
 #include "Graphics/RHI/RHIFullscreenShader.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
 #include "Core/MemoryManager.hpp"
@@ -13,6 +14,8 @@
 #include <gx2/state.h>
 #include <gx2/clear.h>
 #include <gx2r/surface.h>
+#else
+#include "Graphics/GL/GLFunctions.hpp"
 #endif
 
 namespace {
@@ -152,6 +155,39 @@ void GameScene3D::Render() {
         OnGameRenderDebug3D();
         OnGameRenderHUD();
     }
+#else
+    if (Graphics::GL::IsLoaded()) {
+        const auto& gl = Graphics::GL::GetFunctions();
+        Graphics::GL::GLint vp[4]{0, 0, 1280, 720};
+        if (gl.GetIntegerv) {
+            gl.GetIntegerv(Graphics::GL::GL_VIEWPORT_VAL, vp);
+        }
+        constexpr float kInv255 = 1.0f / 255.0f;
+        gl.Enable(Graphics::GL::GL_SCISSOR_TEST_VAL);
+        gl.Scissor(vp[0], vp[1], vp[2], vp[3]);
+        gl.ClearColor(static_cast<float>(m_clearColor.r) * kInv255,
+                      static_cast<float>(m_clearColor.g) * kInv255,
+                      static_cast<float>(m_clearColor.b) * kInv255,
+                      static_cast<float>(m_clearColor.a) * kInv255);
+        gl.Clear(Graphics::GL::GL_COLOR_BUFFER_BIT_VAL | Graphics::GL::GL_DEPTH_BUFFER_BIT_VAL);
+        gl.Disable(Graphics::GL::GL_SCISSOR_TEST_VAL);
+    }
+
+    const Matrix4x4 viewMatrix = GetViewMatrix();
+    const Matrix4x4 projMatrix = GetProjectionMatrix();
+    const Point3D camPos = m_orbitCamera.GetPosition();
+
+    DebugDraw3D::SetMatrices(viewMatrix, projMatrix, 1280.0f, 720.0f, m_nearPlane);
+
+    auto& fwdRenderer = ForwardRendererGX2::Instance();
+    fwdRenderer.BeginFrame(camPos, viewMatrix, projMatrix);
+    OnGameRender3D(fwdRenderer);
+    fwdRenderer.EndFrame();
+
+    Render2D::Begin();
+    OnGameRenderDebug3D();
+    OnGameRenderHUD();
+    Render2D::End();
 #endif
 }
 
@@ -216,7 +252,7 @@ bool GameScene3D::InitGX2Pipeline() {
 
     return rendererOk && m_depthBufferCreated && (m_nativeContextState != nullptr);
 #else
-    return true;
+    return ForwardRendererGX2::Instance().Initialize();
 #endif
 }
 
@@ -249,11 +285,12 @@ void GameScene3D::DestroyGX2Pipeline() {
         MemoryManager::Instance().FreeAligned(rawCtx);
         m_nativeContextState = nullptr;
     }
+#else
+    ReleaseSceneTextures();
 #endif
 }
 
 ResourceHandle<GX2Texture> GameScene3D::LoadSceneTexture(std::string_view filepath, const char* debugLabel) {
-#if defined(__WIIU__) || defined(__wiiu__)
     ResourceHandle<GX2Texture> handle = m_sceneTexturePool.Emplace();
     GX2Texture* tex = m_sceneTexturePool.Get(handle);
     if (!tex) {
@@ -264,14 +301,9 @@ ResourceHandle<GX2Texture> GameScene3D::LoadSceneTexture(std::string_view filepa
         return ResourceHandle<GX2Texture>{};
     }
     return handle;
-#else
-    (void)filepath; (void)debugLabel;
-    return ResourceHandle<GX2Texture>{};
-#endif
 }
 
 ResourceHandle<GX2Texture> GameScene3D::LoadSceneTextureFromMemory(const uint8_t* data, size_t size, const char* debugLabel) {
-#if defined(__WIIU__) || defined(__wiiu__)
     ResourceHandle<GX2Texture> handle = m_sceneTexturePool.Emplace();
     GX2Texture* tex = m_sceneTexturePool.Get(handle);
     if (!tex) {
@@ -282,14 +314,9 @@ ResourceHandle<GX2Texture> GameScene3D::LoadSceneTextureFromMemory(const uint8_t
         return ResourceHandle<GX2Texture>{};
     }
     return handle;
-#else
-    (void)data; (void)size; (void)debugLabel;
-    return ResourceHandle<GX2Texture>{};
-#endif
 }
 
 ResourceHandle<GX2Texture> GameScene3D::CreateSceneSolidTexture(uint32_t rgba8Color, const char* debugLabel) {
-#if defined(__WIIU__) || defined(__wiiu__)
     ResourceHandle<GX2Texture> handle = m_sceneTexturePool.Emplace();
     GX2Texture* tex = m_sceneTexturePool.Get(handle);
     if (!tex) {
@@ -300,14 +327,9 @@ ResourceHandle<GX2Texture> GameScene3D::CreateSceneSolidTexture(uint32_t rgba8Co
         return ResourceHandle<GX2Texture>{};
     }
     return handle;
-#else
-    (void)rgba8Color; (void)debugLabel;
-    return ResourceHandle<GX2Texture>{};
-#endif
 }
 
 bool GameScene3D::LoadSceneCubeMap(std::string_view filepath, const char* debugLabel) {
-#if defined(__WIIU__) || defined(__wiiu__)
     if (m_sceneCubeMapCreated) {
         DrainGPUQueueIfForeground();
         Graphics::TextureLoaderGX2::DestroyTexture(m_sceneCubeMap);
@@ -318,14 +340,9 @@ bool GameScene3D::LoadSceneCubeMap(std::string_view filepath, const char* debugL
         return true;
     }
     return false;
-#else
-    (void)filepath; (void)debugLabel;
-    return true;
-#endif
 }
 
 bool GameScene3D::LoadSceneCubeMapFromMemory(const uint8_t* data, size_t size, const char* debugLabel) {
-#if defined(__WIIU__) || defined(__wiiu__)
     if (m_sceneCubeMapCreated) {
         DrainGPUQueueIfForeground();
         Graphics::TextureLoaderGX2::DestroyTexture(m_sceneCubeMap);
@@ -336,31 +353,17 @@ bool GameScene3D::LoadSceneCubeMapFromMemory(const uint8_t* data, size_t size, c
         return true;
     }
     return false;
-#else
-    (void)data; (void)size; (void)debugLabel;
-    return true;
-#endif
 }
 
 GX2Texture* GameScene3D::GetSceneTexture(ResourceHandle<GX2Texture> handle) noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
     return m_sceneTexturePool.Get(handle);
-#else
-    (void)handle;
-    return nullptr;
-#endif
 }
 
 GX2Texture* GameScene3D::GetSceneCubeMap() noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
     return m_sceneCubeMapCreated ? &m_sceneCubeMap : nullptr;
-#else
-    return nullptr;
-#endif
 }
 
 void GameScene3D::ReleaseSceneTextures() noexcept {
-#if defined(__WIIU__) || defined(__wiiu__)
     m_sceneTexturePool.ForEachActive([](GX2Texture& tex) {
         Graphics::TextureLoaderGX2::DestroyTexture(tex);
     });
@@ -369,7 +372,6 @@ void GameScene3D::ReleaseSceneTextures() noexcept {
         Graphics::TextureLoaderGX2::DestroyTexture(m_sceneCubeMap);
         m_sceneCubeMapCreated = false;
     }
-#endif
 }
 
 } // namespace WiiU

@@ -5,8 +5,12 @@ project(wiiu_demos C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Preservar std::isfinite/std::isnan bajo -O3 -ffast-math (-fno-finite-math-only)
-add_compile_options(-O3 -ffast-math -fno-finite-math-only)
+if(MSVC)
+    add_compile_options(/O2 /W3)
+else()
+    # Preservar std::isfinite/std::isnan bajo -O3 -ffast-math (-fno-finite-math-only)
+    add_compile_options(-O3 -ffast-math -fno-finite-math-only)
+endif()
 if(WUT)
     add_compile_definitions(__WIIU__ __wiiu__)
 endif()
@@ -36,6 +40,19 @@ endif()
 # ==============================================================================
 
 # 1. CORE DEL MOTOR
+set(ENGINE_CORE_PLATFORM_SOURCES)
+if(WUT)
+    list(APPEND ENGINE_CORE_PLATFORM_SOURCES
+        src/Platform/WiiU/PlatformClockWiiU.cpp
+        src/Platform/WiiU/WindowWiiU.cpp
+    )
+elseif(WIN32)
+    list(APPEND ENGINE_CORE_PLATFORM_SOURCES
+        src/Platform/Windows/PlatformClockWin32.cpp
+        src/Platform/Windows/WindowWin32.cpp
+    )
+endif()
+
 add_library(engine_core STATIC
     src/Core/ApplicationLifecycle.cpp
     src/Core/Storage/CryptoHMAC.cpp
@@ -45,7 +62,7 @@ add_library(engine_core STATIC
     src/Core/Config/CVarRegistry.cpp
     src/Core/MemoryManager.cpp
     src/Core/Diagnostics/CoreSelfTest.cpp
-    src/Core/Window.cpp
+    ${ENGINE_CORE_PLATFORM_SOURCES}
     src/Core/AssetManager.cpp
     src/Core/JobSystem.cpp
     src/Core/Math/PRNG.cpp
@@ -78,43 +95,73 @@ add_library(engine_physics STATIC
 target_link_libraries(engine_physics PUBLIC engine_core)
 
 # 3. SUBSISTEMA DE AUDIO 3D
+set(ENGINE_AUDIO_PLATFORM_SOURCES)
+if(WIN32 AND NOT WUT)
+    list(APPEND ENGINE_AUDIO_PLATFORM_SOURCES src/Platform/Windows/AudioDeviceWin32.cpp)
+endif()
 add_library(engine_audio STATIC
     src/Audio/AudioManager.cpp
     src/Audio/AudioEngine3D.cpp
     src/Audio/AudioSelfTest.cpp
     src/Core/ECS/Systems/AudioSpatialSystem.cpp
+    ${ENGINE_AUDIO_PLATFORM_SOURCES}
 )
 target_link_libraries(engine_audio PUBLIC engine_core)
 
 # 4. SUBSISTEMA DE ENTRADA Y CONTROLADORES
+set(ENGINE_INPUT_PLATFORM_SOURCES)
+if(WIN32 AND NOT WUT)
+    list(APPEND ENGINE_INPUT_PLATFORM_SOURCES
+        src/Platform/Windows/InputWin32.cpp
+        src/Platform/Windows/RumbleWin32.cpp
+    )
+endif()
 add_library(engine_input STATIC
     src/Input/InputContextStack.cpp
     src/Input/InputManager.cpp
     src/Input/RumbleManager.cpp
     src/Input/InputSelfTest.cpp
+    ${ENGINE_INPUT_PLATFORM_SOURCES}
 )
 target_link_libraries(engine_input PUBLIC engine_core)
 
-# 5. SUBSISTEMA DE GRÁFICOS Y RENDERIZADO 2D/3D (LATTE GX2)
+# 5. SUBSISTEMA DE GRÁFICOS Y RENDERIZADO 2D/3D (LATTE GX2 / OPENGL 3.3)
+set(ENGINE_GRAPHICS_BACKEND_SOURCES)
+if(WUT)
+    list(APPEND ENGINE_GRAPHICS_BACKEND_SOURCES
+        src/Graphics/ForwardRendererGX2.cpp
+        src/Graphics/Texture/TextureLoaderGX2.cpp
+        src/Graphics/ShadowMapRendererGX2.cpp
+        src/Graphics/PostProcessHDRGX2.cpp
+        src/Graphics/RHI/RenderTargetGX2.cpp
+        src/Graphics/RHI/RHIFullscreenShader.cpp
+    )
+else()
+    list(APPEND ENGINE_GRAPHICS_BACKEND_SOURCES
+        src/Graphics/GL/GLFunctions.cpp
+        src/Graphics/GL/Render2DGL.cpp
+        src/Graphics/GL/ForwardRendererGL.cpp
+        src/Graphics/GL/TextureLoaderGL.cpp
+        src/Graphics/GL/RenderTargetGL.cpp
+        src/Graphics/GL/ShadowMapRendererGL.cpp
+        src/Graphics/GL/PostProcessHDRGL.cpp
+        src/Graphics/GL/RHIFullscreenShaderGL.cpp
+    )
+endif()
 add_library(engine_graphics STATIC
     src/Graphics/Render2D.cpp
     src/Graphics/Render2DGX2.cpp
+    ${ENGINE_GRAPHICS_BACKEND_SOURCES}
     src/Graphics/DebugDraw3D.cpp
     src/Graphics/MaterialSystem.cpp
     src/Graphics/RenderQueue.cpp
-    src/Graphics/ForwardRendererGX2.cpp
     src/Graphics/ShadowSystem.cpp
-    src/Graphics/ShadowMapRendererGX2.cpp
-    src/Graphics/PostProcessHDRGX2.cpp
     src/Graphics/SkyboxRenderPass.cpp
     src/Graphics/Mesh/StaticMesh.cpp
     src/Graphics/Mesh/ProceduralMeshBuilder.cpp
-    src/Graphics/Texture/TextureLoaderGX2.cpp
     src/Graphics/GraphicsSelfTest.cpp
     src/Graphics/RHI/RHIPipelineCache.cpp
-    src/Graphics/RHI/RenderTargetGX2.cpp
     src/Graphics/RHI/RHIRenderPass.cpp
-    src/Graphics/RHI/RHIFullscreenShader.cpp
     src/Graphics/RHI/DisplayCompositor.cpp
     src/Graphics/UIComponents.cpp
     src/Graphics/UI/UIToolkit.cpp
@@ -190,13 +237,14 @@ set(DEMO_SOURCES
     src/Scene/SceneQA_StressCulling.cpp
     src/Scene/SceneQA_ProceduralNPR.cpp
     src/Scene/SceneQA_RaytracingBVH.cpp
+    src/Scene/SceneModelHouse.cpp
+    src/Scene/SceneModelBird.cpp
 )
 
 if(WUT AND WIIU_ENGINE_BUILD_DEMOS)
     add_executable(wiiu_demos ${DEMO_SOURCES})
 
     target_link_libraries(wiiu_demos PRIVATE
-        -Wl,--start-group
         engine_framework
         engine_graphics
         engine_physics
@@ -205,7 +253,6 @@ if(WUT AND WIIU_ENGINE_BUILD_DEMOS)
         engine_ai
         engine_net
         engine_core
-        -Wl,--end-group
         wut
         m
     )
@@ -247,4 +294,61 @@ if(WUT AND WIIU_ENGINE_BUILD_DEMOS)
             set_property(TARGET wiiu_demos_wuhb APPEND PROPERTY SOURCES "${ASSETS_SYNC_STAMP}")
         endif()
     endif()
+elseif(WIN32 AND NOT WUT AND WIIU_ENGINE_BUILD_DEMOS)
+    add_executable(wiiu_demos ${DEMO_SOURCES})
+
+    if(MINGW)
+        target_link_libraries(wiiu_demos PRIVATE
+            engine_framework
+            engine_graphics
+            engine_physics
+            engine_audio
+            engine_input
+            engine_ai
+            engine_net
+            engine_core
+            opengl32
+            gdi32
+            user32
+            winmm
+            ws2_32
+        )
+        target_link_options(wiiu_demos PRIVATE
+            -static
+            -static-libgcc
+            -static-libstdc++
+        )
+    else()
+        target_link_libraries(wiiu_demos PRIVATE
+            engine_framework
+            engine_graphics
+            engine_physics
+            engine_audio
+            engine_input
+            engine_ai
+            engine_net
+            engine_core
+            opengl32
+            gdi32
+            user32
+            winmm
+            ws2_32
+        )
+    endif()
+
+    file(GLOB_RECURSE ENGINE_ASSET_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/*"
+    )
+    set(ASSETS_SYNC_STAMP "${CMAKE_BINARY_DIR}/.assets_synced.stamp")
+    add_custom_command(
+        OUTPUT "${ASSETS_SYNC_STAMP}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            ${CMAKE_BINARY_DIR}/assets
+        COMMAND ${CMAKE_COMMAND} -E touch "${ASSETS_SYNC_STAMP}"
+        DEPENDS ${ENGINE_ASSET_FILES}
+        COMMENT "Sincronizando assets para ejecutable Windows en build-win/assets..."
+    )
+    add_custom_target(sync_assets ALL DEPENDS "${ASSETS_SYNC_STAMP}")
+    add_dependencies(wiiu_demos sync_assets)
 endif()

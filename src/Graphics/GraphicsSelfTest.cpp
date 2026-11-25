@@ -420,6 +420,54 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         outReport.Record("GFX", "RAYTRACING_BVH_PIPELINE", readyOk && cleanAfter,
                          (readyOk && cleanAfter) ? "RT BVH GFD + UNIFORMS OK" : "FALLO RT BVH PIPELINE");
     }
+
+    // T22: Decodificador WTEX BC3 Little-Endian -> RGBA8 LINEAR_ALIGNED alineado >= 256B (0 leaks)
+    {
+        // Cabecera WTEX Big-Endian (16 B): magic='WTEX', width=8, height=4, fmtCode=3 (BC3), mipLevels=1
+        // + 2 bloques DXT5/BC3 de 16 B cada uno (32 B): bloque 0 rojo opaco (A=255), bloque 1 azul transparente (A=0)
+        const uint8_t syntheticWtexBc3[48] = {
+            0x57u, 0x54u, 0x45u, 0x58u, // 'WTEX'
+            0x00u, 0x00u, 0x00u, 0x08u, // width = 8
+            0x00u, 0x00u, 0x00u, 0x04u, // height = 4
+            0x00u, 0x03u, 0x00u, 0x01u, // fmt = 3 (BC3), mips = 1
+            // Bloque 0 (x=0..3): alpha a0=255, a1=255, bits=0 | color c0=0xF800 (LE: 0x00,0xF8), c1=0x0000, idx=0
+            0xFFu, 0xFFu, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u,
+            0x00u, 0xF8u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u,
+            // Bloque 1 (x=4..7): alpha a0=0, a1=0, bits=0 | color c0=0x001F (LE: 0x1F,0x00), c1=0x0000, idx=0
+            0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u,
+            0x1Fu, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u
+        };
+
+        GX2Texture decodedTex{};
+        const bool loaded = TextureLoaderGX2::LoadCookedTextureFromMemory(
+            syntheticWtexBc3, sizeof(syntheticWtexBc3), decodedTex, "SelfTest_WTEX_BC3");
+        const bool rejectTruncated = !TextureLoaderGX2::LoadCookedTextureFromMemory(
+            syntheticWtexBc3, 24u, decodedTex, "SelfTest_WTEX_Trunc");
+        // Re-cargar tras prueba negativa
+        const bool reloaded = TextureLoaderGX2::LoadCookedTextureFromMemory(
+            syntheticWtexBc3, sizeof(syntheticWtexBc3), decodedTex, "SelfTest_WTEX_BC3");
+
+#if defined(__WIIU__) || defined(__wiiu__)
+        bool pxOk = false;
+        if (reloaded && decodedTex.surface.image != nullptr) {
+            const auto* px = static_cast<const uint8_t*>(decodedTex.surface.image);
+            // Pixel (0,0): rojo puro opaco (R>=240, G==0, B==0, A==255)
+            // Pixel (4,0): azul puro transparente (R==0, G==0, B>=240, A==0)
+            pxOk = (px[0] >= 240u) && (px[1] == 0u) && (px[2] == 0u) && (px[3] == 255u) &&
+                   (px[16] == 0u) && (px[17] == 0u) && (px[18] >= 240u) && (px[19] == 0u);
+        }
+        const bool ok = loaded && rejectTruncated && reloaded && pxOk &&
+                        (decodedTex.surface.format == GX2_SURFACE_FORMAT_UNORM_R8_G8_B8_A8) &&
+                        (decodedTex.surface.mipLevels == 1u) &&
+                        (decodedTex.surface.mipmaps == nullptr) &&
+                        IsAligned256(decodedTex.surface.image);
+#else
+        const bool ok = loaded && rejectTruncated && reloaded;
+#endif
+        TextureLoaderGX2::DestroyTexture(decodedTex);
+        outReport.Record("GFX", "WTEX_BC_DECODE_GX2", ok,
+                         ok ? "BC3 LE->RGBA8 ALIGN>=256 OK" : "FALLO DECODIFICADOR WTEX");
+    }
 }
 
 } // namespace WiiU::Graphics

@@ -51,7 +51,6 @@ void RenderQueue::Sort() noexcept {
 }
 
 void RenderQueue::FlushDepthPrePass(ForwardRendererGX2& renderer) const {
-#if defined(__WIIU__) || defined(__wiiu__)
     for (size_t i = 0; i < m_count; ++i) {
         const RenderCommand& cmd = m_commands[m_sortEntries[i].cmdIndex];
         if (cmd.isSkinned || cmd.layer != RenderLayer::Opaque ||
@@ -67,16 +66,12 @@ void RenderQueue::FlushDepthPrePass(ForwardRendererGX2& renderer) const {
             cmd.use32BitIndices
         );
     }
-#else
-    (void)renderer;
-#endif
 }
 
 void RenderQueue::FlushRange(ForwardRendererGX2& renderer,
                              RenderLayer minLayer,
                              RenderLayer maxLayer,
                              bool earlyZEqualPass) const {
-#if defined(__WIIU__) || defined(__wiiu__)
     const uint8_t minL = static_cast<uint8_t>(minLayer);
     const uint8_t maxL = static_cast<uint8_t>(maxLayer);
 
@@ -131,9 +126,6 @@ void RenderQueue::FlushRange(ForwardRendererGX2& renderer,
             );
         }
     }
-#else
-    (void)renderer; (void)minLayer; (void)maxLayer; (void)earlyZEqualPass;
-#endif
 }
 
 void RenderQueue::Flush(ForwardRendererGX2& renderer) const {

@@ -30,6 +30,39 @@
 
 namespace WiiU {
 
+#if defined(__WIIU__) || defined(__wiiu__)
+namespace {
+void UploadSkinnedVertexUniforms(uint32_t mvpOffset,
+                                 uint32_t modelOffset,
+                                 uint32_t bonesOffset,
+                                 const Matrix4x4& vpMatrix,
+                                 const Matrix4x4& modelMatrix,
+                                 const Matrix4x4* boneMatrices,
+                                 uint32_t boneCount) {
+    alignas(256) float mvpBuf[16];
+    alignas(256) float modelBuf[16];
+    alignas(256) float bonePaletteBuf[24 * 16];
+
+    const Matrix4x4 mvp = vpMatrix * modelMatrix;
+    std::memcpy(mvpBuf, mvp.m, sizeof(mvpBuf));
+    std::memcpy(modelBuf, modelMatrix.m, sizeof(modelBuf));
+
+    const uint32_t clampedBones = (boneCount > 24u) ? 24u : boneCount;
+    const Matrix4x4 ident = Matrix4x4::Identity();
+    for (uint32_t b = 0u; b < clampedBones; ++b) {
+        std::memcpy(&bonePaletteBuf[b * 16u], boneMatrices[b].m, 16u * sizeof(float));
+    }
+    for (uint32_t b = clampedBones; b < 24u; ++b) {
+        std::memcpy(&bonePaletteBuf[b * 16u], ident.m, 16u * sizeof(float));
+    }
+
+    GX2SetVertexUniformReg(mvpOffset, 16u, mvpBuf);
+    GX2SetVertexUniformReg(modelOffset, 16u, modelBuf);
+    GX2SetVertexUniformReg(bonesOffset, 24u * 16u, bonePaletteBuf);
+}
+} // namespace
+#endif
+
 ForwardRendererGX2& ForwardRendererGX2::Instance() noexcept {
     static ForwardRendererGX2 s_instance;
     return s_instance;
@@ -46,18 +79,27 @@ bool ForwardRendererGX2::Initialize() {
     (void)InitDepthPrePassShader();
     (void)InitPBRShader();
 
-    // Inicializar Samplers GX2
+    // Inicializar Samplers GX2 (todos los samplers single-mip fijan MIP_FILTER_NONE + MIP_PERF_DISABLE + LOD 0..0
+    // para evitar bloqueos TA/TD en AMD Latte R700 cuando MIP_ADDRESS == NULL)
     GX2InitSampler(&m_skySampler, GX2_TEX_CLAMP_MODE_WRAP, GX2_TEX_XY_FILTER_MODE_LINEAR);
     GX2InitSamplerXYFilter(&m_skySampler, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_NONE);
-    GX2InitSamplerZMFilter(&m_skySampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_LINEAR);
+    GX2InitSamplerZMFilter(&m_skySampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_NONE);
+    GX2InitSamplerFilterAdjust(&m_skySampler, FALSE, GX2_TEX_MIP_PERF_MODE_DISABLE, GX2_TEX_Z_PERF_MODE_DISABLED);
+    GX2InitSamplerLOD(&m_skySampler, 0.0f, 0.0f, 0.0f);
 
     GX2InitSampler(&m_meshSampler, GX2_TEX_CLAMP_MODE_WRAP, GX2_TEX_XY_FILTER_MODE_LINEAR);
     GX2InitSamplerLOD(&m_meshSampler, 0.0f, 10.0f, 0.0f);
+    GX2InitSampler(&m_meshNoMipSampler, GX2_TEX_CLAMP_MODE_WRAP, GX2_TEX_XY_FILTER_MODE_LINEAR);
+    GX2InitSamplerZMFilter(&m_meshNoMipSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_NONE);
+    GX2InitSamplerFilterAdjust(&m_meshNoMipSampler, FALSE, GX2_TEX_MIP_PERF_MODE_DISABLE, GX2_TEX_Z_PERF_MODE_DISABLED);
+    GX2InitSamplerLOD(&m_meshNoMipSampler, 0.0f, 0.0f, 0.0f);
     ApplyTextureFilterMode(EngineConfig::Instance().graphics.textureFilter);
 
     GX2InitSampler(&m_cubeSampler, GX2_TEX_CLAMP_MODE_CLAMP, GX2_TEX_XY_FILTER_MODE_LINEAR);
     GX2InitSamplerXYFilter(&m_cubeSampler, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_XY_FILTER_MODE_LINEAR, GX2_TEX_ANISO_RATIO_NONE);
     GX2InitSamplerZMFilter(&m_cubeSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_NONE);
+    GX2InitSamplerFilterAdjust(&m_cubeSampler, FALSE, GX2_TEX_MIP_PERF_MODE_DISABLE, GX2_TEX_Z_PERF_MODE_DISABLED);
+    GX2InitSamplerLOD(&m_cubeSampler, 0.0f, 0.0f, 0.0f);
     m_cubeSamplerCreated = true;
 
     // Textura neutra 4x4 (0,0,0,0) en búfer estático alineado a 256B (0 leaks en MemoryManager).
@@ -145,6 +187,10 @@ void ForwardRendererGX2::Shutdown() {
     m_meshShaderLoaded = false;
 
     freeShaderPtrs(m_skelVs, m_skelVsProgram, m_skelPs, m_skelPsProgram, m_skelFsProgram);
+    m_skelMvpRegOffset = 0u;
+    m_skelModelRegOffset = 16u;
+    m_skelBonesRegOffset = 32u;
+    m_skelDiffuseSlot = 0u;
     m_skelShaderLoaded = false;
 
     if (m_instanceBufferCreated) {
@@ -209,8 +255,9 @@ void ForwardRendererGX2::RenderSkydome(StaticMesh& skydomeMesh, GX2Texture* skyT
     std::memcpy(skyUniforms, skyVP.m, 16 * sizeof(float));
     GX2SetVertexUniformReg(0, 16, skyUniforms);
 
+    const bool skyHasMips = (skyTexture->surface.mipLevels > 1u) && (skyTexture->surface.mipmaps != nullptr);
     GX2SetPixelTexture(skyTexture, 0);
-    GX2SetPixelSampler(&m_skySampler, 0);
+    GX2SetPixelSampler(skyHasMips ? &m_meshSampler : &m_skySampler, 0);
 
     // Depth Test ON, Depth Write OFF (Z=W=1.0)
     RHIPipelineCache::Instance().BindState(RHIPipelineState(true, false, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
@@ -261,10 +308,7 @@ void ForwardRendererGX2::RenderStaticMesh(const StaticMesh& mesh,
     GX2SetPixelUniformReg(0, 16, psParams);
 
     const GX2Texture* activeDiffuseTex = diffuseTexture ? diffuseTexture : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
-    if (activeDiffuseTex) {
-        GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuseTex), 0);
-        GX2SetPixelSampler(&m_meshSampler, 0);
-    }
+    BindMeshTextureAndSampler(activeDiffuseTex, 0u);
     if (m_cubeSamplerCreated) {
         GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
         if (activeCube) {
@@ -331,10 +375,7 @@ void ForwardRendererGX2::RenderMeshBuffers(GX2RBuffer& vbo,
 
     const GX2Texture* activeDiffuseTex = diffuseTexture ? diffuseTexture
                                       : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
-    if (activeDiffuseTex) {
-        GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuseTex), 0);
-        GX2SetPixelSampler(&m_meshSampler, 0);
-    }
+    BindMeshTextureAndSampler(activeDiffuseTex, 0u);
     if (m_cubeSamplerCreated) {
         GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
         if (activeCube) {
@@ -391,6 +432,41 @@ void ForwardRendererGX2::RenderSkinnedMesh(const StaticMesh& skinnedMesh,
 #endif
 }
 
+#if defined(__WIIU__) || defined(__wiiu__)
+void ForwardRendererGX2::BindMeshTextureAndSampler(const GX2Texture* tex, uint32_t slot) noexcept {
+    if (!tex) return;
+    GX2SetPixelTexture(const_cast<GX2Texture*>(tex), slot);
+    const bool hasValidMipChain = (tex->surface.mipLevels > 1u) && (tex->surface.mipmaps != nullptr);
+    GX2SetPixelSampler(hasValidMipChain ? &m_meshSampler : &m_meshNoMipSampler, slot);
+}
+
+void ForwardRendererGX2::BindSkinnedPipeline(GX2Texture* diffuseTexture,
+                                               float reflectionIntensity,
+                                               bool clayMode) {
+    GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
+    GX2SetFetchShader(&m_skelFs);
+    GX2SetVertexShader(m_skelVs);
+    GX2SetPixelShader(m_skelPs);
+
+    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
+    alignas(256) float psParams[16];
+    psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
+    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
+    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
+    psParams[12] = reflectionIntensity;
+    psParams[13] = clayMode ? 1.0f : 0.0f;
+    psParams[14] = 2.0f;
+    psParams[15] = 0.38f;
+    GX2SetPixelUniformReg(0, 16, psParams);
+
+    const GX2Texture* activeDiffuse = diffuseTexture ? diffuseTexture
+                                    : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
+    BindMeshTextureAndSampler(activeDiffuse, m_skelDiffuseSlot);
+
+    RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
+}
+#endif
+
 void ForwardRendererGX2::RenderSkinnedMesh(GX2RBuffer& vbo, 
                                           GX2RBuffer& ibo, 
                                           uint32_t indexCount, 
@@ -404,53 +480,15 @@ void ForwardRendererGX2::RenderSkinnedMesh(GX2RBuffer& vbo,
                                           bool clayMode,
                                           bool use32BitIndices) {
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (!m_skelShaderLoaded || indexCount == 0 || boneCount == 0 || !boneMatrices) return;
-
-    GX2SetFetchShader(&m_skelFs);
-    GX2SetVertexShader(m_skelVs);
-    GX2SetPixelShader(m_skelPs);
-
-    Matrix4x4 mvp = m_vpMatrix * modelMatrix;
-    constexpr uint32_t TOTAL_VS_UNIFORMS = 32 + 24 * 16;
-    alignas(256) float skelVsUniforms[TOTAL_VS_UNIFORMS];
-    std::memcpy(&skelVsUniforms[0], mvp.m, 16 * sizeof(float));
-    std::memcpy(&skelVsUniforms[16], modelMatrix.m, 16 * sizeof(float));
-
-    uint32_t clampedBones = boneCount > 24u ? 24u : boneCount;
-    for (uint32_t b = 0; b < clampedBones; ++b) {
-        std::memcpy(&skelVsUniforms[32 + b * 16], boneMatrices[b].m, 16 * sizeof(float));
-    }
-    for (uint32_t b = clampedBones; b < 24u; ++b) {
-        std::memcpy(&skelVsUniforms[32 + b * 16], Matrix4x4::Identity().m, 16 * sizeof(float));
-    }
-    GX2SetVertexUniformReg(0, TOTAL_VS_UNIFORMS, skelVsUniforms);
-
-    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
-    alignas(256) float psParams[16];
-    psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
-    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
-    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
-    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;
-    psParams[13] = clayMode ? 1.0f : 0.0f;
-    psParams[14] = 2.0f;
-    psParams[15] = 0.38f;
-    GX2SetPixelUniformReg(0, 16, psParams);
-
-    GX2Texture* activeDiffuse = diffuseTexture ? diffuseTexture
-                              : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
-    if (activeDiffuse) {
-        GX2SetPixelTexture(activeDiffuse, 0);
-        GX2SetPixelSampler(&m_meshSampler, 0);
-    }
-    if (m_cubeSamplerCreated) {
-        GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
-        if (activeCube) {
-            GX2SetPixelTexture(activeCube, 1);
-            GX2SetPixelSampler(&m_cubeSampler, 1);
-        }
+    (void)envCubeMap;
+    if (!m_skelShaderLoaded || indexCount == 0 || boneCount == 0 || !boneMatrices ||
+        vertexStride < SKINNED_VERTEX_STRIDE) {
+        return;
     }
 
-    RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
+    BindSkinnedPipeline(diffuseTexture, reflectionIntensity, clayMode);
+    UploadSkinnedVertexUniforms(m_skelMvpRegOffset, m_skelModelRegOffset, m_skelBonesRegOffset,
+                                m_vpMatrix, modelMatrix, boneMatrices, boneCount);
 
     const GX2IndexType idxType = use32BitIndices ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
     GX2RSetAttributeBuffer(&vbo, 0, vertexStride, 0);
@@ -502,7 +540,7 @@ bool ForwardRendererGX2::InitSkyShader() {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skyVsProgram, vsProgSize);
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skyPsProgram, psProgSize);
 
-            GX2AttribStream attrs[4];
+            GX2AttribStream attrs[4]{};
             uint32_t numAttrs = 0;
 
             if (m_skyVs->attribVarCount > 0 && m_skyVs->attribVars != nullptr) {
@@ -609,7 +647,7 @@ bool ForwardRendererGX2::InitMeshShader() {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_meshVsProgram, vsProgSize);
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_meshPsProgram, psProgSize);
 
-            GX2AttribStream attrs[4];
+            GX2AttribStream attrs[4]{};
             uint32_t numAttrs = 0;
 
             if (m_meshVs->attribVarCount > 0 && m_meshVs->attribVars != nullptr) {
@@ -725,7 +763,35 @@ bool ForwardRendererGX2::InitSkinningShader() {
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skelVsProgram, vsProgSize);
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_skelPsProgram, psProgSize);
 
-            GX2AttribStream attrs[6];
+            m_skelMvpRegOffset = 0u;
+            m_skelModelRegOffset = 16u;
+            m_skelBonesRegOffset = 32u;
+            if (m_skelVs->uniformVars) {
+                for (uint32_t i = 0u; i < m_skelVs->uniformVarCount; ++i) {
+                    const char* vname = m_skelVs->uniformVars[i].name;
+                    if (!vname) continue;
+                    if (std::strcmp(vname, "uMVP") == 0) {
+                        m_skelMvpRegOffset = m_skelVs->uniformVars[i].offset;
+                    } else if (std::strcmp(vname, "uModel") == 0) {
+                        m_skelModelRegOffset = m_skelVs->uniformVars[i].offset;
+                    } else if (std::strcmp(vname, "uBones") == 0 || std::strcmp(vname, "uBones[0]") == 0) {
+                        m_skelBonesRegOffset = m_skelVs->uniformVars[i].offset;
+                    }
+                }
+            }
+
+            m_skelDiffuseSlot = 0u;
+            if (m_skelPs->samplerVars) {
+                for (uint32_t s = 0u; s < m_skelPs->samplerVarCount; ++s) {
+                    const char* sname = m_skelPs->samplerVars[s].name;
+                    if (sname && std::strcmp(sname, "uTexture") == 0) {
+                        m_skelDiffuseSlot = m_skelPs->samplerVars[s].location;
+                        break;
+                    }
+                }
+            }
+
+            GX2AttribStream attrs[6]{};
             attrs[0].location = 0; attrs[0].buffer = 0; attrs[0].offset = offsetof(SkinnedMeshVertex, pos);
             attrs[0].format = GX2_ATTRIB_FORMAT_FLOAT_32_32_32; attrs[0].type = GX2_ATTRIB_INDEX_PER_VERTEX;
             attrs[0].aluDivisor = 0; attrs[0].mask = GX2_SEL_MASK(GX2_SQ_SEL_X, GX2_SQ_SEL_Y, GX2_SQ_SEL_Z, GX2_SQ_SEL_1);
@@ -1096,8 +1162,13 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
     psData[4] = lights.dirLightDir[0]; psData[5] = lights.dirLightDir[1]; psData[6] = lights.dirLightDir[2]; psData[7] = m_shaderTime;
     // [2] dirLightColor
     psData[8] = lights.dirLightColor[0]; psData[9] = lights.dirLightColor[1]; psData[10] = lights.dirLightColor[2]; psData[11] = lights.dirLightColor[3];
-    // [3] albedoTint + customParam (ior para vidrio / waveAmp para agua)
-    psData[12] = material.ubo.albedoTint[0]; psData[13] = material.ubo.albedoTint[1]; psData[14] = material.ubo.albedoTint[2]; psData[15] = material.ubo.pbrParams[3];
+    // [3] albedoTint + customParam (alphaCutout flag en modos 0..1 / ior en vidrio / waveAmp en agua)
+    psData[12] = material.ubo.albedoTint[0];
+    psData[13] = material.ubo.albedoTint[1];
+    psData[14] = material.ubo.albedoTint[2];
+    psData[15] = (shadingMode <= 1u)
+        ? ((material.blendMode == BlendMode::AlphaCutout) ? 1.0f : 0.0f)
+        : material.ubo.pbrParams[3];
     // [4] materialParams (refl, normalMapEnabled, bumpScale, ambient)
     psData[16] = material.ubo.materialParams[0];
     psData[17] = material.ubo.materialParams[1];
@@ -1128,9 +1199,7 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
     GX2Texture* envCube = static_cast<GX2Texture*>(material.envCubeMap);
     const GX2Texture* activeDiffuse = diffuseTex ? diffuseTex : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
     if (m_pbrDiffuseSlot >= 0 && activeDiffuse) {
-        const uint32_t slot = static_cast<uint32_t>(m_pbrDiffuseSlot);
-        GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuse), slot);
-        GX2SetPixelSampler(&m_meshSampler, slot);
+        BindMeshTextureAndSampler(activeDiffuse, static_cast<uint32_t>(m_pbrDiffuseSlot));
     }
     if (m_pbrSkyboxSlot >= 0 && m_cubeSamplerCreated) {
         // pbr_mesh_gx2.frag usa uSkybox como sampler2D (Atlas 3x2 de 6 caras); guarda defensiva TEXTURE_2D
@@ -1147,8 +1216,7 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
         if (shadowActive) {
             ShadowMapRendererGX2::Instance().BindShadowMapRaw(slot, slot);
         } else if (m_defaultTexCreated) {
-            GX2SetPixelTexture(&m_defaultNeutralTex, slot);
-            GX2SetPixelSampler(&m_meshSampler, slot);
+            BindMeshTextureAndSampler(&m_defaultNeutralTex, slot);
         }
     }
 
@@ -1208,10 +1276,7 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
     GX2SetPixelUniformReg(0, 16, psParams);
 
     const GX2Texture* activeDiffuseTex = diffuseTexture ? diffuseTexture : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
-    if (activeDiffuseTex) {
-        GX2SetPixelTexture(const_cast<GX2Texture*>(activeDiffuseTex), 0);
-        GX2SetPixelSampler(&m_meshSampler, 0);
-    }
+    BindMeshTextureAndSampler(activeDiffuseTex, 0u);
 
     RHIPipelineCache::Instance().BindState(RHIPipelineState(
         material ? material->depthTest : true,
@@ -1288,66 +1353,24 @@ void ForwardRendererGX2::RenderSkinnedMeshInstanced(const StaticMesh& skinnedMes
                                                     float reflectionIntensity,
                                                     bool clayMode) {
 #if defined(__WIIU__) || defined(__wiiu__)
+    (void)envCubeMap;
     if (!m_skelShaderLoaded || !skinnedMesh.IsLoaded() || !skinnedMesh.GetVBO() || !skinnedMesh.GetIBO() ||
+        skinnedMesh.GetHeader().vertexStride < SKINNED_VERTEX_STRIDE ||
         !modelMatrices || !bonePalettes || boneCount == 0 || instanceCount == 0) {
         return;
     }
 
     // Enlace UNICO de pipeline, shaders, texturas, samplers, PSO y VBO fuera del bucle (0 binds redundantes)
-    GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
-    GX2SetFetchShader(&m_skelFs);
-    GX2SetVertexShader(m_skelVs);
-    GX2SetPixelShader(m_skelPs);
-
-    const LightBlockUBO& lights = MaterialRegistry::Instance().GetActiveLightBlock();
-    alignas(256) float psParams[16];
-    psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
-    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
-    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
-    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? reflectionIntensity : 0.0f;
-    psParams[13] = clayMode ? 1.0f : 0.0f;
-    psParams[14] = 2.0f;
-    psParams[15] = 0.38f;
-    GX2SetPixelUniformReg(0, 16, psParams);
-
-    GX2Texture* activeDiffuse = diffuseTexture ? diffuseTexture
-                              : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
-    if (activeDiffuse) {
-        GX2SetPixelTexture(activeDiffuse, 0);
-        GX2SetPixelSampler(&m_meshSampler, 0);
-    }
-    if (m_cubeSamplerCreated) {
-        GX2Texture* activeCube = envCubeMap ? envCubeMap : (m_defaultCubeCreated ? &m_defaultNeutralCubeMap : nullptr);
-        if (activeCube) {
-            GX2SetPixelTexture(activeCube, 1);
-            GX2SetPixelSampler(&m_cubeSampler, 1);
-        }
-    }
-
-    RHIPipelineCache::Instance().BindState(RHIPipelineState(true, true, RHI_COMPARE_LEQUAL, BlendMode::Opaque, false));
+    BindSkinnedPipeline(diffuseTexture, reflectionIntensity, clayMode);
 
     const GX2IndexType idxType = (skinnedMesh.GetHeader().indexFormat == 1) ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
     GX2RSetAttributeBuffer(const_cast<GX2RBuffer*>(skinnedMesh.GetVBO()), 0, skinnedMesh.GetHeader().vertexStride, 0);
 
-    constexpr uint32_t TOTAL_VS_UNIFORMS = 32 + 24 * 16;
-    alignas(256) float skelVsUniforms[TOTAL_VS_UNIFORMS];
-    const uint32_t clampedBones = (boneCount > 24u) ? 24u : boneCount;
-    const Matrix4x4 ident = Matrix4x4::Identity();
-
     for (uint32_t i = 0; i < instanceCount; ++i) {
         if (!bonePalettes[i]) continue;
 
-        const Matrix4x4& model = modelMatrices[i];
-        const Matrix4x4 mvp = m_vpMatrix * model;
-        std::memcpy(&skelVsUniforms[0], mvp.m, 16 * sizeof(float));
-        std::memcpy(&skelVsUniforms[16], model.m, 16 * sizeof(float));
-        for (uint32_t b = 0; b < clampedBones; ++b) {
-            std::memcpy(&skelVsUniforms[32 + b * 16], bonePalettes[i][b].m, 16 * sizeof(float));
-        }
-        for (uint32_t b = clampedBones; b < 24u; ++b) {
-            std::memcpy(&skelVsUniforms[32 + b * 16], ident.m, 16 * sizeof(float));
-        }
-        GX2SetVertexUniformReg(0, TOTAL_VS_UNIFORMS, skelVsUniforms);
+        UploadSkinnedVertexUniforms(m_skelMvpRegOffset, m_skelModelRegOffset, m_skelBonesRegOffset,
+                                    m_vpMatrix, modelMatrices[i], bonePalettes[i], boneCount);
 
         GX2RDrawIndexed(GX2_PRIMITIVE_MODE_TRIANGLES,
                         const_cast<GX2RBuffer*>(skinnedMesh.GetIBO()),
@@ -1532,6 +1555,14 @@ void ForwardRendererGX2::ApplyMeshSamplerState() {
     GX2InitSamplerXYFilter(&m_meshSampler, magFilter, minFilter, anisoRatio);
     GX2InitSamplerZMFilter(&m_meshSampler, GX2_TEX_Z_FILTER_MODE_NONE, mipFilter);
     GX2InitSamplerLOD(&m_meshSampler, 0.0f, maxLod, 0.0f);
+
+    // Sampler de seguridad para texturas de 1 solo nivel (mipLevels == 1 / mipmaps == nullptr):
+    // En AMD Latte R700, pedir MIP_FILTER_LINEAR o maxLod > 0 con MIP_ADDRESS == NULL cuelga la unidad TA/TD.
+    GX2InitSamplerClamping(&m_meshNoMipSampler, clampMode, clampMode, GX2_TEX_CLAMP_MODE_WRAP);
+    GX2InitSamplerXYFilter(&m_meshNoMipSampler, magFilter, minFilter, GX2_TEX_ANISO_RATIO_NONE);
+    GX2InitSamplerZMFilter(&m_meshNoMipSampler, GX2_TEX_Z_FILTER_MODE_NONE, GX2_TEX_MIP_FILTER_MODE_NONE);
+    GX2InitSamplerFilterAdjust(&m_meshNoMipSampler, FALSE, GX2_TEX_MIP_PERF_MODE_DISABLE, GX2_TEX_Z_PERF_MODE_DISABLED);
+    GX2InitSamplerLOD(&m_meshNoMipSampler, 0.0f, 0.0f, 0.0f);
 #endif
 }
 

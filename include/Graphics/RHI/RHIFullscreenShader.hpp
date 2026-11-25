@@ -158,6 +158,21 @@ private:
 
     GX2RBuffer m_quadBuffer{};
     bool m_quadCreated{false};
+#else
+    static OutputTargetBinding s_frameTarget;
+    OutputTargetBinding m_outputTarget{};
+    uint32_t m_program{0u};
+    uint32_t m_vao{0u};
+    uint32_t m_scalerFbo{0u};
+    uint32_t m_scalerTex{0u};
+    uint32_t m_offscreenWidth{0u};
+    uint32_t m_offscreenHeight{0u};
+    uint32_t m_activeViewportW{1280u};
+    uint32_t m_activeViewportH{720u};
+    int32_t m_savedViewport[4]{0, 0, 1280, 720};
+    bool m_hasSavedViewport{false};
+    bool m_offscreenReady{false};
+    bool m_renderingOffscreen{false};
 #endif
 
     bool m_shaderLoaded{false};

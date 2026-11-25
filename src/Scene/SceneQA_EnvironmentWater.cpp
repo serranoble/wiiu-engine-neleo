@@ -228,22 +228,22 @@ void SceneQA_EnvironmentWater::OnQARender3D(const Matrix4x4& viewMatrix, const M
     const Matrix4x4 reflVP = projMatrix * reflView;
 
     bool planarReflReady = false;
-#if defined(__WIIU__) || defined(__wiiu__)
     if (m_reflectionRT.IsReady() &&
         m_reflectionRT.BeginPass(0.46f, 0.68f, 0.88f, 1.0f, 1.0f)) {
         renderer.BeginFrame(reflPos, reflView, projMatrix);
         RenderSpheresAndSkybox(activeCube, reflPos);
+#if defined(__WIIU__) || defined(__wiiu__)
         m_reflectionRT.EndPass(
             static_cast<GX2ContextState*>(Window::GetActiveNativeContextState()),
             static_cast<GX2ColorBuffer*>(Window::GetActiveNativeColorBuffer()),
             static_cast<GX2DepthBuffer*>(Window::GetActiveNativeDepthBuffer()),
             1280u, 720u);
+#else
+        m_reflectionRT.EndPass(nullptr, nullptr, nullptr, 1280u, 720u);
+#endif
         renderer.BeginFrame(cam, viewMatrix, projMatrix);
         planarReflReady = true;
     }
-#else
-    (void)viewMatrix;
-#endif
 
     // =========================================================================
     // PASE 2: ESCENA PRINCIPAL (Lago físico con Reflexión Planar + 5 Esferas + Skybox)
@@ -253,9 +253,7 @@ void SceneQA_EnvironmentWater::OnQARender3D(const Matrix4x4& viewMatrix, const M
         renderer.SetTextureWrapMode(TextureWrapMode::Clamp);
 
         MaterialPropertyBlock waterMat{};
-#if defined(__WIIU__) || defined(__wiiu__)
         waterMat.diffuseTexture = planarReflReady ? static_cast<void*>(m_reflectionRT.GetColorTexture()) : nullptr;
-#endif
         waterMat.envCubeMap = activeCube;
         waterMat.ubo.materialParams[0] = planarReflReady ? 1.0f : 0.0f; // Habilita Reflexión Planar RTT
         waterMat.ubo.pbrParams[3] = 1.0f; // waveAmplitude

@@ -177,14 +177,10 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
     const float fogDensity = (m_fogMode == 3u) ? 0.042f : 0.048f;
 
     bool hdrPassActive = false;
-#if defined(__WIIU__) || defined(__wiiu__)
     if (m_postFX.IsReady() && m_postFX.BeginHDRScenePass(0.025f, 0.040f, 0.070f, 1.0f)) {
         renderer.BeginFrame(cam, viewMatrix, projMatrix);
         hdrPassActive = true;
     }
-#else
-    (void)viewMatrix; (void)projMatrix;
-#endif
 
     // 1. PASE OPACO: Suelo + Columnas arquitectónicas (Modo 7 HDR lineal + Niebla)
     {
@@ -295,16 +291,18 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
     }
 
     // 5. RESOLVE HDR -> BLOOM MULTIPASE (BrightPass + BlurH + BlurV) -> COMPOSITE TV (1280x720)
-#if defined(__WIIU__) || defined(__wiiu__)
     if (hdrPassActive) {
+#if defined(__WIIU__) || defined(__wiiu__)
         m_postFX.EndHDRScenePassAndCompose(
             m_settings,
             static_cast<GX2ContextState*>(Window::GetActiveNativeContextState()),
             static_cast<GX2ColorBuffer*>(Window::GetActiveNativeColorBuffer()),
             static_cast<GX2DepthBuffer*>(Window::GetActiveNativeDepthBuffer()),
             1280u, 720u);
-    }
+#else
+        m_postFX.EndHDRScenePassAndCompose(m_settings, nullptr, nullptr, nullptr, 1280u, 720u);
 #endif
+    }
 }
 
 void SceneQA_PostProcessAlpha::OnQARenderHUD() {

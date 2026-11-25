@@ -36,11 +36,11 @@ struct ResourceMetrics {
  * Se activa y desactiva en cualquier momento con el botón "-" (Minus / Select):
  * - GamePad: VPAD_BUTTON_MINUS
  * - Pro Controller: WPAD_PRO_BUTTON_MINUS / WPAD_BUTTON_MINUS
- * - Teclado PC / Host: SDLK_MINUS, SDLK_KP_MINUS o SDLK_TAB
- * - Mandos USB / SDL: SDL_CONTROLLER_BUTTON_BACK
+ * - Teclado PC / Host: Tab o Menos (-)
+ * - Mando nativo / XInput: Botón Back / View
  * 
  * Características:
- * - Capa superpuesta global (Overlay OSD) renderizada en silicio Latte (GX2) o SDL2.
+ * - Capa superpuesta global (Overlay OSD) renderizada en silicio Latte (GX2) u OpenGL 3.3 Core.
  * - Mide con precisión sub-microsegundo el tiempo de CPU y GPU.
  * - Reporta porcentajes de MEM1 (eDRAM VRAM), MEM2 (Heap Cafe OS), Arenas y Audio.
  * - Cero alocaciones dinámicas en caliente (0 bytes malloc/new a 60 FPS).
