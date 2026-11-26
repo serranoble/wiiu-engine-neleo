@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Estructura de almacenamiento en heap para matrices de pose esquelética.
@@ -136,4 +136,4 @@ private:
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

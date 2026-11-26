@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 void ShadowSystem::ComputeCascadeSplits(float nearPlane, float farPlane, uint32_t count,
                                         float lambda, float* outSplits) noexcept {
@@ -125,4 +125,4 @@ float ShadowSystem::ComputeSoftShadowPenumbra(float occluderDist, float lightRad
     return std::clamp(minFactor + penumbra * (1.0f - minFactor), minFactor, 1.0f);
 }
 
-} // namespace WiiU
+} // namespace Neleo

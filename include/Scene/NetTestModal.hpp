@@ -6,7 +6,7 @@
 #include "Net/NetReplication.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 145 - Cap. 20 Jason Gregory] Modal Interactivo de Prueba de Red (UDP + TCP)
@@ -73,4 +73,4 @@ private:
     float m_feedbackTimer{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

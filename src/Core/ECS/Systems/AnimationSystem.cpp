@@ -4,7 +4,7 @@
 #include "Core/ECS/Components/SkeletalMeshComponent.hpp"
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 void AnimationSystem::Update(ECSWorld& world, float dt) {
     if (dt < 0.0f) return;
@@ -81,4 +81,4 @@ void AnimationSystem::Update(ECSWorld& world, float dt) {
     IKSystem::Update(world, dt);
 }
 
-} // namespace WiiU
+} // namespace Neleo

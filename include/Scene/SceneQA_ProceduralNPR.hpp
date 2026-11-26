@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G7: Validación de Terreno Heightmap con Splatting (arena/pasto/roca/nieve),
@@ -63,4 +63,4 @@ private:
     float m_sunTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

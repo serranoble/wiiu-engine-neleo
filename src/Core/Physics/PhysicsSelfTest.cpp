@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace WiiU::Physics {
+namespace Neleo::Physics {
 
 void PhysicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     // 1. SpatialHashGrid: inserción de esferas, consulta sin duplicados y limpieza O(1)
@@ -55,4 +55,4 @@ void PhysicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     }
 }
 
-} // namespace WiiU::Physics
+} // namespace Neleo::Physics

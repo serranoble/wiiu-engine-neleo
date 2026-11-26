@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 // Estructura de retrocompatibilidad
 struct StickState {
@@ -139,6 +139,20 @@ public:
     [[nodiscard]] bool IsButtonHeld(uint32_t buttonMask) const noexcept { return (m_buttonsHold & buttonMask) != 0; }
     [[nodiscard]] bool IsButtonTriggered(uint32_t buttonMask) const noexcept { return (m_buttonsTrigger & buttonMask) != 0; }
 
+    // Limpia flancos de disparo (triggers/releases/touch.justPressed) sin perder el estado mantenido (buttonsHold)
+    void ClearFrameTriggers() noexcept {
+        for (size_t p = 0u; p < MAX_PLAYERS; ++p) {
+            m_gamepads[p].buttonsTrigger = 0u;
+            m_gamepads[p].buttonsRelease = 0u;
+            m_gamepads[p].touch.justPressed = false;
+        }
+        m_buttonsTrigger = 0u;
+        m_touchState.justPressed = false;
+        m_actionTriggeredThisFrame = false;
+        m_backRequested = false;
+        m_pauseRequested = false;
+    }
+
 private:
     InputManager() = default;
     ~InputManager();
@@ -177,4 +191,4 @@ private:
     float m_touchDebounceTimer{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -4,7 +4,7 @@
 #include <array>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Ruta de navegación resultante del algoritmo de búsqueda de caminos.
@@ -98,4 +98,4 @@ private:
     [[nodiscard]] static float HeuristicEuclidean(const Point3D& a, const Point3D& b) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

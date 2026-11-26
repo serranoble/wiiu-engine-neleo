@@ -7,7 +7,7 @@
 #include "Audio/AudioManager.hpp"
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr uint32_t kFilterPresetCount = 7u;
@@ -246,4 +246,4 @@ void SceneQA_PipelineTextures::OnQARenderHUD() {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

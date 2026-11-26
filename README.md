@@ -40,9 +40,9 @@ El motor está desacoplado en **8 librerías estáticas CMake** independientes (
 | **`engine_physics`** | `WiiU` (`CollisionSystem`, `KinematicCharacterSystem`, `RigidBodyPhysicsSystem`) | Barrido cinemático KCC, detección continua, cuerpos rígidos SO(3), impulsos secuenciales + fricción de Coulomb y restricciones XPBD. |
 | **`engine_audio`** | `WiiU` (`AudioManager`, `AudioEngine3D`, `AudioSpatialSystem`, `AudioDeviceWin32`) | Mixer 32 voces (`sndcore2` AX en Wii U / `waveOut` 48 kHz nativo en Windows), paneo azimutal, LPF oclusión, efecto Doppler físico, *sidechain ducking* y reverberación Schroeder. |
 | **`engine_input`** | `WiiU` (`InputManager`, `RumbleManager`, `SoftwareKeyboard`, `InputWin32`, `RumbleWin32`) | HAL unificado: VPAD/WPAD/Pro Controller en Wii U + XInput, teclado, ratón y táctil en Windows/ROG Ally; curvas radiales, contexto jerárquico, háptica ADSR y teclado táctil/nativo. |
-| **`engine_ai`** | `WiiU::AI` (`NavGraph`, `AStarPathfinder`, `SteeringBehaviors`, `AISteeringSystem`) | Navegación A* en memoria de pila, comportamientos de Craig Reynolds y máquina de estados cognitiva FSM / Behavior Trees. |
-| **`engine_graphics`** | `WiiU` / `WiiU::Graphics` (`RHI/`, `ForwardRenderer*`, `RenderTarget*`, `PostProcessHDR*`, `ShadowMapRenderer*`, `TextureLoader*`, `Render2D*`, `DebugDraw3D`, `UIToolkit`) | Renderizado dual nativo por tiempo de enlace (**AMD Latte GX2** + **OpenGL 3.3 Core**): PBR Cook-Torrance, Shadow Maps 2-Pass PCF 3×3/5×5, Skybox Atlas 2D 3×2 + Agua Planar RTT, HDR `RGBA16F` + Bloom Kawase, Instancing HW, Terreno 4 biomas, Toon NPR y Ray Tracing BVH. |
-| **`engine_net`** | `WiiU::Net` (`NetSocket`, `NetBitStream`, `NetSession`, `NetReplication`) | Sockets no bloqueantes `nsysnet` (Wii U) / `ws2_32` (Windows), serialización endian-safe, framing TCP + datagramas UDP `WUN1`, replicación de snapshots 50B con LERP/SLERP y telemetría RTT/SRTT/Jitter. |
+| **`engine_ai`** | `Neleo::AI` (`NavGraph`, `AStarPathfinder`, `SteeringBehaviors`, `AISteeringSystem`) | Navegación A* en memoria de pila, comportamientos de Craig Reynolds y máquina de estados cognitiva FSM / Behavior Trees. |
+| **`engine_graphics`** | `WiiU` / `Neleo::Graphics` (`RHI/`, `ForwardRenderer*`, `RenderTarget*`, `PostProcessHDR*`, `ShadowMapRenderer*`, `TextureLoader*`, `Render2D*`, `DebugDraw3D`, `UIToolkit`) | Renderizado dual nativo por tiempo de enlace (**AMD Latte GX2** + **OpenGL 3.3 Core**): PBR Cook-Torrance, Shadow Maps 2-Pass PCF 3×3/5×5, Skybox Atlas 2D 3×2 + Agua Planar RTT, HDR `RGBA16F` + Bloom Kawase, Instancing HW, Terreno 4 biomas, Toon NPR y Ray Tracing BVH. |
+| **`engine_net`** | `Neleo::Net` (`NetSocket`, `NetBitStream`, `NetSession`, `NetReplication`) | Sockets no bloqueantes `nsysnet` (Wii U) / `ws2_32` (Windows), serialización endian-safe, framing TCP + datagramas UDP `WUN1`, replicación de snapshots 50B con LERP/SLERP y telemetría RTT/SRTT/Jitter. |
 | **`engine_framework`** | `WiiU` (`Engine`, `SceneManager`, `GameScene3D`, `HUDOverlay`, `ResourceMonitor`, `EngineSelfTestSuite`) | Orquestación de arranque con escena inyectable `Engine::Init(std::unique_ptr<IScene>)`, navegación desacoplada por fábricas, suite de **44/44 pruebas automatizadas** y sincronización de VSync/ProcUI. |
 
 ### Suites de Validación Gráfica (G1–G8) — Benchmarks Reales en Wii U
@@ -354,12 +354,12 @@ La forma más rápida de construir un juego 3D multiplataforma (idéntico códig
    #include "WiiUEngine.hpp"
    #include <vector>
 
-   class SceneMiJuego : public WiiU::GameScene3D {
+   class SceneMiJuego : public Neleo::GameScene3D {
    public:
        void LoadAsync() override {
            // Lectura segura en Core 2 (Wii U) o hilo trabajador (Windows)
-           WiiU::AssetManager::LoadBinaryFile("models/dutch_house.wmesh", m_stagedMesh);
-           WiiU::AssetManager::LoadBinaryFile("models/dutch_house.wtex", m_stagedTex);
+           Neleo::AssetManager::LoadBinaryFile("models/dutch_house.wmesh", m_stagedMesh);
+           Neleo::AssetManager::LoadBinaryFile("models/dutch_house.wtex", m_stagedTex);
        }
 
        void OnGameInit() override {
@@ -374,10 +374,10 @@ La forma más rápida de construir un juego 3D multiplataforma (idéntico códig
            m_clock.Tick(dt);
        }
 
-       void OnGameRender3D(WiiU::ForwardRendererGX2& renderer) override {
+       void OnGameRender3D(Neleo::ForwardRendererGX2& renderer) override {
            renderer.RenderStaticMesh(
                m_mesh,
-               WiiU::Matrix4x4::Identity(),
+               Neleo::Matrix4x4::Identity(),
                GetSceneTexture(m_albedo)
            );
        }
@@ -385,9 +385,9 @@ La forma más rápida de construir un juego 3D multiplataforma (idéntico códig
        [[nodiscard]] std::string GetSceneName() const override { return "Mi Juego 3D"; }
 
    private:
-       WiiU::StaticMesh m_mesh;
-       WiiU::ResourceHandle<GX2Texture> m_albedo; // Liberación RAII automática en OnExit()
-       WiiU::GameClock m_clock;
+       Neleo::StaticMesh m_mesh;
+       Neleo::ResourceHandle<GX2Texture> m_albedo; // Liberación RAII automática en OnExit()
+       Neleo::GameClock m_clock;
        std::vector<uint8_t> m_stagedMesh;
        std::vector<uint8_t> m_stagedTex;
    };
@@ -402,7 +402,7 @@ La forma más rápida de construir un juego 3D multiplataforma (idéntico códig
    int main(int argc, char* argv[]) {
        (void)argc; (void)argv;
        {
-           WiiU::Engine engine; // Ámbito RAII para apagar GX2/OpenGL/Audio antes de salir
+           Neleo::Engine engine; // Ámbito RAII para apagar GX2/OpenGL/Audio antes de salir
            if (engine.Init(std::make_unique<SceneMiJuego>())) {
                engine.Run();
            }

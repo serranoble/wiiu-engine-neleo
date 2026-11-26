@@ -6,7 +6,7 @@
 #include <array>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Modal selector unificado del Laboratorio Gráfico QA (Suites G1 a G8).
@@ -46,4 +46,4 @@ private:
     Diagnostics::EngineSelfTestReport m_selfTestReport{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

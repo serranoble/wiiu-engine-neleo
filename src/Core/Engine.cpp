@@ -38,7 +38,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 uint32_t s_engineConfigObserverId = 0;
@@ -391,4 +391,4 @@ void Engine::Shutdown() {
 #endif
 }
 
-} // namespace WiiU
+} // namespace Neleo

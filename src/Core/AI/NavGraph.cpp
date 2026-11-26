@@ -1,7 +1,7 @@
 #include "Core/AI/NavGraph.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 NavGraph::NavGraph() noexcept {
     Clear();
@@ -94,4 +94,4 @@ uint32_t NavGraph::FindNearestNode(const Point3D& pos) const noexcept {
     return bestId;
 }
 
-} // namespace WiiU
+} // namespace Neleo

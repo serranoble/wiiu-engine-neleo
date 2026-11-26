@@ -3,7 +3,7 @@
 #include <array>
 #include <cstdint>
 
-namespace WiiU::Platform {
+namespace Neleo::Platform {
 
 /**
  * @brief Estado interno compartido (Zero-Alloc, sin headers de SO) entre el bucle de mensajes Win32
@@ -11,9 +11,12 @@ namespace WiiU::Platform {
  */
 struct Win32InputBridge {
     static constexpr size_t NUM_VIRTUAL_KEYS = 256u;
+    static constexpr size_t MAX_TYPED_CHARS = 16u;
 
     std::array<bool, NUM_VIRTUAL_KEYS> keysDown{};
     std::array<bool, NUM_VIRTUAL_KEYS> keysPressed{};
+    std::array<char, MAX_TYPED_CHARS> typedChars{};
+    uint8_t typedCharCount{0u};
 
     bool mouseLeftDown{false};
     bool mouseLeftPressed{false};
@@ -22,6 +25,7 @@ struct Win32InputBridge {
 
     bool quitRequested{false};
     bool toggleFullscreenRequested{false};
+    bool textInputCapture{false}; // Suprime mapeo QWERTY->gamepad mientras un teclado virtual modal captura WM_CHAR
 
     // Rectángulo del viewport 16:9 activo dentro de la ventana cliente (píxeles reales)
     int viewportX{0};
@@ -29,8 +33,19 @@ struct Win32InputBridge {
     int viewportW{1280};
     int viewportH{720};
 
+    void PushTypedChar(char ch) noexcept {
+        if (typedCharCount < MAX_TYPED_CHARS) {
+            typedChars[typedCharCount++] = ch;
+        }
+    }
+
+    void ClearTypedChars() noexcept {
+        typedCharCount = 0u;
+    }
+
     void ConsumeFrameEdges() noexcept {
         keysPressed.fill(false);
+        typedCharCount = 0u;
         mouseLeftPressed = false;
         toggleFullscreenRequested = false;
     }
@@ -38,4 +53,4 @@ struct Win32InputBridge {
 
 [[nodiscard]] Win32InputBridge& GetWin32InputBridge() noexcept;
 
-} // namespace WiiU::Platform
+} // namespace Neleo::Platform

@@ -2,7 +2,7 @@
 
 #include "Core/Diagnostics/SelfTestTypes.hpp"
 
-namespace WiiU::Diagnostics {
+namespace Neleo::Diagnostics {
 
 /**
  * @brief Orquestador unificado de validaciones del motor (engine_framework).
@@ -19,4 +19,4 @@ public:
     [[nodiscard]] static EngineSelfTestReport RunAll();
 };
 
-} // namespace WiiU::Diagnostics
+} // namespace Neleo::Diagnostics

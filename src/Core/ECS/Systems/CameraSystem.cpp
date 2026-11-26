@@ -1,7 +1,7 @@
 #include "Core/ECS/Systems/CameraSystem.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 void CameraSystem::Update(ECSWorld& world) {
     constexpr float DEG_TO_RAD = 3.14159265358979323846f / 180.0f;
@@ -36,4 +36,4 @@ void CameraSystem::Update(ECSWorld& world) {
     );
 }
 
-} // namespace WiiU
+} // namespace Neleo

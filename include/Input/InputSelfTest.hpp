@@ -2,7 +2,7 @@
 
 #include "Core/Diagnostics/SelfTestTypes.hpp"
 
-namespace WiiU::Input {
+namespace Neleo::Input {
 
 /**
  * @brief Batería de pruebas deterministas de engine_input (Zona Muerta Radial e InputContextStack).
@@ -12,4 +12,4 @@ public:
     static void RunAll(Diagnostics::EngineSelfTestReport& outReport);
 };
 
-} // namespace WiiU::Input
+} // namespace Neleo::Input

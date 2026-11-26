@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-30 / OPT-184 / OPT-308 / OPT-399] Estado de una solicitud de lectura VFS asincrona.
@@ -138,4 +138,4 @@ private:
     std::atomic<bool> m_initialized{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

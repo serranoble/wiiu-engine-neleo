@@ -2,7 +2,7 @@
 #include <chrono>
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 JobSystem& JobSystem::Instance() noexcept {
     static JobSystem s_instance;
@@ -317,4 +317,4 @@ bool JobSystem::VerifyJobSystemIntegrity() {
     return true;
 }
 
-} // namespace WiiU
+} // namespace Neleo

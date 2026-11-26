@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU::Diagnostics {
+namespace Neleo::Diagnostics {
 
 /**
  * @brief Resultado individual de una prueba automatizada de invariante del motor (POD Zero-Alloc).
@@ -67,4 +67,4 @@ struct SelfTestReport {
 
 using EngineSelfTestReport = SelfTestReport<64u>;
 
-} // namespace WiiU::Diagnostics
+} // namespace Neleo::Diagnostics

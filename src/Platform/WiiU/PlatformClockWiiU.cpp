@@ -6,7 +6,7 @@
 #include <coreinit/time.h>
 #endif
 
-namespace WiiU::PlatformClock {
+namespace Neleo::PlatformClock {
 
 uint64_t GetPerformanceFrequency() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
@@ -37,4 +37,4 @@ void SleepMs(uint32_t milliseconds) noexcept {
 #endif
 }
 
-} // namespace WiiU::PlatformClock
+} // namespace Neleo::PlatformClock

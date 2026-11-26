@@ -4,7 +4,7 @@
 #include "Core/ECS/Components/TransformComponent.hpp"
 #include "Core/ECS/Components/AudioEmitterComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-246] Sistema de Audio Espacial 3D orientado a datos (AudioSpatialSystem).
@@ -19,4 +19,4 @@ public:
     static void Update(ECSWorld& world, float dt);
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -8,7 +8,7 @@
 #include <cmath>
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr uint32_t kShadingModeCount = 4u;
@@ -249,4 +249,4 @@ void SceneQA_LightingPBR::OnQARenderHUD() {
                               30, 184, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

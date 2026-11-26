@@ -2,7 +2,7 @@
 #include "Graphics/Render2D.hpp"
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 Starfield3D::Starfield3D(int numStars, uint64_t seed)
     : m_initialSeed(seed), m_prng(seed) {
@@ -72,4 +72,4 @@ void Starfield3D::Render(int screenWidth, int screenHeight) {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

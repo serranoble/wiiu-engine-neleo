@@ -1,7 +1,7 @@
 #include "Core/AI/AStarPathfinder.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 float AStarPathfinder::HeuristicEuclidean(const Point3D& a, const Point3D& b) noexcept {
     const float dx = a.x - b.x;
@@ -161,4 +161,4 @@ bool AStarPathfinder::FindPath(const NavGraph& graph,
     return FindPath(graph, startId, goalId, outPath);
 }
 
-} // namespace WiiU
+} // namespace Neleo

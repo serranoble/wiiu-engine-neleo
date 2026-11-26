@@ -6,7 +6,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 void AISteeringSystem::Update(ECSWorld& world, 
                               const NavGraph& navGraph, 
@@ -197,4 +197,4 @@ void AISteeringSystem::Update(ECSWorld& world,
     });
 }
 
-} // namespace WiiU
+} // namespace Neleo

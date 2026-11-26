@@ -9,7 +9,7 @@
 #include <cmath>
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr uint32_t kInstancePresets[3] = {256u, 512u, 1000u};
@@ -308,4 +308,4 @@ void SceneQA_StressCulling::OnQARenderHUD() {
                               30, 184, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

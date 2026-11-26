@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -323,4 +323,4 @@ void ShadowMapRendererGX2::BindShadowMapRaw(uint32_t texSlot, uint32_t samplerSl
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

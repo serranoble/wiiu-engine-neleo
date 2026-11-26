@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <mutex>
 
-namespace WiiU {
+namespace Neleo {
 
 std::atomic<uint32_t> AssetManager::s_asyncBytesLoaded{0};
 std::atomic<uint32_t> AssetManager::s_asyncTotalBytes{0};
@@ -238,4 +238,4 @@ bool AssetManager::LoadBinaryFile(const std::string& filepath, std::vector<uint8
     return false;
 }
 
-} // namespace WiiU
+} // namespace Neleo

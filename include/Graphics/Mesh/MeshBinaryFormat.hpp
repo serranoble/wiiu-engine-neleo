@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-293] Formato Binario Universal de Mallas 3D para Nintendo Wii U (.wmesh).
@@ -117,4 +117,4 @@ struct MeshSubmesh {
 
 static_assert(sizeof(MeshSubmesh) == 32, "MeshSubmesh debe tener exactamente 32 bytes");
 
-} // namespace WiiU
+} // namespace Neleo

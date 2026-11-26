@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 20.4] Instantánea compacta de transformación para replicación de red.
@@ -54,4 +54,4 @@ private:
     size_t m_count{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

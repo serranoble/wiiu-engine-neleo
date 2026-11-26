@@ -6,7 +6,7 @@
 
 struct GX2Texture;
 
-namespace WiiU {
+namespace Neleo {
 
 enum class BlendMode : uint8_t {
     Opaque = 0,
@@ -47,4 +47,4 @@ struct MaterialComponent {
           depthTest(dTest), depthWrite(dWrite), isVisible(true) {}
 };
 
-} // namespace WiiU
+} // namespace Neleo

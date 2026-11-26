@@ -1,14 +1,13 @@
 #include "Scene/SceneModelHouse.hpp"
 #include "Core/AssetManager.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
-#include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
 #include "Input/InputManager.hpp"
 #include "Audio/AudioManager.hpp"
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 struct HouseLightPreset {
@@ -67,9 +66,6 @@ void SceneModelHouse::OnQAEnter() {
     m_savedLightBlock = MaterialRegistry::Instance().GetActiveLightBlock();
     m_lightBlockSaved = true;
 
-    (void)Graphics::ProceduralMeshBuilder::CreatePlane(
-        m_floorMesh, 40.0f, 40.0f, 8.0f, 8.0f, 4u, 4u, 0.18f, 0.24f, 0.16f);
-
     m_houseMeshLoaded = !m_stagedHouseMesh.empty()
         ? m_houseMesh.LoadFromMemory(m_stagedHouseMesh.data(), m_stagedHouseMesh.size())
         : m_houseMesh.LoadFromFile("models/dutch_house.wmesh");
@@ -103,7 +99,7 @@ void SceneModelHouse::OnQAExit() {
     FreeStagedBuffers();
 
     const bool hasResources = m_houseMeshLoaded || m_propsMeshLoaded || m_alphaMeshLoaded ||
-                              m_houseTexLoaded || m_propsTexLoaded || m_alphaTexLoaded || m_floorMesh.IsLoaded();
+                              m_houseTexLoaded || m_propsTexLoaded || m_alphaTexLoaded;
     if (hasResources) {
         WaitForGpuIdleSafe();
     }
@@ -124,7 +120,6 @@ void SceneModelHouse::OnQAExit() {
     if (m_alphaMeshLoaded) { m_alphaMesh.Destroy(); m_alphaMeshLoaded = false; }
     if (m_propsMeshLoaded) { m_propsMesh.Destroy(); m_propsMeshLoaded = false; }
     if (m_houseMeshLoaded) { m_houseMesh.Destroy(); m_houseMeshLoaded = false; }
-    m_floorMesh.Destroy();
 
     if (m_lightBlockSaved) {
         MaterialRegistry::Instance().GetActiveLightBlock() = m_savedLightBlock;
@@ -188,21 +183,9 @@ void SceneModelHouse::OnQARender3D(const Matrix4x4& viewMatrix, const Matrix4x4&
     lights.ClearPointLights();
     lights.ClearSpotLight();
 
-    const float floorY = m_houseMeshLoaded ? (m_houseMesh.GetHeader().aabbMin[1] - 0.02f) : -0.02f;
-
-    // 1. Suelo de referencia
-    {
-        MaterialPropertyBlock floorMat{};
-        floorMat.ubo.albedoTint[0] = 0.62f; floorMat.ubo.albedoTint[1] = 0.72f; floorMat.ubo.albedoTint[2] = 0.54f;
-        floorMat.ubo.pbrParams[0] = 0.85f;
-        floorMat.ubo.pbrParams[1] = 0.02f;
-        floorMat.ubo.materialParams[3] = 0.36f;
-        renderer.RenderStaticMeshPBR(m_floorMesh, Matrix4x4::Translation(0.0f, floorY, 0.0f), floorMat, 0u);
-    }
-
     const Matrix4x4 model = Matrix4x4::RotationY(m_turntableAngle) * Matrix4x4::Translation(0.63f, 0.0f, -0.16f);
 
-    // 2. Estructura principal de la casa cocinada (.wmesh + .wtex)
+    // 1. Estructura principal de la casa cocinada (.wmesh + .wtex)
     if (m_houseMeshLoaded) {
         MaterialPropertyBlock houseMat{};
         houseMat.diffuseTexture = (m_useTextures && m_houseTexLoaded) ? &m_houseTex : nullptr;
@@ -214,7 +197,7 @@ void SceneModelHouse::OnQARender3D(const Matrix4x4& viewMatrix, const Matrix4x4&
         renderer.RenderStaticMeshPBR(m_houseMesh, model, houseMat, 0u);
     }
 
-    // 3. Props y vegetación Alpha-Cutout en el mismo espacio PBR sRGB (modo 0u)
+    // 2. Props y vegetación Alpha-Cutout en el mismo espacio PBR sRGB (modo 0u)
     if (m_showProps) {
         if (m_propsMeshLoaded) {
             MaterialPropertyBlock propsMat{};
@@ -281,4 +264,4 @@ void SceneModelHouse::OnQARenderHUD() {
     Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

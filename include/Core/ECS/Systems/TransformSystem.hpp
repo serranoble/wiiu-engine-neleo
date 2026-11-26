@@ -4,7 +4,7 @@
 #include "Core/ECS/Components/TransformComponent.hpp"
 #include "Core/ECS/Components/HierarchyComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-245 / OPT-254] Sistema de Transformación y Cinemática Espacial 3D (TransformSystem).
@@ -18,4 +18,4 @@ public:
     static void Update(ECSWorld& world);
 };
 
-} // namespace WiiU
+} // namespace Neleo

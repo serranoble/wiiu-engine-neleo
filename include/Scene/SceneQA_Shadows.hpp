@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G3: Validación de Sombras en Tiempo Real (Shadow Mapping 2-Pass en AMD Latte GX2,
@@ -64,4 +64,4 @@ private:
     float m_sunTime{0.45f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

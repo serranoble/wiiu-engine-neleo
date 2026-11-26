@@ -15,7 +15,7 @@
 #include <gx2r/buffer.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-126 / OPT-311 / OPT-327] Renderizador Hardware de Shadow Map PCF 2x2 para AMD Latte GX2.
@@ -143,4 +143,4 @@ private:
 #endif
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -5,7 +5,7 @@
 #include <gx2/registers.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 RHIPipelineCache& RHIPipelineCache::Instance() noexcept {
     static RHIPipelineCache s_instance;
@@ -108,4 +108,4 @@ void RHIPipelineCache::BindState(const RHIPipelineState& state) {
     m_currentHash = newHash;
 }
 
-} // namespace WiiU
+} // namespace Neleo

@@ -2,7 +2,7 @@
 
 #include "Core/ECS/ECSWorld.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-336] Sistema ECS de Muestreo de Animación y Cálculo de Skinning Matrices.
@@ -16,4 +16,4 @@ public:
     static void Update(ECSWorld& world, float dt);
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -12,7 +12,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU::UI {
+namespace Neleo::UI {
 
 /**
  * @brief Dimensiones del Lienzo Virtual Canónico (Virtual Canvas)
@@ -299,4 +299,4 @@ private:
     static inline UITheme s_activeTheme{};
 };
 
-} // namespace WiiU::UI
+} // namespace Neleo::UI

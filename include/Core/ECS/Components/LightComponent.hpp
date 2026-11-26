@@ -3,7 +3,7 @@
 #include "Graphics/Color.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 enum class LightType : uint8_t {
     Point = 0,
@@ -32,4 +32,4 @@ struct LightComponent {
         : color(col), intensity(inten), range(rng), type(lType), castShadows(shadows), isEnabled(true) {}
 };
 
-} // namespace WiiU
+} // namespace Neleo

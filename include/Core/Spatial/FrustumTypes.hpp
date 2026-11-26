@@ -3,7 +3,7 @@
 #include "Graphics/Math3D.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-256] Ecuación analítica de plano 3D (Ax + By + Cz + D = 0).
@@ -28,4 +28,4 @@ struct FrustumPlane {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

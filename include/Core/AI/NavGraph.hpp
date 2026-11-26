@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <limits>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Sub-sistema de Grafos de Navegación Espacial (NavGraph) para Consolas.
@@ -106,4 +106,4 @@ private:
     uint32_t m_nodeCount{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -2,7 +2,7 @@
 #include "Graphics/GL/GLFunctions.hpp"
 #include <algorithm>
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 bool RenderTargetGX2::Initialize(uint32_t width,
                                  uint32_t height,
@@ -185,4 +185,4 @@ void RenderTargetGX2::EndPass(void* restoreContext,
     }
 }
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

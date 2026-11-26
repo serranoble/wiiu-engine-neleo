@@ -6,7 +6,7 @@
 #include <functional>
 #include <type_traits>
 
-namespace WiiU {
+namespace Neleo {
 
 // =============================================================================
 // [OPT-266] Envoltorio de Coste Cero con Tipado Fuerte (StrongId / Phantom Type)
@@ -104,19 +104,19 @@ static_assert(std::is_trivially_copyable_v<Entity>, "Entity must be trivially co
 static_assert(sizeof(StrongEntityId) == sizeof(uint32_t), "StrongEntityId must be zero-cost 32-bit wrapper");
 static_assert(std::is_standard_layout_v<StrongEntityId>, "StrongEntityId must have standard layout");
 
-} // namespace WiiU
+} // namespace Neleo
 
 namespace std {
 template <>
-struct hash<WiiU::Entity> {
-    [[nodiscard]] size_t operator()(const WiiU::Entity& entity) const noexcept {
+struct hash<Neleo::Entity> {
+    [[nodiscard]] size_t operator()(const Neleo::Entity& entity) const noexcept {
         return static_cast<size_t>(entity.id);
     }
 };
 
 template <typename Tag, typename Underlying>
-struct hash<WiiU::StrongId<Tag, Underlying>> {
-    [[nodiscard]] size_t operator()(const WiiU::StrongId<Tag, Underlying>& id) const noexcept {
+struct hash<Neleo::StrongId<Tag, Underlying>> {
+    [[nodiscard]] size_t operator()(const Neleo::StrongId<Tag, Underlying>& id) const noexcept {
         return static_cast<size_t>(id.Get());
     }
 };

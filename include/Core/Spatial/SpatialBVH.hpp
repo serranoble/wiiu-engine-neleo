@@ -7,7 +7,7 @@
 #include <vector>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 11.1: "Spatial Partitioning - Axis-Aligned Bounding Box"]
@@ -247,4 +247,4 @@ private:
     size_t m_primCount{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

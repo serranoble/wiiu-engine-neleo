@@ -3,7 +3,7 @@
 #include "Graphics/Color.hpp"
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Subsistema Universal de Renderizado Inmediato de Depuración 3D (Debug Wireframe Renderer).
@@ -157,4 +157,4 @@ public:
     static void DrawRay(const Point3D& start, const Point3D& dirAndLength, float width, const ColorRGBA& color) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

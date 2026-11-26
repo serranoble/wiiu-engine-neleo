@@ -3,7 +3,7 @@
 #include "Graphics/Math3D.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Descriptor de cámara agnóstico a ECS para el cálculo de cascadas CSM.
@@ -75,4 +75,4 @@ public:
                                                          float minFactor = 0.15f) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

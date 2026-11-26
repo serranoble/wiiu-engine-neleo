@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-50 / OPT-136 / OPT-210] Maquina de Estados del Ciclo de Vida de la Aplicacion (ALSM).
@@ -94,4 +94,4 @@ private:
     uint32_t m_nextObserverId{1};
 };
 
-} // namespace WiiU
+} // namespace Neleo

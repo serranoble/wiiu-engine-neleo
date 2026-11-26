@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 Point3D CameraRelativeMovementSystem::ComputeWorldMoveDirection(float stickX, float stickY,
                                                                 const Point3D& camForward) noexcept {
@@ -56,4 +56,4 @@ void CameraRelativeMovementSystem::ApplyToCharacterYaw(KinematicCharacterCompone
     ApplyToCharacter(kcc, stickX, stickY, camForward, sprint, jumpTriggered);
 }
 
-} // namespace WiiU
+} // namespace Neleo

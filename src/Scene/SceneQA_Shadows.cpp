@@ -15,7 +15,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr uint32_t kShadowModeCount = 5u;
@@ -264,4 +264,4 @@ void SceneQA_Shadows::OnQARenderHUD() {
                               30, 184, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

@@ -2,7 +2,7 @@
 
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Sub-sistema Cinemático y Comportamientos de Dirección (Steering Behaviors).
@@ -80,4 +80,4 @@ public:
                                             float fovDeg) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

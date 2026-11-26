@@ -2,7 +2,7 @@
 #include "Core/AI/AIPerceptionComponent.hpp"
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 void BehaviorTreeSystem::Update(ECSWorld& world, float dt) noexcept {
     const float safeDt = std::clamp(dt, 0.0f, 0.1f);
@@ -158,4 +158,4 @@ BTStatus BehaviorTreeSystem::EvaluateNode(ECSWorld& world, Entity entity,
     return BTStatus::Failure;
 }
 
-} // namespace WiiU
+} // namespace Neleo

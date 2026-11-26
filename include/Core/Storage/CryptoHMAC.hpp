@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-398] Primitivas criptograficas FIPS 180-4 (SHA-256) y RFC 2104 (HMAC-SHA256).
@@ -48,4 +48,4 @@ public:
     [[nodiscard]] static bool ConstantTimeEqual(const Digest& a, const Digest& b) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

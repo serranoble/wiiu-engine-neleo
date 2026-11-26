@@ -20,7 +20,7 @@ struct GX2RBuffer {
 };
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-293] Gestor de Mallas Estáticas en Silicio para Nintendo Wii U.
@@ -110,4 +110,4 @@ private:
     GX2RBuffer m_ibo{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

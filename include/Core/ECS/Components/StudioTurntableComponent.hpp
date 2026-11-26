@@ -3,7 +3,7 @@
 #include "Graphics/Math3D.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-302] Componente Reutilizable de Plataforma Giratoria y Cámara de Estudio.
@@ -63,4 +63,4 @@ struct StudioTurntableComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

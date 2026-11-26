@@ -10,7 +10,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 enum class RHILoadAction : uint8_t {
     Load = 0,
@@ -117,4 +117,4 @@ public:
     ScopedRenderPass& operator=(ScopedRenderPass&&) = delete;
 };
 
-} // namespace WiiU
+} // namespace Neleo

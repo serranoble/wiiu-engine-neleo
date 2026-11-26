@@ -14,7 +14,7 @@
 #include <condition_variable>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 using JobFunction = void (*)(void* userData);
 
@@ -111,4 +111,4 @@ private:
 #endif
 };
 
-} // namespace WiiU
+} // namespace Neleo

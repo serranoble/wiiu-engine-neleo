@@ -4,7 +4,7 @@
 #include "Core/AI/NavGraph.hpp"
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Sistema ECS de Navegación, Comportamientos Cinemáticos y FSM de IA.
@@ -34,4 +34,4 @@ public:
                        float dt) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

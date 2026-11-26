@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 static constexpr size_t INSTANCED_MESH_GX2_GSH_SIZE = 2892;
 alignas(256) static constexpr uint8_t INSTANCED_MESH_GX2_GSH_DATA[2892] = {
@@ -189,4 +189,4 @@ alignas(256) static constexpr uint8_t INSTANCED_MESH_GX2_GSH_DATA[2892] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00
 };
 
-} // namespace WiiU
+} // namespace Neleo

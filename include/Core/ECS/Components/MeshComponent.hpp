@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-243] Componente de Malla y Geometría 3D orientado a datos.
@@ -30,4 +30,4 @@ struct MeshComponent {
           isVisible(true), castShadows(true) {}
 };
 
-} // namespace WiiU
+} // namespace Neleo

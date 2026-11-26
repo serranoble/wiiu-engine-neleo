@@ -3,7 +3,7 @@
 #include "Core/ECS/Entity.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-254] Componente de Jerarquía Espacial de Escena orientado a datos (Flat Scene Graph).
@@ -32,4 +32,4 @@ struct HierarchyComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

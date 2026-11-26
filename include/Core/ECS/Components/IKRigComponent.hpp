@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Configuración analítica de cadena Two-Bone IK (Cadera-Rodilla-Pie / Hombro-Codo-Mano).
@@ -127,4 +127,4 @@ struct IKRigComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

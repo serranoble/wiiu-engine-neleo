@@ -3,7 +3,7 @@
 #include "Graphics/Math3D.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 enum class CameraProjectionType : uint8_t {
     Perspective = 0,
@@ -69,4 +69,4 @@ struct CameraComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

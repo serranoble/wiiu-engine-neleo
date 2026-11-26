@@ -2,11 +2,11 @@
 
 #include "Input/InputManager.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 class HUDOverlay {
 public:
     void Render(const InputManager& input, float fps = 60.0f);
 };
 
-} // namespace WiiU
+} // namespace Neleo

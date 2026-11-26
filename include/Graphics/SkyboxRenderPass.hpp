@@ -3,7 +3,7 @@
 #include "Core/ECS/ECSWorld.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-351 / OPT-355 / OPT-367] Pase Modular de Skybox con Early-Z Reversed Draw Order.
@@ -17,4 +17,4 @@ public:
     static bool Render(ECSWorld& world, ForwardRendererGX2& renderer);
 };
 
-} // namespace WiiU
+} // namespace Neleo

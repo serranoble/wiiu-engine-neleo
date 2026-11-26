@@ -2,7 +2,7 @@
 
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-321] Componente ECS de Brazo Elástico y Barrido de Colisión de Cámara (Spring-Arm).
@@ -39,4 +39,4 @@ struct SpringArmComponent {
           collisionEnabled(true), isObstructed(false) {}
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G8 (Final): Ray Tracing en GPU con BVH Stackless Pre-Order (24 nodos / 12 esferas),
@@ -69,4 +69,4 @@ private:
     float m_rtTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

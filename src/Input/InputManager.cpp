@@ -17,12 +17,12 @@
 static uint32_t HomeButtonDeniedCallback(void*) {
     // Cuando Cafe OS deniega el Menú HOME (ej. ejecutando desde Homebrew Launcher),
     // presionar el botón HOME debe solicitar la salida limpia de la aplicación.
-    WiiU::InputManager::Instance().RequestExit();
+    Neleo::InputManager::Instance().RequestExit();
     return 0;
 }
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 void InputManager::Init() {
 #if defined(__WIIU__) || defined(__wiiu__)
@@ -479,4 +479,4 @@ void InputManager::PollDesktopHardware(bool& outRunning) {
 }
 #endif
 
-} // namespace WiiU
+} // namespace Neleo

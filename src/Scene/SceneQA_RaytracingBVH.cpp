@@ -12,7 +12,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr float kFovYRad   = 1.04719755f; // 60 grados
@@ -249,4 +249,4 @@ void SceneQA_RaytracingBVH::OnQARenderHUD() {
                               30, 184, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

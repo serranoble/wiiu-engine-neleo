@@ -6,7 +6,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 SceneLoading::SceneLoading() {
     m_statusText.Format("INICIALIZANDO MOTOR GRAFICO 3D WII U C++20...");
@@ -109,4 +109,4 @@ void SceneLoading::Render() {
     Render2D::End();
 }
 
-} // namespace WiiU
+} // namespace Neleo

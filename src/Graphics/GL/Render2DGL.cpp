@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -290,4 +290,4 @@ void Render2DGL::End() noexcept {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

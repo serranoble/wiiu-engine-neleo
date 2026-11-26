@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 uint64_t RenderQueue::BuildSortKey(RenderLayer layer,
                                    BlendMode blendMode,
@@ -132,4 +132,4 @@ void RenderQueue::Flush(ForwardRendererGX2& renderer) const {
     FlushRange(renderer, RenderLayer::DepthPrePass, RenderLayer::Overlay, false);
 }
 
-} // namespace WiiU
+} // namespace Neleo

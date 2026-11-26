@@ -5,7 +5,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 ApplicationLifecycle& ApplicationLifecycle::Instance() noexcept {
     static ApplicationLifecycle instance;
@@ -98,4 +98,4 @@ void ApplicationLifecycle::TransitionTo(AppLifecycleState nextState) noexcept {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

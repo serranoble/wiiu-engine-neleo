@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G5: Validación de Transparencia (Back-to-Front Alpha Blending), Alpha-Cutout (discard),
@@ -65,4 +65,4 @@ private:
     float m_animTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

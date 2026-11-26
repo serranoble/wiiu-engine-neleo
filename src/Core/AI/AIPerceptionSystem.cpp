@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 bool AIPerceptionSystem::EmitStimulus(const AIStimulusEvent& stimulus) noexcept {
     if (stimulus.type == StimulusType::None || m_stimulusCount >= MAX_FRAME_STIMULI) {
@@ -143,4 +143,4 @@ void AIPerceptionSystem::Update(ECSWorld& world, float dt) noexcept {
     ClearStimuli();
 }
 
-} // namespace WiiU
+} // namespace Neleo

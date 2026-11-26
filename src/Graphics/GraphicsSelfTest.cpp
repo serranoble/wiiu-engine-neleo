@@ -20,7 +20,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 namespace {
 
@@ -82,12 +82,13 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     outReport.Record("GFX", "GX2_CONTEXT_STATE", true, "HOST PC STUB OK");
 #endif
 
-    // T4: ForwardRendererGX2 inicializado (shaders + fallbacks)
+    // T4: ForwardRendererGX2 inicializado (shaders + PBR Uber + PBR Lite + fallbacks)
     {
         auto& renderer = ForwardRendererGX2::Instance();
-        const bool ok = renderer.Initialize() && renderer.IsInitialized();
+        const bool ok = renderer.Initialize() && renderer.IsInitialized() &&
+                        renderer.IsPBRShaderLoaded() && renderer.IsPBRLiteShaderLoaded();
         outReport.Record("GFX", "FORWARD_RENDERER", ok,
-                         ok ? "PIPELINES GX2 LISTOS" : "FALLO INIT FORWARDRENDERER");
+                         ok ? "PIPELINES GX2 + PBR LITE LISTOS" : "FALLO INIT FORWARDRENDERER");
     }
 
     // T5: Math3D (Perspective, LookAt, Quaternion, FromTRS sin NaN/Inf)
@@ -470,4 +471,4 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     }
 }
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

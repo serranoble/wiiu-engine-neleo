@@ -16,7 +16,7 @@
 #include <cmath>
 #include <memory>
 
-namespace WiiU::Diagnostics {
+namespace Neleo::Diagnostics {
 
 namespace {
 
@@ -102,4 +102,4 @@ EngineSelfTestReport EngineSelfTestSuite::RunAll() {
     return report;
 }
 
-} // namespace WiiU::Diagnostics
+} // namespace Neleo::Diagnostics

@@ -4,7 +4,7 @@
 #include <string_view>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 class Render2D {
 public:
@@ -40,4 +40,4 @@ public:
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

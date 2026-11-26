@@ -21,7 +21,7 @@ static inline void* WiiUAlignedAllocFallback(size_t align, size_t size) noexcept
 #define WIIU_FREEALIGNED(ptr) std::free(ptr)
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 // ============================================================================
 // LinearFrameArena [OPT-43 / OPT-113]
@@ -437,4 +437,4 @@ bool MemoryManager::VerifyMemoryIntegrity() {
     return true;
 }
 
-} // namespace WiiU
+} // namespace Neleo

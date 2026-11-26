@@ -4,7 +4,7 @@
 #include "Core/ECS/Entity.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Capas de filtrado de colisión mediante máscara de bits (Bitmask Collision Filtering).
@@ -111,4 +111,4 @@ struct alignas(32) ColliderComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

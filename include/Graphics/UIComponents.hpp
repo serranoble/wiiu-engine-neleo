@@ -5,7 +5,7 @@
 #include <string_view>
 #include <functional>
 
-namespace WiiU {
+namespace Neleo {
 
 struct UIIntRect {
     int x{0};
@@ -124,4 +124,4 @@ private:
     ColorRGBA m_textColor{255, 255, 255, 255};
 };
 
-} // namespace WiiU
+} // namespace Neleo

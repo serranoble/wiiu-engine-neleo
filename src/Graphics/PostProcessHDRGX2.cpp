@@ -19,7 +19,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 bool PostProcessHDRGX2::Initialize(uint32_t width, uint32_t height) {
     if (m_initialized && m_width == width && m_height == height) {
@@ -282,4 +282,4 @@ void PostProcessHDRGX2::EndHDRScenePassAndCompose(const PostProcessHDRSettings& 
 }
 #endif
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

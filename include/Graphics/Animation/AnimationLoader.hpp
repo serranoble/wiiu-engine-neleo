@@ -7,7 +7,7 @@
 #include <cstring>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-337] Cargador de Formatos Binarios de Esqueleto (.wskel) y Animación (.wanim).
@@ -155,4 +155,4 @@ public:
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

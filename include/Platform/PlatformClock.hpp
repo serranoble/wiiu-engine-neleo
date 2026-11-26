@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace WiiU::PlatformClock {
+namespace Neleo::PlatformClock {
 
 /**
  * @brief Retorna la frecuencia del contador de alto rendimiento de la plataforma (ticks por segundo).
@@ -19,4 +19,4 @@ namespace WiiU::PlatformClock {
  */
 void SleepMs(uint32_t milliseconds) noexcept;
 
-} // namespace WiiU::PlatformClock
+} // namespace Neleo::PlatformClock

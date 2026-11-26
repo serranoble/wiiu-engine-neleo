@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace Diagnostics {
 class CoreSelfTest;
@@ -144,4 +144,4 @@ private:
     size_t m_count{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

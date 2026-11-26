@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 SceneOptions::SceneOptions(std::function<void()> onBackCallback)
     : m_starfield(120),
@@ -487,4 +487,4 @@ void SceneOptions::Render() {
     Render2D::End();
 }
 
-} // namespace WiiU
+} // namespace Neleo

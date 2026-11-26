@@ -4,7 +4,7 @@
 #include "Graphics/Color.hpp"
 #include "Core/StackString.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 void HUDOverlay::Render(const InputManager& input, float fps) {
     ColorRGBA borderColor = (input.GetFlashTimer() > 0.0f || input.IsButtonHeld())
@@ -36,4 +36,4 @@ void HUDOverlay::Render(const InputManager& input, float fps) {
     Render2D::DrawPixelString("TOCA Y ARRASTRA EL CUADRADO BLANCO EN PANTALLA", 50, 114, 2, ColorRGBA{180, 180, 180, 255});
 }
 
-} // namespace WiiU
+} // namespace Neleo

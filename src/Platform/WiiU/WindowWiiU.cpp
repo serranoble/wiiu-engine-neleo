@@ -29,7 +29,7 @@
 #include <sysapp/launch.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -203,6 +203,14 @@ void Window::NotifyExitingProcUI() noexcept {
 
 void Window::PumpPlatformEvents() noexcept {
     // En Wii U los mensajes de ProcUI se bombean explícitamente en InputManager::PollPlatformEvents()
+}
+
+void Window::ClearActive(const ColorRGBA& color) noexcept {
+    (void)color;
+}
+
+void Window::PresentActive() noexcept {
+    // En Wii U el teclado nativo nn::swkbd gestiona su propio swapchain GX2
 }
 
 void Window::ToggleFullscreen() noexcept {
@@ -605,4 +613,4 @@ void Window::Shutdown() {
 #endif
 }
 
-} // namespace WiiU
+} // namespace Neleo

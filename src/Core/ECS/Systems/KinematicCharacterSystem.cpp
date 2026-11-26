@@ -2,7 +2,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 KinematicCharacterSystem::FootstepCallback g_footstepCallback = nullptr;
@@ -316,4 +316,4 @@ void KinematicCharacterSystem::Update(ECSWorld& world, float dt) {
     );
 }
 
-} // namespace WiiU
+} // namespace Neleo

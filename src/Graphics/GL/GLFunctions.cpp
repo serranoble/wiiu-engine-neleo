@@ -8,7 +8,7 @@
 #include <windows.h>
 #endif
 
-namespace WiiU::Graphics::GL {
+namespace Neleo::Graphics::GL {
 
 namespace {
 
@@ -149,4 +149,4 @@ bool LoadFunctions() noexcept {
     return ok;
 }
 
-} // namespace WiiU::Graphics::GL
+} // namespace Neleo::Graphics::GL

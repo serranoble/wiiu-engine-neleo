@@ -12,7 +12,7 @@
 #include <coreinit/thread.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 inline void SpinYield() noexcept {
@@ -343,4 +343,4 @@ uint32_t VirtualFileSystem::GetActiveRequestCount() const noexcept {
     return count;
 }
 
-} // namespace WiiU
+} // namespace Neleo

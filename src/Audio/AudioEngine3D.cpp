@@ -5,7 +5,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -751,4 +751,4 @@ AudioEngineTelemetry AudioEngine3D::GetTelemetry() const {
     return telem;
 }
 
-} // namespace WiiU
+} // namespace Neleo

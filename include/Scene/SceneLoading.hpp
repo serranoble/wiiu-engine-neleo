@@ -5,7 +5,7 @@
 #include "Graphics/Color.hpp"
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 class SceneLoading : public IScene {
 public:
@@ -34,4 +34,4 @@ private:
     float m_finishTimer{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

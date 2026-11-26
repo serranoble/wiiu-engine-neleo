@@ -11,7 +11,7 @@
 
 struct AXVoice;
 
-namespace WiiU {
+namespace Neleo {
 
 class AudioManager {
 public:
@@ -169,4 +169,4 @@ private:
     std::atomic<bool> m_isFinished{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -19,7 +19,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 void SceneManager::SetFPSLimitEnabled(bool enabled) {
     m_fpsLimitEnabled = enabled;
@@ -659,4 +659,4 @@ bool SceneManager::NavigateToOptions(bool fromPureGX2) {
     return false;
 }
 
-} // namespace WiiU
+} // namespace Neleo

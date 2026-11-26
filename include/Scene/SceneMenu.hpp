@@ -7,7 +7,7 @@
 #include <string>
 #include <functional>
 
-namespace WiiU {
+namespace Neleo {
 
 class SceneMenu : public IScene {
 public:
@@ -39,4 +39,4 @@ private:
     size_t m_focusedIndex{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

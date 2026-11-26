@@ -12,7 +12,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU::Graphics::TextureLoaderGX2 {
+namespace Neleo::Graphics::TextureLoaderGX2 {
 
 namespace {
 
@@ -1321,4 +1321,4 @@ void DestroyTexture(GX2Texture& tex) noexcept {
 #endif
 }
 
-} // namespace WiiU::Graphics::TextureLoaderGX2
+} // namespace Neleo::Graphics::TextureLoaderGX2

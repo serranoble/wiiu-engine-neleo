@@ -19,7 +19,7 @@
 #include <unistd.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -482,4 +482,4 @@ NetResult TcpSocket::Receive(uint8_t* outBuf, size_t bufCap, size_t& outReceived
     return NetResult::Ok;
 }
 
-} // namespace WiiU
+} // namespace Neleo

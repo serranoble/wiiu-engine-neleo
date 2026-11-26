@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 /**
  * @brief Sistema de Partículas 3D Zero-Alloc (pool estático de 128 partículas) para fuego aditivo y humo.
@@ -139,4 +139,4 @@ private:
     uint32_t m_activeCount{0u};
 };
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

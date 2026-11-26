@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <atomic>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Gestor centralizado y validador de recursos y assets para el motor de Wii U.
@@ -59,4 +59,4 @@ private:
     static std::atomic<uint32_t> s_asyncFilesLoaded;
 };
 
-} // namespace WiiU
+} // namespace Neleo

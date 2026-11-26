@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 inline constexpr uint32_t SKYBOX_GX2_GSH_SIZE = 1124;
 
@@ -80,4 +80,4 @@ inline constexpr uint8_t SKYBOX_GX2_GSH_DATA[] = {
     0x00, 0x00, 0x00, 0x00
 };
 
-} // namespace WiiU
+} // namespace Neleo

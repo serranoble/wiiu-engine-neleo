@@ -22,7 +22,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 ShadowMapRendererGX2& ShadowMapRendererGX2::Instance() noexcept {
     static ShadowMapRendererGX2 instance;
@@ -311,4 +311,4 @@ void ShadowMapRendererGX2::BindShadowMapRaw(uint32_t texSlot, uint32_t samplerSl
 }
 #endif
 
-} // namespace WiiU
+} // namespace Neleo

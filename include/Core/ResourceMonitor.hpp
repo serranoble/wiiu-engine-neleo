@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Métricas de telemetría de hardware y consumo de recursos de la máquina.
@@ -94,4 +94,4 @@ private:
     float m_pulseAnim{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -7,7 +7,7 @@
 #include <array>
 #include <mutex>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-213] Handle de índice generacional compacto de 32 bits (Generational Index Handle).
@@ -242,4 +242,4 @@ private:
     size_t m_activeCount{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

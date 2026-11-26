@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 using RHITexturePtr = void*;
 
@@ -176,4 +176,4 @@ private:
     LightBlockUBO m_lightBlock{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

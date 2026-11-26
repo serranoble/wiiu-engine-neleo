@@ -21,14 +21,14 @@
 #include <algorithm>
 
 #if !defined(__WIIU__) && !defined(__wiiu__)
-namespace WiiU::Platform {
+namespace Neleo::Platform {
 using HostAudioFillFn = void (*)(void* userData, uint8_t* outPcm, int numBytes);
 bool OpenWin32AudioDevice(int sampleRate, int channels, HostAudioFillFn fillFn, void* userData) noexcept;
 void CloseWin32AudioDevice() noexcept;
-} // namespace WiiU::Platform
+} // namespace Neleo::Platform
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -1215,4 +1215,4 @@ void AudioManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
     AudioEngine3D::Instance().MixAudio(out, numFrames, masterVol);
 }
 
-} // namespace WiiU
+} // namespace Neleo

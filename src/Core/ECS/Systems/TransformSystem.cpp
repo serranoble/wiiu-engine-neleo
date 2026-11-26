@@ -1,6 +1,6 @@
 #include "Core/ECS/Systems/TransformSystem.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 void TransformSystem::Update(ECSWorld& world) {
     // Pase 1: Recalcular matrices TRS locales en entidades que han cambiado (dirty-checking)
@@ -52,4 +52,4 @@ void TransformSystem::Update(ECSWorld& world) {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

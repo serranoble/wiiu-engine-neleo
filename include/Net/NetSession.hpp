@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Callbacks desacoplados sin asignaciones dinámicas (DIP).
@@ -130,4 +130,4 @@ private:
     void* m_tcpUserData{nullptr};
 };
 
-} // namespace WiiU
+} // namespace Neleo

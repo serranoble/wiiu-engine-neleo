@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G4: Validación de Entorno, Skybox CubeMap (.wcube / Procedural),
@@ -67,4 +67,4 @@ private:
     float m_waterTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("native_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2", "pbr_mesh_gx2")]
+    [ValidateSet("native_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2", "pbr_mesh_gx2", "pbr_lite_gx2")]
     [string] $Shader
 )
 
@@ -63,6 +63,12 @@ $shaderFiles = @{
         SizeSymbol = "PBR_MESH_GX2_GSH_SIZE"
         DataSymbol = "PBR_MESH_GX2_GSH_DATA"
     }
+    pbr_lite_gx2 = @{
+        Binary = "assets/shaders/pbr_lite_gx2.gsh"
+        Header = "include/Graphics/PBRLiteShaderBinary.hpp"
+        SizeSymbol = "PBR_LITE_GX2_GSH_SIZE"
+        DataSymbol = "PBR_LITE_GX2_GSH_DATA"
+    }
 }
 
 $shaderInfo = $shaderFiles[$Shader]
@@ -84,7 +90,7 @@ $text = [System.Text.StringBuilder]::new()
 [void] $text.AppendLine("#include <cstddef>")
 [void] $text.AppendLine("#include <cstdint>")
 [void] $text.AppendLine()
-[void] $text.AppendLine("namespace WiiU {")
+[void] $text.AppendLine("namespace Neleo {")
 [void] $text.AppendLine("inline constexpr size_t $($shaderInfo.SizeSymbol) = $($bytes.Length);")
 [void] $text.AppendLine("inline const uint8_t $($shaderInfo.DataSymbol)[$($bytes.Length)] = {")
 
@@ -97,7 +103,7 @@ for ($offset = 0; $offset -lt $bytes.Length; $offset += 16) {
 }
 
 [void] $text.AppendLine("};")
-[void] $text.AppendLine("} // namespace WiiU")
+[void] $text.AppendLine("} // namespace Neleo")
 
 $parentDirectory = Split-Path -Parent $headerPath
 if (-not (Test-Path -LiteralPath $parentDirectory -PathType Container)) {

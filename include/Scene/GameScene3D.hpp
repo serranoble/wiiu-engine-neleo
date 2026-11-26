@@ -22,7 +22,7 @@
 struct GX2ContextState;
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 119] Clase Base Reusable para Escenas y Videojuegos 3D en la Arquitectura del Motor.
@@ -247,9 +247,9 @@ public:
     [[nodiscard]] GX2ColorBuffer* GetColorBuffer() noexcept { return m_pColorBuffer; }
 
     /**
-     * @brief Retorna el puntero al búfer de profundidad de silicio (D24_S8) en eDRAM.
+     * @brief Retorna el puntero al búfer de profundidad principal activo en eDRAM/MEM1 (FLOAT_R32 + HiZ).
      */
-    [[nodiscard]] GX2DepthBuffer* GetDepthBuffer() noexcept { return &m_depthBuffer; }
+    [[nodiscard]] GX2DepthBuffer* GetDepthBuffer() noexcept { return m_pDepthBuffer; }
 #endif
 
 protected:
@@ -293,14 +293,12 @@ protected:
     bool m_sceneCubeMapCreated{false};
 
 #if defined(__WIIU__) || defined(__wiiu__)
-    GX2DepthBuffer m_depthBuffer{};
-    void* m_hiZBuffer{nullptr};
-    bool m_depthBufferCreated{false};
     GX2ContextState* m_nativeContextState{nullptr};
     GX2ColorBuffer* m_pColorBuffer{nullptr};
+    GX2DepthBuffer* m_pDepthBuffer{nullptr};
 #else
     void* m_pColorBuffer{nullptr};
 #endif
 };
 
-} // namespace WiiU
+} // namespace Neleo

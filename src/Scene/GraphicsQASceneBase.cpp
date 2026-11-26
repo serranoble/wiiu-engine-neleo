@@ -18,7 +18,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr float kMoveSpeed = 12.0f;
@@ -189,4 +189,4 @@ void GraphicsQASceneBase::RenderBaseHUD() const noexcept {
                               32, 685, 2, ColorRGBA{185, 215, 245, 255});
 }
 
-} // namespace WiiU
+} // namespace Neleo

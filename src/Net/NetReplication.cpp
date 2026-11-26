@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 bool SerializeSnapshot(NetBitWriter& writer, const NetTransformSnapshot& snap) noexcept {
     return writer.WriteU32(snap.netId) &&
@@ -145,4 +145,4 @@ bool SnapshotInterpolator::Sample(double renderTimeSec, NetTransformSnapshot& ou
     return true;
 }
 
-} // namespace WiiU
+} // namespace Neleo

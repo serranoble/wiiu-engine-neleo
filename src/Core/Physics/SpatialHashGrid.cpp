@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 SpatialHashGrid::SpatialHashGrid(float cellSize) noexcept {
     SetCellSize(cellSize);
@@ -134,4 +134,4 @@ size_t SpatialHashGrid::QueryAABB(const Point3D& minPt, const Point3D& maxPt,
     return outCount;
 }
 
-} // namespace WiiU
+} // namespace Neleo

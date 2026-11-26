@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 struct AIStimulusEvent {
     StimulusType type{StimulusType::None};
@@ -58,4 +58,4 @@ private:
     size_t m_stimulusCount{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

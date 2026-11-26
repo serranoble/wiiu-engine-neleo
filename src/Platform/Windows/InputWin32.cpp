@@ -12,7 +12,7 @@
 #include <xinput.h>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -142,20 +142,22 @@ void InputManager::PollDesktopHardware(bool& outRunning) {
         if (bridge.keysPressed[vk]) kbTrig |= mask;
     };
 
-    mapKey(VK_RETURN, VirtualButton::A);
-    mapKey(VK_SPACE,  VirtualButton::A);
-    mapKey('B',       VirtualButton::B);
-    mapKey(VK_BACK,   VirtualButton::B);
-    mapKey(VK_ESCAPE, VirtualButton::B);
-    mapKey('P',       VirtualButton::Plus);
-    mapKey(VK_TAB,    VirtualButton::Minus);
-    mapKey(VK_OEM_MINUS, VirtualButton::Minus);
-    mapKey('X',       VirtualButton::X);
-    mapKey('Y',       VirtualButton::Y);
-    mapKey('Q',       VirtualButton::ZL);
-    mapKey('Z',       VirtualButton::ZL);
-    mapKey('E',       VirtualButton::ZR);
-    mapKey('R',       VirtualButton::StickR);
+    if (!bridge.textInputCapture) {
+        mapKey(VK_RETURN, VirtualButton::A);
+        mapKey(VK_SPACE,  VirtualButton::A);
+        mapKey('B',       VirtualButton::B);
+        mapKey(VK_BACK,   VirtualButton::B);
+        mapKey(VK_ESCAPE, VirtualButton::B);
+        mapKey('P',       VirtualButton::Plus);
+        mapKey(VK_TAB,    VirtualButton::Minus);
+        mapKey(VK_OEM_MINUS, VirtualButton::Minus);
+        mapKey('X',       VirtualButton::X);
+        mapKey('Y',       VirtualButton::Y);
+        mapKey('Q',       VirtualButton::ZL);
+        mapKey('Z',       VirtualButton::ZL);
+        mapKey('E',       VirtualButton::ZR);
+        mapKey('R',       VirtualButton::StickR);
+    }
     mapKey(VK_UP,     VirtualButton::DPadUp);
     mapKey(VK_DOWN,   VirtualButton::DPadDown);
     mapKey(VK_LEFT,   VirtualButton::DPadLeft);
@@ -171,23 +173,25 @@ void InputManager::PollDesktopHardware(bool& outRunning) {
 
     pad0.buttonsHold |= kbHold;
 
-    // Sticks desde teclado (reiniciar a 0 al soltar cuando no hay XInput en Player 0)
-    float kLeftX = 0.0f, kLeftY = 0.0f;
-    if (bridge.keysDown['D']) kLeftX += 1.0f;
-    if (bridge.keysDown['A']) kLeftX -= 1.0f;
-    if (bridge.keysDown['W']) kLeftY += 1.0f;
-    if (bridge.keysDown['S']) kLeftY -= 1.0f;
-    if (!xinput0Connected || kLeftX != 0.0f || kLeftY != 0.0f) {
-        pad0.leftStick = ApplyRadialDeadzone(kLeftX, kLeftY, 0.0f);
-    }
+    // Sticks desde teclado (omitidos durante textInputCapture para no interferir con WASD/IJKL en WM_CHAR)
+    if (!bridge.textInputCapture) {
+        float kLeftX = 0.0f, kLeftY = 0.0f;
+        if (bridge.keysDown['D']) kLeftX += 1.0f;
+        if (bridge.keysDown['A']) kLeftX -= 1.0f;
+        if (bridge.keysDown['W']) kLeftY += 1.0f;
+        if (bridge.keysDown['S']) kLeftY -= 1.0f;
+        if (!xinput0Connected || kLeftX != 0.0f || kLeftY != 0.0f) {
+            pad0.leftStick = ApplyRadialDeadzone(kLeftX, kLeftY, 0.0f);
+        }
 
-    float kRightX = 0.0f, kRightY = 0.0f;
-    if (bridge.keysDown['L']) kRightX += 1.0f;
-    if (bridge.keysDown['J']) kRightX -= 1.0f;
-    if (bridge.keysDown['I']) kRightY += 1.0f;
-    if (bridge.keysDown['K']) kRightY -= 1.0f;
-    if (!xinput0Connected || kRightX != 0.0f || kRightY != 0.0f) {
-        pad0.rightStick = ApplyRadialDeadzone(kRightX, kRightY, 0.0f);
+        float kRightX = 0.0f, kRightY = 0.0f;
+        if (bridge.keysDown['L']) kRightX += 1.0f;
+        if (bridge.keysDown['J']) kRightX -= 1.0f;
+        if (bridge.keysDown['I']) kRightY += 1.0f;
+        if (bridge.keysDown['K']) kRightY -= 1.0f;
+        if (!xinput0Connected || kRightX != 0.0f || kRightY != 0.0f) {
+            pad0.rightStick = ApplyRadialDeadzone(kRightX, kRightY, 0.0f);
+        }
     }
 
     // Ratón / Pantalla Táctil normalizada a 1280x720
@@ -214,4 +218,4 @@ void InputManager::PollDesktopHardware(bool& outRunning) {
     bridge.ConsumeFrameEdges();
 }
 
-} // namespace WiiU
+} // namespace Neleo

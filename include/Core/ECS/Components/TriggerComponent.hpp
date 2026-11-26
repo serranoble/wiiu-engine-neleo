@@ -4,7 +4,7 @@
 #include "Core/ECS/Entity.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Tipos semánticos de volumen Trigger espacial.
@@ -67,4 +67,4 @@ struct TriggerComponent {
           isActive(true), oneShot(singleUse), name(label) {}
 };
 
-} // namespace WiiU
+} // namespace Neleo

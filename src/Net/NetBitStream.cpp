@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 bool NetAddress::ParseIPv4(std::string_view ipStr, uint16_t p, NetAddress& outAddr) noexcept {
     if (ipStr.empty()) {
@@ -284,4 +284,4 @@ bool NetBitReader::ReadHeader(NetPacketHeader& outHeader) noexcept {
     return true;
 }
 
-} // namespace WiiU
+} // namespace Neleo

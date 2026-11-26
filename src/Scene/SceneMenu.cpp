@@ -10,7 +10,7 @@
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 SceneMenu::SceneMenu()
     : m_starfield(120) {
@@ -141,4 +141,4 @@ void SceneMenu::Render() {
     Render2D::End();
 }
 
-} // namespace WiiU
+} // namespace Neleo

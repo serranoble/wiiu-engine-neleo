@@ -12,7 +12,7 @@
 #include "Core/ResourceHandle.hpp"
 #include "Core/ArenaVector.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Categorías de memoria para auditoría, rastreo y diagnóstico en silicio Wii U.
@@ -248,4 +248,4 @@ private:
     SceneArena m_sceneArena;
 };
 
-} // namespace WiiU
+} // namespace Neleo

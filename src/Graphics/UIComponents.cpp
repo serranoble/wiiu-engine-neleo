@@ -7,7 +7,7 @@
 #include <cstring>
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 UIButton::UIButton() = default;
 
@@ -228,4 +228,4 @@ void UISlider::Render() const {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

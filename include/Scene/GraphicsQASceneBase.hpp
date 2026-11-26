@@ -4,7 +4,7 @@
 #include "Graphics/Math3D.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Base reutilizable para las Suites de Validación Gráfica (G1..G8).
@@ -67,4 +67,4 @@ private:
     bool m_hudVisible{true};
 };
 
-} // namespace WiiU
+} // namespace Neleo

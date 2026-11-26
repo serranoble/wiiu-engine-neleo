@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 NetTestModal::NetTestModal()
     : m_btnEditIp(125, 132, 620, 44, "", 2),
@@ -142,7 +142,7 @@ void NetTestModal::OpenIpKeyboard() {
             (void)cfg.SaveToFile();
 
             RefreshButtonLabels();
-            SetFeedback("IP ACTUALIZADA Y GUARDADA DESDE TECLADO WII U", ColorRGBA::Green());
+            SetFeedback("IP ACTUALIZADA Y GUARDADA", ColorRGBA::Green());
         } else {
             SetFeedback("IP INVALIDA: USA FORMATO A.B.C.D (EJ. 192.168.1.50)", ColorRGBA::Red(), 3.5f);
         }
@@ -427,4 +427,4 @@ void NetTestModal::Render() {
     Render2D::End();
 }
 
-} // namespace WiiU
+} // namespace Neleo

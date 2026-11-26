@@ -6,7 +6,7 @@
 #include <array>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-386] Estimulo percibido individual en el espacio 3D.
@@ -41,4 +41,4 @@ struct AIPerceptionComponent {
     std::array<PerceivedStimulus, MAX_RECENT_STIMULI> recentStimuli{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

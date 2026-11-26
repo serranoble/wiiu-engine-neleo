@@ -6,7 +6,7 @@
 #include <array>
 #include "Core/ECS/Entity.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Interfaz polimórfica para contenedores de componentes heterogéneos en ECSWorld.
@@ -143,4 +143,4 @@ private:
     uint32_t m_denseCount{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

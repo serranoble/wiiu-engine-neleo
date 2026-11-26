@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Handle generacional seguro de 32 bits para un canal de voz de audio activo.
@@ -136,4 +136,4 @@ struct AudioEngineTelemetry {
     float maxOcclusionInScene{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

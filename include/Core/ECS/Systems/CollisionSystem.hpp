@@ -6,7 +6,7 @@
 #include "Core/ECS/Components/TriggerComponent.hpp"
 #include "Core/ECS/Components/KinematicCharacterComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 116] Sistema ECS de Detección y Resolución de Colisiones y Triggers (CollisionSystem).
@@ -77,4 +77,4 @@ public:
                                     Point3D& outNormal, float& outPenetration) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

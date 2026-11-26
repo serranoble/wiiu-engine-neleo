@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 class StaticMesh;
 
@@ -50,4 +50,4 @@ private:
     float m_lod2DistSq{1296.0f}; // 36m^2
 };
 
-} // namespace WiiU
+} // namespace Neleo

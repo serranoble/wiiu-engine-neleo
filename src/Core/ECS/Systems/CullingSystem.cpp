@@ -3,7 +3,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -193,4 +193,4 @@ size_t CullingSystem::UpdateWithBVH(ECSWorld& world, const SpatialBVH& bvh, cons
     return finalVisible;
 }
 
-} // namespace WiiU
+} // namespace Neleo

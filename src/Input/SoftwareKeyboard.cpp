@@ -3,6 +3,7 @@
 #include "Core/MemoryManager.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 #if defined(__WIIU__) || defined(__wiiu__)
@@ -19,9 +20,16 @@
 #include <padscore/kpad.h>
 #include <proc_ui/procui.h>
 #include <vpad/input.h>
+#else
+#include "Audio/AudioManager.hpp"
+#include "Graphics/Color.hpp"
+#include "Graphics/Render2D.hpp"
+#include "Input/InputManager.hpp"
+#include "Platform/PlatformClock.hpp"
+#include "Platform/Win32InputBridge.hpp"
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 #if defined(__WIIU__) || defined(__wiiu__)
 namespace {
@@ -280,12 +288,337 @@ bool SoftwareKeyboard::Show(const char* hintText,
 
     return accepted;
 #else
-    (void)hintText;
-    (void)initialText;
-    (void)mode;
-    (void)maxLength;
+    // =========================================================================
+    // TECLADO VIRTUAL MODAL IN-ENGINE ZERO-ALLOC (Windows x64 / ASUS ROG Ally)
+    // Soporta simultáneamente: Teclado físico (WM_CHAR), Mando XInput y Ratón/Táctil
+    // =========================================================================
+    enum class KeyAction : uint8_t {
+        Char = 0,
+        Backspace,
+        Clear,
+        Loopback,
+        Space,
+        Confirm,
+        Cancel
+    };
+
+    struct VirtualKeyDef {
+        const char* label;
+        KeyAction action;
+        char ch;
+    };
+
+    static constexpr int kIpCols = 4;
+    static constexpr int kIpRows = 4;
+    static constexpr VirtualKeyDef kIpKeys[kIpRows][kIpCols] = {
+        { {"1", KeyAction::Char, '1'}, {"2", KeyAction::Char, '2'}, {"3", KeyAction::Char, '3'}, {"BORRAR",    KeyAction::Backspace, '\0'} },
+        { {"4", KeyAction::Char, '4'}, {"5", KeyAction::Char, '5'}, {"6", KeyAction::Char, '6'}, {"LIMPIAR",   KeyAction::Clear,     '\0'} },
+        { {"7", KeyAction::Char, '7'}, {"8", KeyAction::Char, '8'}, {"9", KeyAction::Char, '9'}, {"127.0.0.1", KeyAction::Loopback,  '\0'} },
+        { {".", KeyAction::Char, '.'}, {"0", KeyAction::Char, '0'}, {"OK", KeyAction::Confirm, '\0'}, {"CANCELAR", KeyAction::Cancel, '\0'} }
+    };
+
+    static constexpr int kFullCols = 10;
+    static constexpr int kFullRows = 4;
+    static constexpr VirtualKeyDef kFullKeys[kFullRows][kFullCols] = {
+        { {"1", KeyAction::Char, '1'}, {"2", KeyAction::Char, '2'}, {"3", KeyAction::Char, '3'}, {"4", KeyAction::Char, '4'}, {"5", KeyAction::Char, '5'},
+          {"6", KeyAction::Char, '6'}, {"7", KeyAction::Char, '7'}, {"8", KeyAction::Char, '8'}, {"9", KeyAction::Char, '9'}, {"0", KeyAction::Char, '0'} },
+        { {"Q", KeyAction::Char, 'Q'}, {"W", KeyAction::Char, 'W'}, {"E", KeyAction::Char, 'E'}, {"R", KeyAction::Char, 'R'}, {"T", KeyAction::Char, 'T'},
+          {"Y", KeyAction::Char, 'Y'}, {"U", KeyAction::Char, 'U'}, {"I", KeyAction::Char, 'I'}, {"O", KeyAction::Char, 'O'}, {"P", KeyAction::Char, 'P'} },
+        { {"A", KeyAction::Char, 'A'}, {"S", KeyAction::Char, 'S'}, {"D", KeyAction::Char, 'D'}, {"F", KeyAction::Char, 'F'}, {"G", KeyAction::Char, 'G'},
+          {"H", KeyAction::Char, 'H'}, {"J", KeyAction::Char, 'J'}, {"K", KeyAction::Char, 'K'}, {"L", KeyAction::Char, 'L'}, {"DEL", KeyAction::Backspace, '\0'} },
+        { {"Z", KeyAction::Char, 'Z'}, {"X", KeyAction::Char, 'X'}, {"C", KeyAction::Char, 'C'}, {"V", KeyAction::Char, 'V'}, {"B", KeyAction::Char, 'B'},
+          {"N", KeyAction::Char, 'N'}, {"M", KeyAction::Char, 'M'}, {"SPC", KeyAction::Space, ' '}, {"OK", KeyAction::Confirm, '\0'}, {"ESC", KeyAction::Cancel, '\0'} }
+    };
+
+    const size_t maxAllowed = static_cast<size_t>(
+        std::clamp<int32_t>(maxLength, 1, static_cast<int32_t>(outCapacity - 1u)));
+    const size_t bufCap = std::min<size_t>(maxAllowed, 63u);
+
+    char buffer[64]{};
+    size_t len = 0u;
+    if (initialText) {
+        while (initialText[len] != '\0' && len < bufCap) {
+            if (IsCharAllowed(initialText[len], mode)) {
+                buffer[len] = initialText[len];
+                ++len;
+            } else {
+                break;
+            }
+        }
+        buffer[len] = '\0';
+    }
+
+    const bool isIpMode = (mode == KeyboardInputMode::IPv4);
+    const int numRows = isIpMode ? kIpRows : kFullRows;
+    const int numCols = isIpMode ? kIpCols : kFullCols;
+    int selRow = 0;
+    int selCol = 0;
+
+    auto& bridge = Platform::GetWin32InputBridge();
+    struct ScopedTextCapture {
+        Platform::Win32InputBridge& b;
+        explicit ScopedTextCapture(Platform::Win32InputBridge& ref) noexcept : b(ref) { b.textInputCapture = true; }
+        ~ScopedTextCapture() noexcept { b.textInputCapture = false; }
+    } captureGuard(bridge);
+
+    bridge.ConsumeFrameEdges();
+    InputManager::Instance().ClearFrameTriggers();
+
+    bool running = true;
+    bool accepted = false;
+    bool done = false;
+    float navCooldown = 0.0f;
+    float blinkTimer = 0.0f;
+
+    auto appendChar = [&](char ch) noexcept {
+        if (len < bufCap && IsCharAllowed(ch, mode)) {
+            buffer[len++] = ch;
+            buffer[len] = '\0';
+        }
+    };
+
+    auto applyAction = [&](const VirtualKeyDef& key) noexcept {
+        AudioManager::Instance().PlayClick();
+        switch (key.action) {
+            case KeyAction::Char:
+                appendChar(key.ch);
+                break;
+            case KeyAction::Space:
+                appendChar(' ');
+                break;
+            case KeyAction::Backspace:
+                if (len > 0u) {
+                    buffer[--len] = '\0';
+                }
+                break;
+            case KeyAction::Clear:
+                len = 0u;
+                buffer[0] = '\0';
+                break;
+            case KeyAction::Loopback: {
+                constexpr const char* kLoopback = "127.0.0.1";
+                len = 0u;
+                while (kLoopback[len] != '\0' && len < bufCap) {
+                    buffer[len] = kLoopback[len];
+                    ++len;
+                }
+                buffer[len] = '\0';
+                break;
+            }
+            case KeyAction::Confirm:
+                accepted = true;
+                done = true;
+                break;
+            case KeyAction::Cancel:
+                accepted = false;
+                done = true;
+                break;
+        }
+    };
+
+    // Geometría de la grilla (coordenadas virtuales 1280x720)
+    const int panelX = isIpMode ? 240 : 80;
+    const int panelY = 90;
+    const int panelW = isIpMode ? 800 : 1120;
+    const int panelH = 540;
+    const int gridX = panelX + 36;
+    const int gridY = panelY + 175;
+    const int gridW = panelW - 72;
+    const int gridH = 290;
+    const int gap = 10;
+    const int keyW = (gridW - gap * (numCols - 1)) / numCols;
+    const int keyH = (gridH - gap * (numRows - 1)) / numRows;
+
+    while (!done && running) {
+        constexpr float kDt = 1.0f / 60.0f;
+        blinkTimer += kDt;
+        if (navCooldown > 0.0f) {
+            navCooldown = std::max(0.0f, navCooldown - kDt);
+        }
+
+        // 1. Bombear eventos Win32 y capturar WM_CHAR antes de que InputManager limpie edges
+        Window::PumpPlatformEvents();
+        char localChars[Platform::Win32InputBridge::MAX_TYPED_CHARS]{};
+        const uint8_t localCount = std::min<uint8_t>(
+            bridge.typedCharCount,
+            static_cast<uint8_t>(Platform::Win32InputBridge::MAX_TYPED_CHARS));
+        for (uint8_t i = 0u; i < localCount; ++i) {
+            localChars[i] = bridge.typedChars[i];
+        }
+        bridge.ClearTypedChars();
+
+        if (bridge.quitRequested) {
+            running = false;
+            accepted = false;
+            break;
+        }
+
+        // 2. Actualizar entrada unificada (XInput + ratón/táctil + teclas)
+        InputManager::Instance().Update(running, kDt);
+        if (!running) {
+            accepted = false;
+            break;
+        }
+
+        // 3. Procesar entrada de teclado físico (WM_CHAR)
+        for (uint8_t i = 0u; i < localCount && !done; ++i) {
+            const char ch = localChars[i];
+            if (ch == 0x08) { // Backspace
+                if (len > 0u) {
+                    buffer[--len] = '\0';
+                    AudioManager::Instance().PlayClick();
+                }
+            } else if (ch == 0x0D) { // Enter
+                AudioManager::Instance().PlayClick();
+                accepted = true;
+                done = true;
+            } else if (ch == 0x1B) { // Escape
+                AudioManager::Instance().PlayClick();
+                accepted = false;
+                done = true;
+            } else if (IsCharAllowed(ch, mode)) {
+                appendChar(ch);
+                AudioManager::Instance().PlayClick();
+            }
+        }
+
+        // 4. Procesar mando XInput / D-Pad / Stick / Ratón / Táctil
+        if (!done) {
+            const auto& pad = InputManager::Instance().GetGamepad(0);
+
+            int dRow = 0;
+            int dCol = 0;
+            if (pad.WasJustPressed(VirtualButton::DPadUp))    dRow = -1;
+            if (pad.WasJustPressed(VirtualButton::DPadDown))  dRow = 1;
+            if (pad.WasJustPressed(VirtualButton::DPadLeft))  dCol = -1;
+            if (pad.WasJustPressed(VirtualButton::DPadRight)) dCol = 1;
+
+            if (dRow == 0 && dCol == 0 && navCooldown <= 0.0f) {
+                if (pad.leftStick.y > 0.55f)       dRow = -1;
+                else if (pad.leftStick.y < -0.55f) dRow = 1;
+                if (pad.leftStick.x < -0.55f)      dCol = -1;
+                else if (pad.leftStick.x > 0.55f)  dCol = 1;
+                if (dRow != 0 || dCol != 0) {
+                    navCooldown = 0.18f;
+                }
+            }
+
+            if (dRow != 0 || dCol != 0) {
+                selRow = (selRow + dRow + numRows) % numRows;
+                selCol = (selCol + dCol + numCols) % numCols;
+                AudioManager::Instance().PlayClick();
+            }
+
+            if (pad.WasJustPressed(VirtualButton::A)) {
+                const VirtualKeyDef& k = isIpMode ? kIpKeys[selRow][selCol] : kFullKeys[selRow][selCol];
+                applyAction(k);
+            } else if (pad.WasJustPressed(VirtualButton::X)) {
+                if (len > 0u) {
+                    buffer[--len] = '\0';
+                    AudioManager::Instance().PlayClick();
+                }
+            } else if (pad.WasJustPressed(VirtualButton::Plus)) {
+                AudioManager::Instance().PlayClick();
+                accepted = true;
+                done = true;
+            } else if (pad.WasJustPressed(VirtualButton::B)) {
+                AudioManager::Instance().PlayClick();
+                accepted = false;
+                done = true;
+            } else if (pad.touch.justPressed) {
+                const int tx = static_cast<int>(pad.touch.x);
+                const int ty = static_cast<int>(pad.touch.y);
+                for (int r = 0; r < numRows && !done; ++r) {
+                    for (int c = 0; c < numCols && !done; ++c) {
+                        const int kx = gridX + c * (keyW + gap);
+                        const int ky = gridY + r * (keyH + gap);
+                        if (tx >= kx && tx <= kx + keyW && ty >= ky && ty <= ky + keyH) {
+                            selRow = r;
+                            selCol = c;
+                            const VirtualKeyDef& k = isIpMode ? kIpKeys[r][c] : kFullKeys[r][c];
+                            applyAction(k);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Renderizado 2D Zero-Alloc sobre OpenGL 3.3 Core respetando viewport 16:9
+        Window::ClearActive(ColorRGBA{8, 14, 26, 255});
+        Render2D::Begin();
+
+        Render2D::DrawBox(panelX, panelY, panelW, panelH,
+                          ColorRGBA{14, 24, 42, 245}, ColorRGBA{85, 190, 255, 255});
+
+        const char* title = (hintText && hintText[0] != '\0') ? hintText : "TECLADO VIRTUAL";
+        Render2D::DrawPixelString(title, panelX + 36, panelY + 28, 2, ColorRGBA::Cyan());
+
+        // Campo de texto editable con cursor parpadeante
+        Render2D::DrawBox(panelX + 36, panelY + 78, panelW - 72, 66,
+                          ColorRGBA{6, 12, 22, 255}, ColorRGBA::Yellow());
+        const bool showCursor = (static_cast<int>(blinkTimer * 2.5f) & 1) == 0;
+        char displayBuf[80]{};
+        std::snprintf(displayBuf, sizeof(displayBuf), "%s%s", buffer, showCursor ? "_" : "");
+        Render2D::DrawPixelString(displayBuf, panelX + 54, panelY + 98, 3, ColorRGBA::White());
+
+        char counterBuf[32]{};
+        std::snprintf(counterBuf, sizeof(counterBuf), "%zu/%zu", len, bufCap);
+        Render2D::DrawPixelString(counterBuf, panelX + panelW - 120, panelY + 102, 2, ColorRGBA{170, 210, 240, 255});
+
+        // Grilla de teclas
+        for (int r = 0; r < numRows; ++r) {
+            for (int c = 0; c < numCols; ++c) {
+                const VirtualKeyDef& k = isIpMode ? kIpKeys[r][c] : kFullKeys[r][c];
+                const int kx = gridX + c * (keyW + gap);
+                const int ky = gridY + r * (keyH + gap);
+                const bool focused = (r == selRow && c == selCol);
+
+                ColorRGBA fill{24, 42, 72, 240};
+                ColorRGBA border{95, 160, 220, 255};
+                if (k.action == KeyAction::Confirm) {
+                    fill = ColorRGBA{18, 72, 42, 245};
+                    border = ColorRGBA::Green();
+                } else if (k.action == KeyAction::Cancel) {
+                    fill = ColorRGBA{78, 24, 30, 245};
+                    border = ColorRGBA::Red();
+                } else if (k.action == KeyAction::Backspace || k.action == KeyAction::Clear) {
+                    fill = ColorRGBA{64, 46, 20, 245};
+                    border = ColorRGBA::Orange();
+                }
+                if (focused) {
+                    fill = ColorRGBA{46, 108, 178, 255};
+                    border = ColorRGBA::Yellow();
+                }
+
+                Render2D::DrawBox(kx, ky, keyW, keyH, fill, border);
+                constexpr int kTextScale = 2;
+                const int labelPxW = static_cast<int>(std::strlen(k.label)) * 6 * kTextScale;
+                const int labelPxH = 7 * kTextScale;
+                const int tx = kx + (keyW - labelPxW) / 2;
+                const int ty = ky + (keyH - labelPxH) / 2;
+                Render2D::DrawPixelString(k.label, tx, ty, kTextScale, ColorRGBA::White());
+            }
+        }
+
+        Render2D::DrawPixelString(
+            "TECLADO FISICO / RATON / TACTIL / MANDO: [DPAD] MOVER  [A] PULSAR  [X] BORRAR  [+/ENTER] OK  [B/ESC] CANCELAR",
+            panelX + 36, panelY + panelH - 36, 1, ColorRGBA{180, 215, 245, 255});
+
+        Render2D::End();
+        Window::PresentActive();
+        PlatformClock::SleepMs(1u);
+    }
+
+    bridge.ConsumeFrameEdges();
+    InputManager::Instance().ClearFrameTriggers();
+
+    if (accepted) {
+        std::strncpy(outText, buffer, outCapacity - 1u);
+        outText[outCapacity - 1u] = '\0';
+        return true;
+    }
     return false;
 #endif
 }
 
-} // namespace WiiU
+} // namespace Neleo

@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 constexpr size_t POSTPROCESS_HDR_GX2_GSH_SIZE = 3096;
 alignas(256) constexpr uint8_t POSTPROCESS_HDR_GX2_GSH_DATA[POSTPROCESS_HDR_GX2_GSH_SIZE] = {
@@ -203,4 +203,4 @@ alignas(256) constexpr uint8_t POSTPROCESS_HDR_GX2_GSH_DATA[POSTPROCESS_HDR_GX2_
     0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00
 };
 
-} // namespace WiiU
+} // namespace Neleo

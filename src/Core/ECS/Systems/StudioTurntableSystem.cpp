@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 void StudioTurntableSystem::Update(ECSWorld& world, float dt) {
     if (dt <= 0.0f) return;
@@ -49,4 +49,4 @@ void StudioTurntableSystem::Update(ECSWorld& world, float dt) {
     });
 }
 
-} // namespace WiiU
+} // namespace Neleo

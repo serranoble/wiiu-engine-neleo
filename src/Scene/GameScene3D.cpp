@@ -23,7 +23,7 @@ namespace {
 void DrainGPUQueueIfForeground() noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
     if (ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
-        WiiU::Window::HasForeground() && !WiiU::Window::IsExitingProcUI()) {
+        Neleo::Window::HasForeground() && !Neleo::Window::IsExitingProcUI()) {
         GX2DrawDone();
     }
 #endif
@@ -31,7 +31,7 @@ void DrainGPUQueueIfForeground() noexcept {
 
 } // namespace
 
-namespace WiiU {
+namespace Neleo {
 
 GameScene3D::GameScene3D() = default;
 
@@ -86,44 +86,42 @@ Matrix4x4 GameScene3D::GetViewProjectionMatrix() const noexcept {
 void GameScene3D::Render() {
 #if defined(__WIIU__) || defined(__wiiu__)
     m_pColorBuffer = static_cast<GX2ColorBuffer*>(Window::GetActiveNativeColorBuffer());
+    m_pDepthBuffer = static_cast<GX2DepthBuffer*>(Window::GetActiveNativeDepthBuffer());
     if (!m_nativeContextState || !m_pColorBuffer) {
         return;
     }
 
     // -------------------------------------------------------------------------
-    // CONFIGURACIÓN DETERMINISTA DE CONTEXTO GPU LATTE GX2
+    // CONFIGURACIÓN DETERMINISTA DE CONTEXTO GPU LATTE GX2 (eDRAM / MEM1 @ 560 GB/s)
     // -------------------------------------------------------------------------
     GX2SetContextState(m_nativeContextState);
     GX2SetColorBuffer(m_pColorBuffer, GX2_RENDER_TARGET_0);
-    if (m_depthBufferCreated) {
-        GX2SetDepthBuffer(&m_depthBuffer);
+    if (m_pDepthBuffer) {
+        GX2SetDepthBuffer(m_pDepthBuffer);
     }
     // Viewport y Scissor canónicos para escaneo de 720p (1280x720)
     GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
     GX2SetScissor(0, 0, 1280, 720);
 
-    // Borrado de búferes de hardware (Color eDRAM y Z-Buffer D24_S8)
+    // Borrado de búferes de hardware (Color eDRAM y Z-Buffer FLOAT_R32 + HiZ en MEM1)
     float r = static_cast<float>(m_clearColor.r) / 255.0f;
     float g = static_cast<float>(m_clearColor.g) / 255.0f;
     float b = static_cast<float>(m_clearColor.b) / 255.0f;
     float a = static_cast<float>(m_clearColor.a) / 255.0f;
     GX2ClearColor(m_pColorBuffer, r, g, b, a);
-    if (m_depthBufferCreated) {
-        const GX2ClearFlags clearFlags = (m_depthBuffer.hiZPtr != nullptr)
-                                         ? GX2_CLEAR_FLAGS_BOTH
-                                         : GX2_CLEAR_FLAGS_DEPTH;
-        GX2ClearDepthStencilEx(&m_depthBuffer, 1.0f, 0, clearFlags);
+    if (m_pDepthBuffer) {
+        GX2ClearDepthStencilEx(m_pDepthBuffer, 1.0f, 0u, GX2_CLEAR_FLAGS_DEPTH);
     }
 
     // Restaurar contexto, targets, viewport/scissor y Color Control tras GX2Clear*
     // (en silicio real gx2.rpl cambia al contexto de borrado y desactiva escritura de color).
     GX2SetContextState(m_nativeContextState);
     GX2SetColorBuffer(m_pColorBuffer, GX2_RENDER_TARGET_0);
-    if (m_depthBufferCreated) {
-        GX2SetDepthBuffer(&m_depthBuffer);
+    if (m_pDepthBuffer) {
+        GX2SetDepthBuffer(m_pDepthBuffer);
     }
     const RHIFullscreenShader::ScopedActiveFrameTargets scopedTargets(
-        m_pColorBuffer, m_depthBufferCreated ? &m_depthBuffer : nullptr);
+        m_pColorBuffer, m_pDepthBuffer);
     GX2SetViewport(0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f);
     GX2SetScissor(0, 0, 1280, 720);
     GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, TRUE);
@@ -194,52 +192,13 @@ void GameScene3D::Render() {
 bool GameScene3D::InitGX2Pipeline() {
 #if defined(__WIIU__) || defined(__wiiu__)
     // 1. Inicializar shaders, samplers y estado de ForwardRendererGX2
-    bool rendererOk = ForwardRendererGX2::Instance().Initialize();
+    const bool rendererOk = ForwardRendererGX2::Instance().Initialize();
 
-    // 2. Crear Búfer de Profundidad (1280x720, D24_S8) vía GX2R (reside en MEM2 para sobrevivir transiciones ProcUI/HOME)
-    if (!m_depthBufferCreated) {
-        std::memset(&m_depthBuffer, 0, sizeof(GX2DepthBuffer));
-        m_depthBuffer.surface.dim = GX2_SURFACE_DIM_TEXTURE_2D;
-        m_depthBuffer.surface.width = 1280;
-        m_depthBuffer.surface.height = 720;
-        m_depthBuffer.surface.depth = 1;
-        m_depthBuffer.surface.mipLevels = 1;
-        m_depthBuffer.surface.format = GX2_SURFACE_FORMAT_FLOAT_D24_S8;
-        m_depthBuffer.surface.aa = GX2_AA_MODE1X;
-        m_depthBuffer.surface.use = GX2_SURFACE_USE_DEPTH_BUFFER;
-        m_depthBuffer.surface.tileMode = GX2_TILE_MODE_DEFAULT;
-        m_depthBuffer.viewNumSlices = 1; // Invariante de Latte: descarta rebanadas residuales
-        m_depthBuffer.depthClear = 1.0f;
-        GX2CalcSurfaceSizeAndAlignment(&m_depthBuffer.surface);
+    // 2. Reutilizar el DepthBuffer principal en eDRAM/MEM1 (560 GB/s + HiZ) gestionado por WindowWiiU
+    //    (evita el cuello de botella DDR3/MEM2 de 12.8 GB/s y sobrevive automáticamente a ProcUI/HOME).
+    m_pDepthBuffer = static_cast<GX2DepthBuffer*>(Window::GetActiveNativeDepthBuffer());
 
-        if (GX2RCreateSurface(&m_depthBuffer.surface, static_cast<GX2RResourceFlags>(
-            GX2R_RESOURCE_BIND_DEPTH_BUFFER | GX2R_RESOURCE_USAGE_GPU_WRITE | GX2R_RESOURCE_USAGE_GPU_READ
-        ))) {
-            // [OPT-21 / OPT-39 / OPT-212 / OPT-267] Asignar superficie Hi-Z alineada y respetar orden Cafe OS:
-            // GX2InitDepthBufferRegs PRIMERO, GX2InitDepthBufferHiZEnable DESPUES (evita sobrescritura de db_depth_info)
-            uint32_t hiZSize = 0;
-            uint32_t hiZAlign = 0;
-            GX2CalcDepthBufferHiZInfo(&m_depthBuffer, &hiZSize, &hiZAlign);
-            bool hiZEnabled = false;
-            if (hiZSize > 0) {
-                const size_t safeAlign = (hiZAlign < 256u) ? 256u : static_cast<size_t>(hiZAlign);
-                m_hiZBuffer = MemoryManager::Instance().AllocAligned(
-                    safeAlign, hiZSize, MemoryTag::SurfaceDepth, "GameScene3D_HiZ");
-                if (m_hiZBuffer) {
-                    std::memset(m_hiZBuffer, 0, hiZSize);
-                    m_depthBuffer.hiZPtr = m_hiZBuffer;
-                    m_depthBuffer.hiZSize = hiZSize;
-                    GX2Invalidate(GX2_INVALIDATE_MODE_CPU, m_hiZBuffer, hiZSize);
-                    hiZEnabled = true;
-                }
-            }
-            GX2InitDepthBufferRegs(&m_depthBuffer);
-            GX2InitDepthBufferHiZEnable(&m_depthBuffer, hiZEnabled ? TRUE : FALSE);
-            m_depthBufferCreated = true;
-        }
-    }
-
-    // 3. Crear Context State con alineación estricta de 256 bytes en MEM1
+    // 3. Crear Context State con alineación estricta de 256 bytes
     if (!m_nativeContextState) {
         m_nativeContextState = static_cast<GX2ContextState*>(
             MemoryManager::Instance().AllocAligned(GX2_CONTEXT_STATE_ALIGNMENT, sizeof(GX2ContextState),
@@ -250,7 +209,7 @@ bool GameScene3D::InitGX2Pipeline() {
         }
     }
 
-    return rendererOk && m_depthBufferCreated && (m_nativeContextState != nullptr);
+    return rendererOk && (m_nativeContextState != nullptr);
 #else
     return ForwardRendererGX2::Instance().Initialize();
 #endif
@@ -267,17 +226,8 @@ void GameScene3D::DestroyGX2Pipeline() {
     // Liberación automática RAII de todas las texturas y CubeMap de la escena (GPU ya drenada)
     ReleaseSceneTextures();
 
-    // Destrucción determinista de superficie de profundidad y Hi-Z
-    if (m_hiZBuffer) {
-        MemoryManager::Instance().FreeAligned(m_hiZBuffer);
-        m_hiZBuffer = nullptr;
-        m_depthBuffer.hiZPtr = nullptr;
-        m_depthBuffer.hiZSize = 0;
-    }
-    if (m_depthBufferCreated) {
-        GX2RDestroySurfaceEx(&m_depthBuffer.surface, GX2R_RESOURCE_BIND_NONE);
-        m_depthBufferCreated = false;
-    }
+    m_pColorBuffer = nullptr;
+    m_pDepthBuffer = nullptr;
 
     // Liberación del Context State alineado
     if (m_nativeContextState) {
@@ -374,4 +324,4 @@ void GameScene3D::ReleaseSceneTextures() noexcept {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

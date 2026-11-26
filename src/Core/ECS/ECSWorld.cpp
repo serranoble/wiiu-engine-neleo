@@ -12,7 +12,7 @@
 #include "Core/ECS/Systems/CullingSystem.hpp"
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 ECSWorld::ECSWorld() {
     m_freeCount = MAX_ENTITIES;
@@ -369,4 +369,4 @@ bool ECSWorld::VerifyECSIntegrity() {
     return true;
 }
 
-} // namespace WiiU
+} // namespace Neleo

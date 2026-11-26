@@ -2,7 +2,7 @@
 
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-241] Componente de Transformación Espacial 3D orientado a datos (Data-Oriented POD).
@@ -42,4 +42,4 @@ struct TransformComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

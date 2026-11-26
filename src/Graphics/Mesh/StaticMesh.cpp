@@ -10,7 +10,7 @@
 #include "Graphics/GL/GLFunctions.hpp"
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -466,4 +466,4 @@ bool StaticMesh::VerifyMeshIntegrity() {
     return true;
 }
 
-} // namespace WiiU
+} // namespace Neleo

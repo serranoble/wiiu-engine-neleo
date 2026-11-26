@@ -3,7 +3,7 @@
 #include "Core/ECS/ECSWorld.hpp"
 #include "Core/ECS/Components/StudioTurntableComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-302] Sistema ECS para actualización desacoplada de plataformas de estudio (StudioTurntableSystem).
@@ -17,4 +17,4 @@ public:
     static void Update(ECSWorld& world, float dt);
 };
 
-} // namespace WiiU
+} // namespace Neleo

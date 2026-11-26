@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 bool NetSession::Connect(const NetAddress& udpRemote, const NetAddress& tcpRemote, uint16_t localUdpPort) noexcept {
     Disconnect();
@@ -361,4 +361,4 @@ void NetSession::EvaluateLostPackets() noexcept {
     }
 }
 
-} // namespace WiiU
+} // namespace Neleo

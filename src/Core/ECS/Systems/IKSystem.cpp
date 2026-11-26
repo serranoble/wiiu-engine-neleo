@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -256,4 +256,4 @@ void IKSystem::Update(ECSWorld& world, float /*dt*/) noexcept {
         });
 }
 
-} // namespace WiiU
+} // namespace Neleo

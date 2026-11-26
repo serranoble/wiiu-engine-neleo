@@ -14,7 +14,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 bool Render2DGX2::Init() {
     if (m_initialized) {
@@ -446,9 +446,9 @@ void Render2DGX2::End() {
         GX2RUnlockBufferEx(&activeBuf, GX2R_RESOURCE_DISABLE_CPU_INVALIDATE);
 
         // Vincular búfer de atributos y emitir 1 sola llamada GPU desde el offset del pase
+        // (sin GX2Flush redundante: el flush canónico ocurre al presentar el frame en Window::Present).
         GX2RSetAttributeBuffer(&activeBuf, 0, sizeof(Render2DVertexGX2), 0);
         GX2DrawEx(GX2_PRIMITIVE_MODE_TRIANGLES, vertCount, m_bufferVertexOffset, 1);
-        GX2Flush();
 
         m_bufferVertexOffset += vertCount;
     }
@@ -466,4 +466,4 @@ void Render2DGX2::NextFrame() noexcept {
 #endif
 }
 
-} // namespace WiiU
+} // namespace Neleo

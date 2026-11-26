@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-335] Componente ECS de Controlador y Reproductor de Animación.
@@ -109,4 +109,4 @@ struct AnimatorComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

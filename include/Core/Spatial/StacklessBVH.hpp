@@ -4,7 +4,7 @@
 #include <array>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Constructor Zero-Alloc de BVH Stackless Pre-Order (hasta 24 nodos / 12 esferas)
@@ -154,4 +154,4 @@ private:
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

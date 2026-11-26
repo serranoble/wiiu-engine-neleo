@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-275] Rejilla Espacial Hash 3D (Spatial Hash Grid Broadphase) Zero-Alloc.
@@ -92,4 +92,4 @@ private:
     size_t m_oversizedCount{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

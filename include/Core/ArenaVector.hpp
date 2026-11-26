@@ -6,7 +6,7 @@
 #include <utility>
 #include <type_traits>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-219] Vector de capacidad fija alocado contiguamente en un Arena (SceneArena / LinearFrameArena).
@@ -76,4 +76,4 @@ private:
     size_t m_count{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

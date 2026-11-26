@@ -460,10 +460,12 @@
 | **OPT-448** | Multiplataforma PAL / Windows OpenGL 3.3 | Eliminación Total de SDL2 (`ZERO_SDL_SOURCE_REFS: PASS`), Capa PAL (`PlatformClock`, `WindowWiiU`/`WindowWin32`, `InputWin32` XInput, `RumbleWin32`, `AudioDeviceWin32` `waveOut`) y `Render2DGL` OpenGL 3.3 Core | Jason Gregory (Caps. 5, 8, 11) / Win32 / WGL / OpenGL 3.3 | **IMPLEMENTADO** | Hito 149 / Fase 1 (25 Nov 2026) |
 | **OPT-449** | Gráficos 3D Multiplataforma / OpenGL 3.3 Core | Backend 3D OpenGL 3.3 Core Completo (`ForwardRendererGL`, `TextureLoaderGL`, `StaticMesh` BE→LE, Skinning 64h, Instancing HW, Skybox Atlas 3×2, `GameScene3D`, `RenderQueue`, `DebugDraw3D`) | Tomas Akenine-Möller (RTR4) / Jason Gregory (Caps. 11–13) / OpenGL 3.3 Core | **IMPLEMENTADO** | Hito 150 / Fase 2 (25 Nov 2026) |
 | **OPT-450** | Gráficos Avanzados Multiplataforma / OpenGL 3.3 Core | Paridad Gráfica Completa OpenGL 3.3 Core (`RenderTargetGL` RGBA8/16F, `ShadowMapRendererGL` PCF 3×3/5×5, `PostProcessHDRGL` HDR+Bloom Kawase, `RHIFullscreenShaderGL` Raytracing BVH, Reflejo Planar y Modos `4..9`) | Tomas Akenine-Möller (RTR4, Caps. 7 & 12) / Eric Lengyel (FGED2) / OpenGL 3.3 Core | **IMPLEMENTADO** | Hito 151 / Fase 3 (25 Nov 2026) |
+| **OPT-451** | Silicio Wii U / Rendimiento 60 FPS | Z-Buffer Único en eDRAM/MEM1 (560 GB/s en `GameScene3D`), Shader Especializado `pbr_lite_gx2` (9.6 KB vs 33.6 KB, bajo GPR en R700), Dirty-Checking de Shaders en `ForwardRendererGX2` y Eliminación de `GX2Flush()` en `Render2DGX2` | AMD R700 ISA / Cafe OS GX2 / Jason Gregory (Cap. 11) | **IMPLEMENTADO** | Hito 152 (26 Nov 2026) |
+| **OPT-452** | Arquitectura Multiplataforma / API Pública | Migración Limpia del Namespace Global `WiiU` → `Neleo` (279 archivos) y Umbrella Header Multiplataforma `include/NeleoEngine.hpp` | Jason Gregory (Cap. 5) / C++20 Clean Code | **IMPLEMENTADO** | Hito 152 (26 Nov 2026) |
 
 ---
 
-## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-450`)
+## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-452`)
 
 ### [OPT-01] Multiprocesamiento Simétrico en 2 Cores (Cores 1 y 2)
 - **Implementado en:** [Hito 24](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md#L669) (6 de Octubre de 2026).
@@ -5358,6 +5360,30 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **Grado de Reusabilidad para el Framework:** **10/10** — Cierra la paridad visual completa de las 8 suites QA (`G1..G8`), `SceneModelHouse`, `SceneModelBird` y `GameScene3D` en Windows / ROG Ally Z1 sin impacto en Wii U GX2 y listo para futuro backend Linux OpenGL/Vulkan.
 - **PROS:** Sombras reales PCF, HDR+Bloom, reflejo planar en agua, raytracing BVH fullscreen y modos procedurales completos con 0 DLLs externas y 0 referencias SDL2.
 - **CONTRAS:** Depende de OpenGL 3.3 Core (soportado ampliamente por AMD Radeon RDNA3 de ROG Ally Z1, NVIDIA e Intel actuales); la validación visual interactiva final en cada escena queda lista para pruebas del usuario en la consola portátil / PC.
+
+### [OPT-451] Hito 152: Optimización de Silicio Wii U 60 FPS (Z-Buffer en MEM1/eDRAM, Shader Especializado `pbr_lite_gx2`, Caché de Pipeline y Limpieza `GX2Flush`)
+- **Área:** Rendimiento GPU AMD Latte R700 / Memoria eDRAM (`GameScene3D`, `ForwardRendererGX2`, `Render2DGX2`, `pbr_lite_gx2.frag/.gsh`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 152 - 26 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD R700 ISA (Wavefront Occupancy & GPR Pressure); Cafe OS GX2 Memory Architecture (MEM1 eDRAM 560 GB/s vs MEM2 DDR3 12.8 GB/s).
+- **Mecanismo Implementado:**
+  1. **Z-Buffer Único en eDRAM/MEM1 (`GameScene3D`):** Eliminada la asignación duplicada de `m_depthBuffer`/`m_hiZBuffer` en MEM2 (12.8 GB/s); `GameScene3D::Render()` reutiliza `Window::GetActiveNativeDepthBuffer()` (`FLOAT_R32` + HiZ en `s_mem1ExpHeap` @ 560 GB/s), sobreviviendo de forma nativa a ProcUI/HOME.
+  2. **Especialización de Shader PBR Lite (`pbr_lite_gx2`):** Nuevo fragment shader compilado con CafeGLSL a **9,676 B** (3.5× más compacto que los 33,588 B de `pbr_mesh_gx2.gsh`), conteniendo solo modos `0..1` (PBR Cook-Torrance + Blinn-Phong, Alpha-Cutout, TBN, IBL opcional y luces) sin PCF 5×5, `Fbm3D`, agua, vidrio, terreno ni NPR. Enrutamiento automático en `ForwardRendererGX2::RenderStaticMeshPBR()` cuando `shadingMode <= 1u && !shadowActive`.
+  3. **Dirty-Checking de Shaders & Limpieza 2D:** `m_boundShaderKind` evita re-invocar `GX2SetFetchShader`/`VertexShader`/`PixelShader` en draws consecutivos del mismo pipeline; retirado `GX2Flush()` redundante en `Render2DGX2::End()`.
+  4. **Cobertura Self-Test:** `T4: FORWARD_RENDERER` en `GraphicsSelfTest.cpp` valida `IsPBRLiteShaderLoaded()`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Beneficia automáticamente a todas las escenas 3D (`GameScene3D`, suites G1–G8, `SceneModelHouse`) sin modificar código de juego ni afectar el backend OpenGL 3.3 Core.
+- **PROS:** Elimina el cuello de botella Z-test en DDR3/MEM2, reduce presión de GPRs en R700 y disminuye overhead CPU en Core 1.
+- **CONTRAS:** Mantiene dos binarios PBR embebidos (`pbr_mesh_gx2` + `pbr_lite_gx2`, +9.6 KB en el ejecutable).
+
+### [OPT-452] Hito 152: Migración Limpia del Namespace Multiplataforma (`WiiU` → `Neleo`) y Umbrella Header `NeleoEngine.hpp`
+- **Área:** Arquitectura y API Pública Multiplataforma (`include/`, `src/`, `tools/EmbedGsh.ps1`, documentación).
+- **Estado:** **`IMPLEMENTADO`** (Hito 152 - 26 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, Cap. 5); C++20 Clean Code.
+- **Mecanismo Implementado:**
+  1. Reemplazo integral y determinista de `namespace WiiU` / `WiiU::` por `namespace Neleo` / `Neleo::` en 279 archivos de código fuente, headers, `tools/EmbedGsh.ps1` y documentación, preservando intactas las macros de plataforma (`__WIIU__`, `WIIU_ENGINE_BUILD_DEMOS`).
+  2. Creación de `include/NeleoEngine.hpp` como umbrella header canónico multiplataforma (con redirección en `include/WiiUEngine.hpp`).
+- **Grado de Reusabilidad para el Framework:** **10/10** — Desacopla la identidad de la API C++20 de una consola específica (Wii U, Windows/ROG Ally, futuro Linux/Switch) evitando colisiones con `class Engine`.
+- **PROS:** API limpia y coherente con el nombre del motor (`Neleo`), 0 deuda de alias legacy.
+- **CONTRAS:** Ninguno (sin consumidores externos dependientes de `WiiU::`).
 
 ---
 

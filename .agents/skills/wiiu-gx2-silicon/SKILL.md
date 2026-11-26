@@ -13,7 +13,7 @@ description: Hardware invariants for Nintendo Wii U (IBM Espresso PPC 750CL, AMD
 ## 2. ProcUI & Foreground Guards (Menú HOME)
 - **Never** call `GX2DrawDone()` or teardown GPU buffers without checking:
   ```cpp
-  if (WiiU::Window::HasForeground() && !WiiU::Window::IsExitingProcUI()) {
+  if (Neleo::Window::HasForeground() && !Neleo::Window::IsExitingProcUI()) {
       GX2DrawDone();
   }
   ```

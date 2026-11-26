@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace WiiU::UI {
+namespace Neleo::UI {
 
 const UITheme& UITheme::Default() noexcept {
     static const UITheme s_defaultTheme{};
@@ -339,4 +339,4 @@ bool UIToolkit::VerifyUIToolkitIntegrity() {
     return true;
 }
 
-} // namespace WiiU::UI
+} // namespace Neleo::UI

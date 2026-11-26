@@ -4,7 +4,7 @@
 #include "Core/ECS/Components/SpringArmComponent.hpp"
 #include "Core/ECS/Components/StudioTurntableComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-321] Sistema ECS de Barrido de Colisión y Amortiguamiento de Brazo de Cámara.
@@ -21,4 +21,4 @@ public:
     static void Update(ECSWorld& world, float dt);
 };
 
-} // namespace WiiU
+} // namespace Neleo

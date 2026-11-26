@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace WiiU::Audio {
+namespace Neleo::Audio {
 
 namespace {
 
@@ -62,4 +62,4 @@ void AudioSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     }
 }
 
-} // namespace WiiU::Audio
+} // namespace Neleo::Audio

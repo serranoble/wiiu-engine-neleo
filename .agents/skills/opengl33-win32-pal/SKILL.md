@@ -13,7 +13,7 @@ description: Hardware and platform invariants for Windows x64 / ASUS ROG Ally (W
 ## 2. Link-Time PAL & Header Hygiene
 - Isolate Win32/OpenGL code inside `src/Platform/Win32/` and `src/Graphics/GL/` via `CMakeLists.txt` (`if(WUT) ... else() ... endif()`).
 - **Never** `#include <windows.h>`, `<winsock2.h>`, or `<GL/gl.h>` inside any public header under `include/`.
-- Use `GLFunctions` (`WiiU::Graphics::GL::LoadFunctions()` via `wglGetProcAddress`) and scalar typedefs/constants in `include/Graphics/GL/GLFunctions.hpp`.
+- Use `GLFunctions` (`Neleo::Graphics::GL::LoadFunctions()` via `wglGetProcAddress`) and scalar typedefs/constants in `include/Graphics/GL/GLFunctions.hpp`.
 
 ## 3. OpenGL 3.3 Core Pipeline & State Invariants
 - **Isolated VAOs per layout:** Never share one VAO across incompatible vertex layouts. Keep distinct VAOs (`staticVao`, `instVao`, `skinnedVao`, `skyVao`, `depthVao`, `shadowVao`, `fullscreenVao`) and bind before configuring attributes or issuing draws.

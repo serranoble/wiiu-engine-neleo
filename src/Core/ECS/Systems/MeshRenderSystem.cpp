@@ -9,7 +9,7 @@
 #include "Graphics/RenderQueue.hpp"
 #include "Graphics/SkyboxRenderPass.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 void MeshRenderSystem::Render(ECSWorld& world, ForwardRendererGX2& renderer, bool enableEarlyZPrePass) {
     static RenderQueue s_queue{};
@@ -128,4 +128,4 @@ void MeshRenderSystem::Render(ECSWorld& world, ForwardRendererGX2& renderer, boo
     s_queue.FlushRange(renderer, RenderLayer::Transparent, RenderLayer::Overlay, false);
 }
 
-} // namespace WiiU
+} // namespace Neleo

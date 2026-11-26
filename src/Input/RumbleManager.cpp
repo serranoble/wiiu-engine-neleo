@@ -6,12 +6,12 @@
 #include <vpad/input.h>
 #include <padscore/wpad.h>
 #elif defined(_WIN32)
-namespace WiiU::Platform {
+namespace Neleo::Platform {
 void SetWin32HardwareRumble(int playerIdx, float intensity, bool active) noexcept;
 }
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 void RumbleManager::Init() {
     if (m_initialized) return;
@@ -182,4 +182,4 @@ void RumbleManager::SetHardwareRumble(PlayerIndex player, float intensity, bool 
 #endif
 }
 
-} // namespace WiiU
+} // namespace Neleo

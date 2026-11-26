@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 struct DirectionalLight {
     Point3D direction{-0.5f, -1.0f, -0.7f}; // Dirección de la luz espacial
@@ -47,4 +47,4 @@ inline ColorRGBA calculateLighting(const ColorRGBA& baseColor, const Point3D& no
     return CalculateLighting(baseColor, normal, light);
 }
 
-} // namespace WiiU
+} // namespace Neleo

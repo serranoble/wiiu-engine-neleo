@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Estados discretos de la Máquina de Estados Finitos (FSM) de IA.
@@ -81,4 +81,4 @@ struct AIControllerComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

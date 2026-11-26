@@ -19,7 +19,7 @@
 #include <proc_ui/procui.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -616,4 +616,4 @@ bool RHIFullscreenShader::CreateQuadBuffer() {
 }
 #endif
 
-} // namespace WiiU
+} // namespace Neleo

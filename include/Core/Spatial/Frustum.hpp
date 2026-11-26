@@ -5,7 +5,7 @@
 #include <array>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Volumen de visión 3D (6 planos normalizados) con extracción Gribb-Hartmann
@@ -122,4 +122,4 @@ private:
     std::array<FrustumPlane, 6> m_planes{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

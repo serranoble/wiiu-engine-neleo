@@ -20,7 +20,7 @@
 #include <gfd.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Formato de vértice para renderizado 2D nativo por hardware GX2.
@@ -129,4 +129,4 @@ private:
 #endif
 };
 
-} // namespace WiiU
+} // namespace Neleo

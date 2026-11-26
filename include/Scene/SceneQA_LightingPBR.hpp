@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G2: Validación de Iluminación Analítica (Direccional + 4 Puntuales + 1 Spot Light),
@@ -64,4 +64,4 @@ private:
     float m_lightTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

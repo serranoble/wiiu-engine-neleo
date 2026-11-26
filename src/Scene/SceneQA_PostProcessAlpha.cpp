@@ -15,7 +15,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr uint32_t kToneMapCount = 3u;
@@ -325,4 +325,4 @@ void SceneQA_PostProcessAlpha::OnQARenderHUD() {
                               30, 184, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

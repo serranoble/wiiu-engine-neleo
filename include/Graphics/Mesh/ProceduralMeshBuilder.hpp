@@ -3,7 +3,7 @@
 #include "Graphics/Mesh/StaticMesh.hpp"
 #include <cstdint>
 
-namespace WiiU::Graphics::ProceduralMeshBuilder {
+namespace Neleo::Graphics::ProceduralMeshBuilder {
 
 /**
  * @brief Construye un plano horizontal en Y=0 con normales (+Y) y coordenadas UV escalables.
@@ -56,4 +56,4 @@ namespace WiiU::Graphics::ProceduralMeshBuilder {
                                           uint32_t gridZ = 48u,
                                           float maxHeight = 5.5f);
 
-} // namespace WiiU::Graphics::ProceduralMeshBuilder
+} // namespace Neleo::Graphics::ProceduralMeshBuilder

@@ -9,7 +9,7 @@
 #include "Core/ECS/Entity.hpp"
 #include "Core/ECS/ComponentPool.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Generador de identificadores únicos por tipo de componente en tiempo de compilación/enlace.
@@ -275,4 +275,4 @@ private:
     std::array<std::unique_ptr<IComponentPool>, MAX_COMPONENT_TYPES> m_pools{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -1,6 +1,6 @@
 #include "Graphics/MaterialSystem.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 MaterialRegistry& MaterialRegistry::Instance() noexcept {
     static MaterialRegistry instance;
@@ -56,4 +56,4 @@ void MaterialRegistry::Clear() noexcept {
     m_lightBlock.ClearPointLights();
 }
 
-} // namespace WiiU
+} // namespace Neleo

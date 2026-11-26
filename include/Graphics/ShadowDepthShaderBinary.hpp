@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 static constexpr size_t SHADOW_DEPTH_GX2_GSH_SIZE = 1076;
 alignas(256) static constexpr uint8_t SHADOW_DEPTH_GX2_GSH_DATA[1076] = {
@@ -76,4 +76,4 @@ alignas(256) static constexpr uint8_t SHADOW_DEPTH_GX2_GSH_DATA[1076] = {
     0x00, 0x00, 0x00, 0x00
 };
 
-} // namespace WiiU
+} // namespace Neleo

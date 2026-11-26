@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <array>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 124 - Jason Gregory Cap. 5.3] Modos de filtrado de textura en hardware GX2.
@@ -147,4 +147,4 @@ private:
     bool m_isApplying{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

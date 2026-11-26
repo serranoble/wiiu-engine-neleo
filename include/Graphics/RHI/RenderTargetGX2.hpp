@@ -9,7 +9,7 @@
 #include <gx2/texture.h>
 #endif
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 enum class RenderTargetFormat : uint8_t {
     RGBA8_UNorm  = 0u,
@@ -114,4 +114,4 @@ private:
 #endif
 };
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

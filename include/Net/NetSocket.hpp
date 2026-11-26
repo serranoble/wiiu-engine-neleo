@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 20.1] Capa de ciclo de vida del subsistema de red (HAL).
@@ -81,4 +81,4 @@ private:
     bool m_connected{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

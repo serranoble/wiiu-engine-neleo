@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -366,4 +366,4 @@ bool CVarRegistry::ExecuteCommand(std::string_view commandLine, StackString<256>
     return false;
 }
 
-} // namespace WiiU
+} // namespace Neleo

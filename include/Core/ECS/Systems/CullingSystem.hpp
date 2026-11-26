@@ -7,7 +7,7 @@
 #include "Core/ECS/Components/CameraComponent.hpp"
 #include "Core/ECS/Components/BoundingVolumeComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 class SpatialBVH;
 
@@ -36,4 +36,4 @@ public:
                                 float screenWidth = 1280.0f, float screenHeight = 720.0f);
 };
 
-} // namespace WiiU
+} // namespace Neleo

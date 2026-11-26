@@ -9,7 +9,7 @@
 #include <gx2/state.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 #if defined(__WIIU__) || defined(__wiiu__)
 inline constexpr uint8_t RHI_COMPARE_EQUAL  = static_cast<uint8_t>(GX2_COMPARE_FUNC_EQUAL);  // 2
@@ -176,4 +176,4 @@ struct RHIPipelineState {
 
 static_assert(std::is_standard_layout_v<RHIPipelineState>, "RHIPipelineState must be standard layout POD");
 
-} // namespace WiiU
+} // namespace Neleo

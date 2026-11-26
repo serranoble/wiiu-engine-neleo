@@ -1,7 +1,6 @@
 #include "Scene/SceneModelBird.hpp"
 #include "Core/AssetManager.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
-#include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
 #include "Graphics/Animation/AnimationLoader.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
@@ -9,7 +8,7 @@
 #include "Audio/AudioManager.hpp"
 #include <cstdio>
 
-namespace WiiU {
+namespace Neleo {
 
 std::vector<std::string> SceneModelBird::GetRequiredAssets() const {
     return {
@@ -51,9 +50,6 @@ void SceneModelBird::OnQAEnter() {
     m_savedLightBlock = MaterialRegistry::Instance().GetActiveLightBlock();
     m_lightBlockSaved = true;
 
-    (void)Graphics::ProceduralMeshBuilder::CreatePlane(
-        m_floorMesh, 24.0f, 24.0f, 6.0f, 6.0f, 4u, 4u, 0.16f, 0.19f, 0.24f);
-
     m_birdMeshLoaded = !m_stagedBirdMesh.empty()
         ? m_birdMesh.LoadFromMemory(m_stagedBirdMesh.data(), m_stagedBirdMesh.size())
         : m_birdMesh.LoadFromFile("models/bird_orange.wmesh");
@@ -76,7 +72,7 @@ void SceneModelBird::OnQAEnter() {
 void SceneModelBird::OnQAExit() {
     FreeStagedBuffers();
 
-    const bool hasResources = m_birdMeshLoaded || m_birdTexLoaded || m_floorMesh.IsLoaded();
+    const bool hasResources = m_birdMeshLoaded || m_birdTexLoaded;
     if (hasResources) {
         WaitForGpuIdleSafe();
     }
@@ -89,7 +85,6 @@ void SceneModelBird::OnQAExit() {
         m_birdMesh.Destroy();
         m_birdMeshLoaded = false;
     }
-    m_floorMesh.Destroy();
 
     std::vector<AnimationClip>{}.swap(m_clips);
     m_clipsLoaded = false;
@@ -199,19 +194,7 @@ void SceneModelBird::OnQARender3D(const Matrix4x4& viewMatrix, const Matrix4x4& 
     lights.ClearPointLights();
     lights.ClearSpotLight();
 
-    const float floorY = m_birdMeshLoaded ? (m_birdMesh.GetHeader().aabbMin[1] - 0.02f) : -0.02f;
-
-    // 1. Pedestal / suelo de referencia
-    {
-        MaterialPropertyBlock floorMat{};
-        floorMat.ubo.albedoTint[0] = 0.55f; floorMat.ubo.albedoTint[1] = 0.62f; floorMat.ubo.albedoTint[2] = 0.72f;
-        floorMat.ubo.pbrParams[0] = 0.76f;
-        floorMat.ubo.pbrParams[1] = 0.04f;
-        floorMat.ubo.materialParams[3] = 0.36f;
-        renderer.RenderStaticMeshPBR(m_floorMesh, Matrix4x4::Translation(0.0f, floorY, 0.0f), floorMat, 0u);
-    }
-
-    // 2. Modelo único animado con GPU Skinning (stride 80 B + paleta <= 24 huesos)
+    // 1. Modelo único animado con GPU Skinning (stride 80 B + paleta <= 24 huesos)
     if (m_birdMeshLoaded && m_skelLoaded && m_skeleton.jointCount > 0u) {
         const uint32_t clampedJoints = (m_skeleton.jointCount <= MAX_SKELETON_JOINTS)
             ? m_skeleton.jointCount
@@ -275,4 +258,4 @@ void SceneModelBird::OnQARenderHUD() {
     Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

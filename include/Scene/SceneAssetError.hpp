@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Escena modal defensiva que bloquea el inicio de una escena cuando faltan recursos,
@@ -31,4 +31,4 @@ private:
     float m_animTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

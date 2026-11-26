@@ -12,7 +12,7 @@
 #include <gx2r/buffer.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Preset estándar 16:9 para escalado dinámico interno sobre `RHIFullscreenShader`.
@@ -179,4 +179,4 @@ private:
     std::vector<uint8_t> m_stagedBinary;
 };
 
-} // namespace WiiU
+} // namespace Neleo

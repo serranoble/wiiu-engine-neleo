@@ -2,7 +2,7 @@
 #include "Graphics/Render2D.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
     // Estado estático de proyección para el cuadro de renderizado actual
@@ -266,4 +266,4 @@ void DebugDraw3D::DrawRay(const Point3D& start, const Point3D& dirAndLength, flo
     DrawLine(start, end, width, color);
 }
 
-} // namespace WiiU
+} // namespace Neleo

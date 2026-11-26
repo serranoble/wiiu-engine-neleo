@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Generador de Números Pseudoaleatorios Determinista de Alto Rendimiento (PRNG).
@@ -179,4 +179,4 @@ private:
     bool  m_hasCachedGaussian{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

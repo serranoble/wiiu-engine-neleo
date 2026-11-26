@@ -8,14 +8,14 @@
 #include <string>
 #include <vector>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Escena de validación del Asset Cooker para modelos estáticos (.wmesh 48B + .wtex).
  *
  * Carga por separado la casa holandesa cocinada (dutch_house, props y vegetación alpha-cutout)
- * sobre un suelo procedural para verificar fidelidad de geometría, UVs, normales, alpha-cutout
- * y rendimiento en Cemu y Nintendo Wii U real.
+ * sin geometría adicional para verificar fidelidad de geometría, UVs, normales, alpha-cutout
+ * y rendimiento en Cemu, Windows y Nintendo Wii U real.
  */
 class SceneModelHouse final : public GraphicsQASceneBase {
 public:
@@ -54,7 +54,6 @@ private:
     std::vector<uint8_t> m_stagedPropsTex;
     std::vector<uint8_t> m_stagedAlphaTex;
 
-    StaticMesh m_floorMesh;
     StaticMesh m_houseMesh;
     StaticMesh m_propsMesh;
     StaticMesh m_alphaMesh;
@@ -80,4 +79,4 @@ private:
     float m_turntableAngle{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 void OrbitCameraSystem::SetSplineControlPoints(const Point3D* points, uint32_t count) noexcept {
     if (!points || count == 0) {
@@ -167,4 +167,4 @@ void OrbitCameraSystem::Update(ECSWorld& world, float deltaTime) {
     m_viewMatrix = Matrix4x4::LookAt(m_camPos, focusPoint + shakePosOffset, Point3D{0.0f, 1.0f, 0.0f});
 }
 
-} // namespace WiiU
+} // namespace Neleo

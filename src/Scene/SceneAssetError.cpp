@@ -6,7 +6,7 @@
 #include "Graphics/Color.hpp"
 #include "Core/StackString.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 SceneAssetError::SceneAssetError(std::string targetSceneName, std::vector<std::string> missingAssets)
     : m_targetSceneName(std::move(targetSceneName)),
@@ -108,4 +108,4 @@ void SceneAssetError::Render() {
     Render2D::End();
 }
 
-} // namespace WiiU
+} // namespace Neleo

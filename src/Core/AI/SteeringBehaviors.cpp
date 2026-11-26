@@ -1,7 +1,7 @@
 #include "Core/AI/SteeringBehaviors.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 Point3D SteeringBehaviors::Seek(const Point3D& currentPos, 
                                 const Point3D& targetPos, 
@@ -110,4 +110,4 @@ bool SteeringBehaviors::IsInSightCone(const Point3D& observerPos,
     return dot >= cosHalfFov;
 }
 
-} // namespace WiiU
+} // namespace Neleo

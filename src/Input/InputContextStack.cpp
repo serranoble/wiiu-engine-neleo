@@ -1,6 +1,6 @@
 #include "Input/InputContextStack.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 void InputContextStack::Clear() noexcept {
     m_count = 0;
@@ -102,4 +102,4 @@ InputContext InputContextStack::GetActiveContext() const noexcept {
     return m_layers[m_count - 1].context;
 }
 
-} // namespace WiiU
+} // namespace Neleo

@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU::Graphics::GL {
+namespace Neleo::Graphics::GL {
 
 // Tipos básicos compatibles con OpenGL 3.3 Core (sin depender de <GL/gl.h> ni loaders externos)
 using GLboolean = unsigned char;
@@ -190,4 +190,4 @@ struct Functions {
 bool LoadFunctions() noexcept;
 void ResetFunctions() noexcept;
 
-} // namespace WiiU::Graphics::GL
+} // namespace Neleo::Graphics::GL

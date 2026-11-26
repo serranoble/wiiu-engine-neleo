@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 namespace {
 
@@ -317,4 +317,4 @@ void PostProcessHDRGX2::EndHDRScenePassAndCompose(const PostProcessHDRSettings& 
     gl.DepthMask(GL::GL_TRUE_VAL);
 }
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

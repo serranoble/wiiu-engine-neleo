@@ -1,7 +1,7 @@
 #include "Core/Math/PRNG.hpp"
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 constexpr float TWO_PI = 6.28318530717958647692f;
 constexpr float PI     = 3.14159265358979323846f;
@@ -232,4 +232,4 @@ ColorRGBA ColorRGBA::Random(PRNG& prng) {
     return prng.NextColorRGBA();
 }
 
-} // namespace WiiU
+} // namespace Neleo

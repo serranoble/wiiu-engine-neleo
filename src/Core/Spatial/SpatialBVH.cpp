@@ -1,7 +1,7 @@
 #include "Core/Spatial/SpatialBVH.hpp"
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 void SpatialBVH::Reserve(size_t maxPrimitives) {
     if (maxPrimitives == 0) return;
@@ -303,4 +303,4 @@ size_t SpatialBVH::PackNodesForGPU(float* outVec4Buffer, size_t maxNodes) const 
     return outCursor;
 }
 
-} // namespace WiiU
+} // namespace Neleo

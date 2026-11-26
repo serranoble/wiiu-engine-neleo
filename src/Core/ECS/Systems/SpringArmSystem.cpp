@@ -3,7 +3,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 void SpringArmSystem::Update(ECSWorld& world, float dt) {
     if (dt <= 0.0f) return;
@@ -60,4 +60,4 @@ void SpringArmSystem::Update(ECSWorld& world, float dt) {
     });
 }
 
-} // namespace WiiU
+} // namespace Neleo

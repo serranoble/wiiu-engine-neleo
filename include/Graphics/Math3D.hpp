@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 struct Point3D {
     float x{0.0f};
@@ -560,4 +560,4 @@ struct Matrix4x4 {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

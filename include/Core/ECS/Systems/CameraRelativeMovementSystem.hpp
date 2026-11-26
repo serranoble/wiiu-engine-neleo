@@ -4,7 +4,7 @@
 #include "Core/ECS/Components/KinematicCharacterComponent.hpp"
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-374] Sistema Reutilizable de Locomocion Cinematica Relativa a Camara.
@@ -42,4 +42,4 @@ public:
                                     bool jumpTriggered = false) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

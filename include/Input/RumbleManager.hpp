@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 enum class PlayerIndex : uint8_t {
     Player1 = 0,
@@ -89,4 +89,4 @@ private:
     bool m_initialized{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

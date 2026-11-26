@@ -4,7 +4,7 @@
 #include <array>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-385] Componente ECS que vincula una entidad con un BehaviorTreeAsset compartido.
@@ -31,4 +31,4 @@ struct BehaviorTreeComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -5,7 +5,7 @@
 #include <array>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 class ECSWorld;
 
@@ -134,4 +134,4 @@ private:
     Matrix4x4 m_viewMatrix{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

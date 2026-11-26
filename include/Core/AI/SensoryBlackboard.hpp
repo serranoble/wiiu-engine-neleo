@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 enum class StimulusType : uint8_t {
     None = 0,
@@ -139,4 +139,4 @@ struct SensoryBlackboard {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

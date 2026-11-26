@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 constexpr uint32_t MAX_KEYFRAMES_PER_TRACK = 64;
 
@@ -158,4 +158,4 @@ struct AnimationClip {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -1,7 +1,7 @@
 #include "Graphics/SkyboxRenderPass.hpp"
 #include "Core/ECS/Components/SkyboxComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 bool SkyboxRenderPass::Render(ECSWorld& world, ForwardRendererGX2& renderer) {
     bool rendered = false;
@@ -17,4 +17,4 @@ bool SkyboxRenderPass::Render(ECSWorld& world, ForwardRendererGX2& renderer) {
     return rendered;
 }
 
-} // namespace WiiU
+} // namespace Neleo

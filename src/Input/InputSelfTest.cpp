@@ -1,9 +1,10 @@
 #include "Input/InputSelfTest.hpp"
 #include "Input/VirtualGamepad.hpp"
 #include "Input/InputContextStack.hpp"
+#include "Input/SoftwareKeyboard.hpp"
 #include <cmath>
 
-namespace WiiU::Input {
+namespace Neleo::Input {
 
 void InputSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     // 1. ApplyRadialDeadzone: 0 dentro del radio muerto, remapeo suave y magnitud <= 1 en diagonal
@@ -39,6 +40,21 @@ void InputSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         outReport.Record("INPUT", "INPUT_CONTEXT_STACK", ok,
                          ok ? "CONTEXT STACK/BLOCK OK" : "FALLO INPUT CONTEXT STACK");
     }
+
+    // 3. SoftwareKeyboard::IsCharAllowed (filtro IPv4 vs FullText multiplataforma)
+    {
+        const bool ipOk = SoftwareKeyboard::IsCharAllowed('0', KeyboardInputMode::IPv4) &&
+                          SoftwareKeyboard::IsCharAllowed('9', KeyboardInputMode::IPv4) &&
+                          SoftwareKeyboard::IsCharAllowed('.', KeyboardInputMode::IPv4) &&
+                          !SoftwareKeyboard::IsCharAllowed('A', KeyboardInputMode::IPv4) &&
+                          !SoftwareKeyboard::IsCharAllowed(' ', KeyboardInputMode::IPv4);
+        const bool fullOk = SoftwareKeyboard::IsCharAllowed('A', KeyboardInputMode::FullText) &&
+                            SoftwareKeyboard::IsCharAllowed(' ', KeyboardInputMode::FullText) &&
+                            !SoftwareKeyboard::IsCharAllowed('\n', KeyboardInputMode::FullText);
+        const bool ok = ipOk && fullOk;
+        outReport.Record("INPUT", "SWKBD_CHAR_FILTER", ok,
+                         ok ? "FILTRO IPV4+FULLTEXT OK" : "FALLO FILTRO TECLADO VIRTUAL");
+    }
 }
 
-} // namespace WiiU::Input
+} // namespace Neleo::Input

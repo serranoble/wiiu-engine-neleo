@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 bool CollisionSystem::IntersectSphereSphere(const Point3D& centerA, float radiusA,
                                             const Point3D& centerB, float radiusB,
@@ -307,4 +307,4 @@ void CollisionSystem::Update(ECSWorld& world, float /*dt*/) noexcept {
     );
 }
 
-} // namespace WiiU
+} // namespace Neleo

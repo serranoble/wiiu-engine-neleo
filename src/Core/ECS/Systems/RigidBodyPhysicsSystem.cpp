@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -916,4 +916,4 @@ bool RigidBodyPhysicsSystem::IntersectAABBAABB(const Point3D& centerA, const Poi
     return true;
 }
 
-} // namespace WiiU
+} // namespace Neleo

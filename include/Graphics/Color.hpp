@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstdlib>
 
-namespace WiiU {
+namespace Neleo {
 
 class PRNG;
 
@@ -38,4 +38,4 @@ struct ColorRGBA {
     static ColorRGBA Random(PRNG& prng);
 };
 
-} // namespace WiiU
+} // namespace Neleo

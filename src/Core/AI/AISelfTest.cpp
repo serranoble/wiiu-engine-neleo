@@ -4,7 +4,7 @@
 #include "Core/AI/SteeringBehaviors.hpp"
 #include <cmath>
 
-namespace WiiU::AI {
+namespace Neleo::AI {
 
 void AISelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     // 1. NavGraph + AStarPathfinder: debe elegir la ruta óptima (0 -> 1 -> 3 costo 4) vs larga (0 -> 2 -> 3 costo 20)
@@ -47,4 +47,4 @@ void AISelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     }
 }
 
-} // namespace WiiU::AI
+} // namespace Neleo::AI

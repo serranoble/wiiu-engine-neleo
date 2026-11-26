@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 constexpr uint32_t MAX_SKELETON_JOINTS = 24;
 
@@ -42,4 +42,4 @@ struct Skeleton {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

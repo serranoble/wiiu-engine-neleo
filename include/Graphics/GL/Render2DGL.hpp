@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Subsistema de renderizado 2D batcheado en OpenGL 3.3 Core (0 dependencias externas).
@@ -63,4 +63,4 @@ private:
     bool m_inBatch{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

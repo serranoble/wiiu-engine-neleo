@@ -14,7 +14,7 @@
 #include <gx2/surface.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr uint32_t kIORPresetCount = 4u;
@@ -185,6 +185,7 @@ void SceneQA_EnvironmentWater::RenderSpheresAndSkybox(GX2Texture* activeCube, co
         skyMat.envCubeMap = activeCube;
         skyMat.depthTest = true;
         skyMat.depthWrite = false;
+        skyMat.backfaceCull = false;
         const Matrix4x4 skyModel = Matrix4x4::Translation(skyCenterPos.x, skyCenterPos.y, skyCenterPos.z) *
                                    Matrix4x4::Scale(120.0f, 120.0f, 120.0f);
         renderer.RenderStaticMeshPBR(m_skyboxCubeMesh, skyModel, skyMat, 6u);
@@ -286,4 +287,4 @@ void SceneQA_EnvironmentWater::OnQARenderHUD() {
                               30, 184, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

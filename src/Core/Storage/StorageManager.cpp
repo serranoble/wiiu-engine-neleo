@@ -19,7 +19,7 @@
 #define MKDIR(path) mkdir(path, 0777)
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 bool StorageManager::s_initialized = false;
 char StorageManager::s_saveRoot[256] = "./";
@@ -520,4 +520,4 @@ bool StorageManager::GetLastAsyncSaveSuccess() noexcept {
     return g_lastAsyncSaveSuccess.load(std::memory_order_acquire);
 }
 
-} // namespace WiiU
+} // namespace Neleo

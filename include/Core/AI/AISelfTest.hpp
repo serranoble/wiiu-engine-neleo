@@ -2,7 +2,7 @@
 
 #include "Core/Diagnostics/SelfTestTypes.hpp"
 
-namespace WiiU::AI {
+namespace Neleo::AI {
 
 /**
  * @brief Batería de pruebas deterministas de engine_ai (NavGraph + AStarPathfinder y SteeringBehaviors).
@@ -12,4 +12,4 @@ public:
     static void RunAll(Diagnostics::EngineSelfTestReport& outReport);
 };
 
-} // namespace WiiU::AI
+} // namespace Neleo::AI

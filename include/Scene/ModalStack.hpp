@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <memory>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-233 / OPT-314] Interfaz para capas superpuestas compositables (modales, inventarios, dialogos, terminal CVar).
@@ -61,4 +61,4 @@ private:
     size_t m_count{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

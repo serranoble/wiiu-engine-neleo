@@ -1,6 +1,6 @@
 #pragma once
 
-namespace WiiU {
+namespace Neleo {
 
 class ECSWorld;
 class ForwardRendererGX2;
@@ -24,4 +24,4 @@ public:
     static void Render(ECSWorld& world, ForwardRendererGX2& renderer, bool enableEarlyZPrePass = false);
 };
 
-} // namespace WiiU
+} // namespace Neleo

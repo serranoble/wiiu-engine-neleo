@@ -2,7 +2,7 @@
 
 #include "Core/ECS/ECSWorld.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-125] Sistema ECS de Cinemática Inversa Esquelética (Two-Bone, Look-At & FABRIK).
@@ -16,4 +16,4 @@ public:
     static void Update(ECSWorld& world, float dt) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

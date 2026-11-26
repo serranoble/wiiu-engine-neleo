@@ -1,7 +1,7 @@
 #include "Scene/ModalStack.hpp"
 #include "Input/InputManager.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 bool ModalStack::Push(std::unique_ptr<ISceneOverlay> overlay) {
     if (!overlay || m_count >= MAX_OVERLAYS) {
@@ -88,4 +88,4 @@ bool ModalStack::IsBlockingSceneInput() const noexcept {
     return false;
 }
 
-} // namespace WiiU
+} // namespace Neleo

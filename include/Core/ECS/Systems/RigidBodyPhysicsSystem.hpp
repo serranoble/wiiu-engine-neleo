@@ -10,7 +10,7 @@
 #include "Core/ECS/Components/KinematicCharacterComponent.hpp"
 #include "Core/Physics/SpatialHashGrid.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Contacto físico generado en la fase estrecha entre dos entidades rígidas o estáticas.
@@ -203,4 +203,4 @@ private:
     PhysicsTelemetry m_telemetry{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

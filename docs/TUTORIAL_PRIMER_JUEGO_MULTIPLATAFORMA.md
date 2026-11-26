@@ -62,25 +62,25 @@ El motor resuelve rutas relativas como `"models/mi_modelo.wmesh"` automáticamen
 #include "WiiUEngine.hpp"
 #include <vector>
 
-class SceneMiJuego final : public WiiU::GameScene3D {
+class SceneMiJuego final : public Neleo::GameScene3D {
 public:
     void LoadAsync() override;
     void OnGameInit() override;
     void OnGameExit() override;
     void OnGameUpdate(float dt) override;
-    void OnGameRender3D(WiiU::ForwardRendererGX2& renderer) override;
+    void OnGameRender3D(Neleo::ForwardRendererGX2& renderer) override;
     void OnGameRenderDebug3D() override;
     void OnGameRenderHUD() override;
 
     [[nodiscard]] std::string GetSceneName() const override { return "Mi Juego 3D"; }
 
 private:
-    WiiU::StaticMesh m_mesh;
-    WiiU::MaterialPropertyBlock m_material{};
-    WiiU::ResourceHandle<GX2Texture> m_albedoHandle{};
-    WiiU::GameClock m_clock{};
+    Neleo::StaticMesh m_mesh;
+    Neleo::MaterialPropertyBlock m_material{};
+    Neleo::ResourceHandle<GX2Texture> m_albedoHandle{};
+    Neleo::GameClock m_clock{};
 
-    WiiU::Point3D m_playerPos{0.0f, 0.5f, 0.0f};
+    Neleo::Point3D m_playerPos{0.0f, 0.5f, 0.0f};
     float m_yawRad{0.0f};
     float m_elapsedSec{0.0f};
     bool m_showDebug{false};
@@ -102,8 +102,8 @@ private:
 #include <cmath>
 
 void SceneMiJuego::LoadAsync() {
-    WiiU::AssetManager::LoadBinaryFile("models/dutch_house.wmesh", m_stagedMesh);
-    WiiU::AssetManager::LoadBinaryFile("models/dutch_house.wtex", m_stagedTex);
+    Neleo::AssetManager::LoadBinaryFile("models/dutch_house.wmesh", m_stagedMesh);
+    Neleo::AssetManager::LoadBinaryFile("models/dutch_house.wtex", m_stagedTex);
 }
 
 void SceneMiJuego::OnGameInit() {
@@ -131,7 +131,7 @@ void SceneMiJuego::OnGameInit() {
     m_material.normalMapEnabled = true;
 
     // 3. Registrar música o audio 3D si dispones de un archivo WAV en assets/audio/
-    WiiU::AudioEngine3D::Instance().SetListenerTransform(m_playerPos, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f});
+    Neleo::AudioEngine3D::Instance().SetListenerTransform(m_playerPos, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f});
 }
 
 void SceneMiJuego::OnGameExit() {
@@ -153,7 +153,7 @@ void SceneMiJuego::OnGameUpdate(float dt) {
     m_clock.Tick(dt);
     m_elapsedSec += dt;
 
-    const auto& pad = WiiU::InputManager::Instance().GetGamepad(0);
+    const auto& pad = Neleo::InputManager::Instance().GetGamepad(0);
 
     // 1. Movimiento con Stick Izquierdo (zona muerta radial aplicada por el motor)
     const float moveSpeed = 4.5f;
@@ -166,17 +166,17 @@ void SceneMiJuego::OnGameUpdate(float dt) {
     m_orbitCamera.Update(dt);
 
     // 3. Botón A (o clic/táctil): activar vibración háptica multiplataforma
-    if (pad.WasJustPressed(WiiU::VirtualButton::A)) {
-        WiiU::RumbleManager::Instance().PlayPulse(0, 0.7f, 0.7f, 0.18f);
+    if (pad.WasJustPressed(Neleo::VirtualButton::A)) {
+        Neleo::RumbleManager::Instance().PlayPulse(0, 0.7f, 0.7f, 0.18f);
     }
 
     // 4. Botón Y: alternar wireframes 3D de depuración
-    if (pad.WasJustPressed(WiiU::VirtualButton::Y)) {
+    if (pad.WasJustPressed(Neleo::VirtualButton::Y)) {
         m_showDebug = !m_showDebug;
     }
 
     // 5. Actualizar listener espacial y sistema físico/ECS (0 heap allocations)
-    WiiU::AudioEngine3D::Instance().SetListenerTransform(m_playerPos, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f});
+    Neleo::AudioEngine3D::Instance().SetListenerTransform(m_playerPos, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f});
     m_ecsWorld.UpdateTransforms();
 }
 ```
@@ -190,13 +190,13 @@ void SceneMiJuego::OnGameUpdate(float dt) {
 `ForwardRendererGX2` ejecuta automáticamente **AMD Latte GX2** en Wii U u **OpenGL 3.3 Core** en Windows/ROG Ally con las mismas llamadas:
 
 ```cpp
-void SceneMiJuego::OnGameRender3D(WiiU::ForwardRendererGX2& renderer) {
+void SceneMiJuego::OnGameRender3D(Neleo::ForwardRendererGX2& renderer) {
     renderer.SetShaderTime(m_elapsedSec);
 
     if (m_mesh.IsLoaded()) {
-        const WiiU::Matrix4x4 model =
-            WiiU::Matrix4x4::Translation(m_playerPos.x, 0.0f, m_playerPos.z) *
-            WiiU::Matrix4x4::RotationY(m_yawRad);
+        const Neleo::Matrix4x4 model =
+            Neleo::Matrix4x4::Translation(m_playerPos.x, 0.0f, m_playerPos.z) *
+            Neleo::Matrix4x4::RotationY(m_yawRad);
 
         // shadingMode: 0u = PBR Cook-Torrance (GGX + luces), 1u = Blinn-Phong, 8u = Terreno/Procedural, 9u = Toon NPR
         renderer.RenderStaticMeshPBR(m_mesh, model, m_material, 0u);
@@ -206,9 +206,9 @@ void SceneMiJuego::OnGameRender3D(WiiU::ForwardRendererGX2& renderer) {
 void SceneMiJuego::OnGameRenderDebug3D() {
     if (!m_showDebug) return;
 
-    WiiU::DebugDraw3D::SetMatrices(GetViewMatrix(), GetProjectionMatrix());
-    WiiU::DebugDraw3D::DrawAxes(m_playerPos, 1.2f);
-    WiiU::DebugDraw3D::DrawAABB(
+    Neleo::DebugDraw3D::SetMatrices(GetViewMatrix(), GetProjectionMatrix());
+    Neleo::DebugDraw3D::DrawAxes(m_playerPos, 1.2f);
+    Neleo::DebugDraw3D::DrawAABB(
         {m_playerPos.x - 1.0f, 0.0f, m_playerPos.z - 1.0f},
         {m_playerPos.x + 1.0f, 2.0f, m_playerPos.z + 1.0f},
         {80, 255, 120, 255}
@@ -217,12 +217,12 @@ void SceneMiJuego::OnGameRenderDebug3D() {
 
 void SceneMiJuego::OnGameRenderHUD() {
     // Coordenadas virtuales unificadas 1280x720 (escaladas automáticamente en TV, DRC y 16:9 Windows)
-    WiiU::Render2D::DrawBox(24, 20, 410, 84, {12, 18, 28, 190}, {90, 175, 255, 255});
+    Neleo::Render2D::DrawBox(24, 20, 410, 84, {12, 18, 28, 190}, {90, 175, 255, 255});
 
     char line[96];
     std::snprintf(line, sizeof(line), "MI JUEGO 3D | %.1f FPS (%.2f ms)", GetFPS(), GetFrameTimeMs());
-    WiiU::Render2D::DrawPixelString(line, 40, 36, 2, {255, 255, 255, 255});
-    WiiU::Render2D::DrawPixelString("[A] Vibracion  [Y] Wireframe  [L/R] Camara", 40, 68, 2, {185, 220, 255, 255});
+    Neleo::Render2D::DrawPixelString(line, 40, 36, 2, {255, 255, 255, 255});
+    Neleo::Render2D::DrawPixelString("[A] Vibracion  [Y] Wireframe  [L/R] Camara", 40, 68, 2, {185, 220, 255, 255});
 }
 ```
 
@@ -230,7 +230,7 @@ void SceneMiJuego::OnGameRenderHUD() {
 - **Shadow Mapping 2-Pass (`ShadowMapRendererGX2`):** Enciende `BeginShadowPass()` → `RenderCaster()` → `EndShadowPass()` + `BindShadowMap()` y activa `renderer.SetDirectionalShadowState(lightVP, 2u, 0.002f, 1.0f / 1024.0f)` para PCF 3×3/5×5 hardware (ver [`src/Scene/SceneQA_Shadows.cpp`](../src/Scene/SceneQA_Shadows.cpp)).
 - **Post-Procesado HDR + Kawase Bloom (`PostProcessHDRGX2`):** Envuelve tu escena con `BeginHDRScenePass()` y `EndHDRScenePassAndCompose(settings, ...)` para ACES Filmic, vignette y bloom 16F (ver [`src/Scene/SceneQA_PostProcessAlpha.cpp`](../src/Scene/SceneQA_PostProcessAlpha.cpp)).
 - **ECS + Física de Cuerpos Rígidos (`engine_physics`):** Agrega `TransformComponent`, `ColliderComponent` y `RigidBodyComponent` a tus entidades en `m_ecsWorld` y avanza con `RigidBodyPhysicsSystem`.
-- **Modo Offline/Online (`engine_net`):** Usa `WiiU::Net::NetSession` para UDP/TCP sobre `nsysnet` (Wii U) o `ws2_32` (Windows).
+- **Modo Offline/Online (`engine_net`):** Usa `Neleo::Net::NetSession` para UDP/TCP sobre `nsysnet` (Wii U) o `ws2_32` (Windows).
 
 ---
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
     {
-        WiiU::Engine engine; // Gestiona init y shutdown ordenados (GX2/OpenGL, Audio, Input, Window)
+        Neleo::Engine engine; // Gestiona init y shutdown ordenados (GX2/OpenGL, Audio, Input, Window)
         if (engine.Init(std::make_unique<SceneMiJuego>())) {
             engine.Run();
         }

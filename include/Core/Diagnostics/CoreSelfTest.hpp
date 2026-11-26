@@ -2,7 +2,7 @@
 
 #include "Core/Diagnostics/SelfTestTypes.hpp"
 
-namespace WiiU::Diagnostics {
+namespace Neleo::Diagnostics {
 
 /**
  * @brief Batería de pruebas deterministas de engine_core (PRNG, CryptoHMAC, SpatialBVH, CVar/EngineConfig).
@@ -12,4 +12,4 @@ public:
     static void RunAll(EngineSelfTestReport& outReport);
 };
 
-} // namespace WiiU::Diagnostics
+} // namespace Neleo::Diagnostics

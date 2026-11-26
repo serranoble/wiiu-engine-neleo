@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 125 - OPT-396 - Jason Gregory Cap. 5.2 / Cap. 5.3]
@@ -103,4 +103,4 @@ private:
     static char s_saveRoot[256];
 };
 
-} // namespace WiiU
+} // namespace Neleo

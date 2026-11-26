@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 20.4] Identidad de red ECS (POD puro en engine_core, cero includes de sockets).
@@ -18,4 +18,4 @@ struct NetIdentityComponent {
         : netId(id), isLocalAuthority(localAuthority), replicateTransform(replicate) {}
 };
 
-} // namespace WiiU
+} // namespace Neleo

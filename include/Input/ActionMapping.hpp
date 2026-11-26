@@ -3,7 +3,7 @@
 #include "Input/VirtualGamepad.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 8.3 & 8.5: "Action Mapping & Context Decoupling"]
@@ -137,4 +137,4 @@ public:
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

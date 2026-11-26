@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 class ECSWorld;
 
@@ -93,4 +93,4 @@ struct BehaviorTreeAsset {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

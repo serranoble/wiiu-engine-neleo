@@ -3,7 +3,7 @@
 #include "Graphics/RHI/RHIPipelineState.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-255] Gestor de Caché y Registro de Estados de Pipeline (PSO Cache).
@@ -50,4 +50,4 @@ private:
     RHIStateBits m_lastDirtyBits{RHIStateBits::None};
 };
 
-} // namespace WiiU
+} // namespace Neleo

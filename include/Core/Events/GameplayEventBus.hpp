@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 133] Tipos de eventos de gameplay desacoplados (Jason Gregory, Cap. 18).
@@ -150,4 +150,4 @@ private:
     uint32_t m_totalPublished{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

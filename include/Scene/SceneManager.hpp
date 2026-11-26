@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <functional>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Fases del ciclo de vida en la máquina de estados de transición de escenas.
@@ -127,4 +127,4 @@ private:
     ModalStack m_modalStack{};
 };
 
-} // namespace WiiU
+} // namespace Neleo

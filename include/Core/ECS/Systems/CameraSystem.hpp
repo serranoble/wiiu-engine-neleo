@@ -4,7 +4,7 @@
 #include "Core/ECS/Components/TransformComponent.hpp"
 #include "Core/ECS/Components/CameraComponent.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-253] Sistema de Cálculo de Cámaras 3D orientado a datos (CameraSystem).
@@ -18,4 +18,4 @@ public:
     static void Update(ECSWorld& world);
 };
 
-} // namespace WiiU
+} // namespace Neleo

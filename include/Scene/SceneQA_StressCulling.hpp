@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G6: Stress Test de Hardware Instancing (hasta 1,000 instancias en lotes de 256),
@@ -96,4 +96,4 @@ private:
     float m_animTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

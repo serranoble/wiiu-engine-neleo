@@ -11,7 +11,7 @@
 #include <gx2r/buffer.h>
 #endif
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 enum class ToneMapOperator : uint8_t {
     NoneClamp = 0u,
@@ -123,4 +123,4 @@ private:
 #endif
 };
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

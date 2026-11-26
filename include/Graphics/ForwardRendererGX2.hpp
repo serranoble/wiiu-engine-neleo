@@ -20,7 +20,7 @@ struct GX2Texture;
 struct GX2RBuffer;
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Modos de direccionamiento UV en hardware GX2 (CGP Cap. 5 / RTR4 Cap. 6).
@@ -64,6 +64,14 @@ public:
     [[nodiscard]] bool IsPBRShaderLoaded() const noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
         return m_pbrShaderLoaded;
+#else
+        return m_initialized;
+#endif
+    }
+
+    [[nodiscard]] bool IsPBRLiteShaderLoaded() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_pbrLiteShaderLoaded;
 #else
         return m_initialized;
 #endif
@@ -344,7 +352,28 @@ private:
     int32_t m_pbrSkyboxSlot{-1};
     int32_t m_pbrShadowSlot{1};
     bool m_pbrShaderLoaded{false};
+
+    // 7. [OPT-451] Pipeline PBR Lite especializado (modos 0..1 sin sombras/PCF/Fbm3D — bajo conteo de GPRs en Latte R700)
+    bool InitPBRLiteShader();
+    GX2VertexShader* m_pbrLiteVs{nullptr};
+    void* m_pbrLiteVsProgram{nullptr};
+    GX2PixelShader* m_pbrLitePs{nullptr};
+    void* m_pbrLitePsProgram{nullptr};
+    GX2FetchShader m_pbrLiteFs{};
+    void* m_pbrLiteFsProgram{nullptr};
+    int32_t m_pbrLiteDiffuseSlot{0};
+    int32_t m_pbrLiteSkyboxSlot{-1};
+    bool m_pbrLiteShaderLoaded{false};
+
+    enum class BoundShaderKind : uint8_t {
+        None = 0,
+        Sky,
+        Mesh,
+        PBRUber,
+        PBRLite
+    };
+    BoundShaderKind m_boundShaderKind{BoundShaderKind::None};
 #endif
 };
 
-} // namespace WiiU
+} // namespace Neleo

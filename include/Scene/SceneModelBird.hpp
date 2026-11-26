@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Escena de validación del Asset Cooker para modelos animados con Skinning GPU (.wmesh 80B + .wskel + .wanim + .wtex).
@@ -53,7 +53,6 @@ private:
     std::vector<uint8_t> m_stagedBirdMesh;
     std::vector<uint8_t> m_stagedBirdTex;
 
-    StaticMesh m_floorMesh;
     StaticMesh m_birdMesh;
     GX2Texture m_birdTex{};
     Skeleton m_skeleton{};
@@ -77,4 +76,4 @@ private:
     float m_turntableAngle{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

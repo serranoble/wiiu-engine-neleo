@@ -16,7 +16,7 @@
 #include <cstdio>
 #include <memory>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 constexpr int kModalX = 110;
@@ -233,4 +233,4 @@ void GraphicsQAModal::Render() {
     Render2D::End();
 }
 
-} // namespace WiiU
+} // namespace Neleo

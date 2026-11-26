@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <vector>
 
-namespace WiiU {
+namespace Neleo {
 
 void SceneQA_ProceduralNPR::OnQAEnter() {
     SetDefaultCamera(Point3D{0.0f, 5.4f, 14.5f}, 0.0f, -0.22f);
@@ -307,4 +307,4 @@ void SceneQA_ProceduralNPR::OnQARenderHUD() {
                               30, 184, 2, ColorRGBA::Yellow());
 }
 
-} // namespace WiiU
+} // namespace Neleo

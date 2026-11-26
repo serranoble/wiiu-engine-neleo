@@ -5,7 +5,7 @@
 #include <gx2/registers.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 void RHIRenderPass::Begin(const RHIRenderPassDesc& desc) {
     s_insidePass = true;
@@ -116,4 +116,4 @@ void RHIRenderPass::End() {
     s_insidePass = false;
 }
 
-} // namespace WiiU
+} // namespace Neleo

@@ -3,7 +3,7 @@
 #include "Core/ECS/Components/CameraComponent.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 enum class CompositorMode : uint8_t {
     TVOnly = 0,
@@ -47,4 +47,4 @@ private:
     CompositorMode m_mode{CompositorMode::TVOnly};
 };
 
-} // namespace WiiU
+} // namespace Neleo

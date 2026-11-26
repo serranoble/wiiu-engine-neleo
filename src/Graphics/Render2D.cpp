@@ -11,7 +11,7 @@
 #include <cctype>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 void Render2D::GetFont5x7(char c, uint8_t out[5]) {
     std::memset(out, 0, 5);
@@ -176,4 +176,4 @@ void Render2D::DrawBox(int x, int y, int w, int h, const ColorRGBA& fillColor, c
 #endif
 }
 
-} // namespace WiiU
+} // namespace Neleo

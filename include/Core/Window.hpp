@@ -3,7 +3,7 @@
 #include "Graphics/Color.hpp"
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Capa de Abstracción de Ventana y Swapchain Multiplataforma (PAL).
@@ -44,6 +44,8 @@ public:
     static void AcquireForeground() noexcept;
     static void ReleaseForeground() noexcept;
     static void PumpPlatformEvents() noexcept;
+    static void ClearActive(const ColorRGBA& color = ColorRGBA::Black()) noexcept;
+    static void PresentActive() noexcept;
 
 private:
     std::string m_title;
@@ -52,4 +54,4 @@ private:
     bool m_ownsWindow{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

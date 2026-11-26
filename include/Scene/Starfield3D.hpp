@@ -6,7 +6,7 @@
 #include "Graphics/Color.hpp"
 #include "Core/Math/PRNG.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 struct Star {
     Point3D pos;
@@ -37,4 +37,4 @@ private:
     std::vector<Star> m_stars;
 };
 
-} // namespace WiiU
+} // namespace Neleo

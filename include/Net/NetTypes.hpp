@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 20: "Multiplayer & Networking"]
@@ -126,4 +126,4 @@ using NetPacketBuffer = std::array<uint8_t, NetProtocol::MAX_PACKET_BYTES>;
            ((s1 < s2) && (static_cast<uint16_t>(s2 - s1) > 32768u));
 }
 
-} // namespace WiiU
+} // namespace Neleo

@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 class IScene {
 public:
@@ -44,4 +44,4 @@ public:
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

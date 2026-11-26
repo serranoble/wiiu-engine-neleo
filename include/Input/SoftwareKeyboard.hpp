@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Modos de entrada soportados por el teclado virtual del sistema.
@@ -14,14 +14,24 @@ enum class KeyboardInputMode : uint8_t {
 };
 
 /**
- * @brief [Capa HAL Multi-Consola] Teclado Virtual Nativo del Sistema Operativo.
+ * @brief [Capa HAL Multi-Consola] Teclado Virtual Modal Multiplataforma.
  *
- * En Nintendo Wii U (y Cemu) invoca el teclado oficial Cafe OS `nn::swkbd` renderizando
- * sobre el swapchain GX2 nativo de `Window` con guardas de ProcUI/Menú HOME.
- * En PC mantiene un retorno seguro no bloqueante.
+ * - En Nintendo Wii U (y Cemu) invoca el teclado oficial Cafe OS `nn::swkbd` sobre GX2.
+ * - En Windows x64 / ASUS ROG Ally abre un teclado virtual modal in-engine Zero-Alloc
+ *   (compatible con teclado físico, mando XInput, ratón y pantalla táctil).
  */
 class SoftwareKeyboard {
 public:
+    /**
+     * @brief Valida si un carácter ASCII es aceptado bajo el modo de entrada indicado.
+     */
+    [[nodiscard]] static constexpr bool IsCharAllowed(char ch, KeyboardInputMode mode) noexcept {
+        if (mode == KeyboardInputMode::IPv4) {
+            return (ch >= '0' && ch <= '9') || (ch == '.');
+        }
+        return (ch >= 0x20 && ch <= 0x7E);
+    }
+
     /**
      * @brief Abre el teclado virtual modal del sistema.
      * @param hintText Texto de ayuda / título en UTF-8/ASCII (puede ser nullptr).
@@ -40,4 +50,4 @@ public:
                      int32_t maxLength = 32) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

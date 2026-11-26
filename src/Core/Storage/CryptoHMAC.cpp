@@ -1,7 +1,7 @@
 #include "Core/Storage/CryptoHMAC.hpp"
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -220,4 +220,4 @@ bool CryptoHMAC::ConstantTimeEqual(const Digest& a, const Digest& b) noexcept {
     return diff == 0;
 }
 
-} // namespace WiiU
+} // namespace Neleo

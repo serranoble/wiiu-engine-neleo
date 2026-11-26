@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 20.2] Escritor binario determinista en Network Byte Order (Big-Endian).
@@ -70,4 +70,4 @@ private:
     bool m_overflowed{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -9,7 +9,7 @@
 #include <array>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 ResourceMonitor::ResourceMonitor() noexcept {
     const uint64_t freq = PlatformClock::GetPerformanceFrequency();
@@ -188,4 +188,4 @@ void ResourceMonitor::Render() {
     Render2D::End();
 }
 
-} // namespace WiiU
+} // namespace Neleo

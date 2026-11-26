@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 133] Reloj Jerarquico de Simulacion en Tiempo Real (Jason Gregory, Cap. 7).
@@ -170,4 +170,4 @@ private:
     bool m_singleStepRequested{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

@@ -12,18 +12,18 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
     {
-        auto& sceneMgr = WiiU::SceneManager::Instance();
+        auto& sceneMgr = Neleo::SceneManager::Instance();
         sceneMgr.SetHomeMenuFactory([]() {
-            return std::make_unique<WiiU::SceneMenu>();
+            return std::make_unique<Neleo::SceneMenu>();
         });
         sceneMgr.SetModelsMenuFactory([]() {
-            return std::make_unique<WiiU::SceneMenu>();
+            return std::make_unique<Neleo::SceneMenu>();
         });
         sceneMgr.SetOptionsSceneFactory([](std::function<void()> onBack) {
-            return std::make_unique<WiiU::SceneOptions>(std::move(onBack));
+            return std::make_unique<Neleo::SceneOptions>(std::move(onBack));
         });
 
-        WiiU::Engine engine;
+        Neleo::Engine engine;
 
         if (engine.Init()) {
             engine.Run();

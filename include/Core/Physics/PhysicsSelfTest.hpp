@@ -2,7 +2,7 @@
 
 #include "Core/Diagnostics/SelfTestTypes.hpp"
 
-namespace WiiU::Physics {
+namespace Neleo::Physics {
 
 /**
  * @brief Batería de pruebas deterministas de engine_physics (SpatialHashGrid y volúmenes AABB).
@@ -12,4 +12,4 @@ public:
     static void RunAll(Diagnostics::EngineSelfTestReport& outReport);
 };
 
-} // namespace WiiU::Physics
+} // namespace Neleo::Physics

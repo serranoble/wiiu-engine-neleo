@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace WiiU::Graphics::TextureLoaderGX2 {
+namespace Neleo::Graphics::TextureLoaderGX2 {
 
 namespace {
 
@@ -686,4 +686,4 @@ void DestroyTexture(GX2Texture& tex) noexcept {
     tex = GX2Texture{};
 }
 
-} // namespace WiiU::Graphics::TextureLoaderGX2
+} // namespace Neleo::Graphics::TextureLoaderGX2

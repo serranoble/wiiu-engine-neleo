@@ -158,6 +158,15 @@ def check_gl_invariants() -> list[str]:
         ptext = post_gl.read_text(encoding="utf-8", errors="replace")
         if "GL_VIEWPORT_VAL" not in ptext and "m_hdrRT.EndPass(" not in ptext:
             issues.append("src/Graphics/GL/PostProcessHDRGL.cpp: missing viewport restore (GL_VIEWPORT_VAL or m_hdrRT.EndPass)")
+
+    if fwd_gl.exists() and "(shadingMode == 6u) ? false : mat.backfaceCull" not in ftext:
+        issues.append("src/Graphics/GL/ForwardRendererGL.cpp: skybox mode 6u must disable backface culling")
+
+    water_qa_cpp = ROOT / "src" / "Scene" / "SceneQA_EnvironmentWater.cpp"
+    if water_qa_cpp.exists():
+        wtext = water_qa_cpp.read_text(encoding="utf-8", errors="replace")
+        if "skyMat.backfaceCull = false;" not in wtext:
+            issues.append("src/Scene/SceneQA_EnvironmentWater.cpp: skyMat must set backfaceCull = false for OpenGL 3.3")
     return issues
 
 

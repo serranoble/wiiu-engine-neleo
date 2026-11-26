@@ -2,7 +2,7 @@
 
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-256] Componente de Volumen Delimitador para Frustum & Small-Primitive Culling.
@@ -30,4 +30,4 @@ struct BoundingVolumeComponent {
           minScreenRadius(minPixels) {}
 };
 
-} // namespace WiiU
+} // namespace Neleo

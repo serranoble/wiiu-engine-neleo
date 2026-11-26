@@ -2,7 +2,7 @@
 
 #include "Core/Diagnostics/SelfTestTypes.hpp"
 
-namespace WiiU::Graphics {
+namespace Neleo::Graphics {
 
 /**
  * @brief Batería de pruebas automatizadas de invariantes gráficos (GX2, RHI, Math3D, Mallas y Mipmaps).
@@ -19,4 +19,4 @@ public:
     static void RunAll(Diagnostics::EngineSelfTestReport& outReport);
 };
 
-} // namespace WiiU::Graphics
+} // namespace Neleo::Graphics

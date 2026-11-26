@@ -12,16 +12,16 @@
 #include <algorithm>
 #include <cstring>
 
-namespace WiiU::Platform {
+namespace Neleo::Platform {
 
 Win32InputBridge& GetWin32InputBridge() noexcept {
     static Win32InputBridge s_bridge;
     return s_bridge;
 }
 
-} // namespace WiiU::Platform
+} // namespace Neleo::Platform
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -172,6 +172,14 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             const uint32_t vk = static_cast<uint32_t>(wParam) & 0xFFu;
             bridge.keysDown[vk] = false;
             break;
+        }
+
+        case WM_CHAR: {
+            const uint32_t ch = static_cast<uint32_t>(wParam);
+            if ((ch >= 0x20u && ch <= 0x7Eu) || ch == 0x08u || ch == 0x0Du || ch == 0x1Bu) {
+                bridge.PushTypedChar(static_cast<char>(ch));
+            }
+            return 0;
         }
 
         case WM_LBUTTONDOWN:
@@ -417,6 +425,10 @@ bool Window::Init() {
 }
 
 void Window::Clear(const ColorRGBA& color) {
+    ClearActive(color);
+}
+
+void Window::ClearActive(const ColorRGBA& color) noexcept {
     if (!s_hwnd || !s_gl11.loaded) return;
 
     // Limpiar franjas negras de letterboxing y luego ajustar viewport 16:9 centrado con scissor
@@ -441,6 +453,10 @@ void Window::Clear(const ColorRGBA& color) {
 }
 
 void Window::Present() {
+    PresentActive();
+}
+
+void Window::PresentActive() noexcept {
     if (s_hdc) {
         SwapBuffers(s_hdc);
     }
@@ -476,4 +492,4 @@ void Window::Shutdown() {
     s_isFullscreen = false;
 }
 
-} // namespace WiiU
+} // namespace Neleo

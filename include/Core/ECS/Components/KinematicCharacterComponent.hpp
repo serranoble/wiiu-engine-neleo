@@ -3,7 +3,7 @@
 #include "Graphics/Math3D.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-274] Maquina de Estados Finitos de Locomocion Cinematica (KCC-FSM).
@@ -110,4 +110,4 @@ struct KinematicCharacterComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

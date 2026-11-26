@@ -3,7 +3,7 @@
 #include "Core/AI/BehaviorTreeComponent.hpp"
 #include "Core/ECS/ECSWorld.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-385] Evaluador ECS de Arboles de Comportamiento (BehaviorTreeRunner).
@@ -30,4 +30,4 @@ private:
                                                uint32_t depth) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo

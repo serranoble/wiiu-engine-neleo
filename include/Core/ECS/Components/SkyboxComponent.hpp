@@ -3,7 +3,7 @@
 #include "Graphics/Color.hpp"
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 class StaticMesh;
 
@@ -27,4 +27,4 @@ struct SkyboxComponent {
     constexpr SkyboxComponent() noexcept = default;
 };
 
-} // namespace WiiU
+} // namespace Neleo

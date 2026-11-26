@@ -1,7 +1,7 @@
 #include "Core/ECS/Systems/AudioSpatialSystem.hpp"
 #include "Audio/AudioEngine3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 void AudioSpatialSystem::Update(ECSWorld& world) {
     Update(world, 0.0f);
@@ -59,4 +59,4 @@ void AudioSpatialSystem::Update(ECSWorld& world, float dt) {
     );
 }
 
-} // namespace WiiU
+} // namespace Neleo

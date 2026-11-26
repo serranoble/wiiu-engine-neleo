@@ -2,7 +2,7 @@
 #include <cmath>
 #include <vector>
 
-namespace WiiU::Graphics::ProceduralMeshBuilder {
+namespace Neleo::Graphics::ProceduralMeshBuilder {
 
 namespace {
 
@@ -291,4 +291,4 @@ bool CreateHeightmapTerrain(StaticMesh& outMesh,
     return outMesh.CreateFromVertices(vertices, indices);
 }
 
-} // namespace WiiU::Graphics::ProceduralMeshBuilder
+} // namespace Neleo::Graphics::ProceduralMeshBuilder

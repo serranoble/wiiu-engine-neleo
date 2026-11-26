@@ -4,7 +4,7 @@
 #include <algorithm>
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Clasificación cinemática del cuerpo rígido dentro del mundo físico.
@@ -191,4 +191,4 @@ struct RigidBodyComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

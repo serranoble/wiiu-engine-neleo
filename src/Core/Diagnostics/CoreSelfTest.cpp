@@ -9,7 +9,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace WiiU::Diagnostics {
+namespace Neleo::Diagnostics {
 
 void CoreSelfTest::RunAll(EngineSelfTestReport& outReport) {
     // 1. PRNG PCG32: determinismo bit a bit + rangos acotados
@@ -164,4 +164,4 @@ void CoreSelfTest::RunAll(EngineSelfTestReport& outReport) {
     }
 }
 
-} // namespace WiiU::Diagnostics
+} // namespace Neleo::Diagnostics

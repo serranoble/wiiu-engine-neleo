@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Jason Gregory Cap. 8.1] Tipos de dispositivos de interfaz humana soportados.
@@ -156,4 +156,4 @@ struct VirtualGamepad {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

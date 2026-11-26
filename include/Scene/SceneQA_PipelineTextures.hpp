@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Suite G1: Validación de Pipeline 3D, Transformaciones Jerárquicas (Cuaterniones/MVP),
@@ -67,4 +67,4 @@ private:
     float m_orbitTime{0.0f};
 };
 
-} // namespace WiiU
+} // namespace Neleo

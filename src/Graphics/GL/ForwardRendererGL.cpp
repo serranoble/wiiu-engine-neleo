@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <cstring>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -1064,7 +1064,8 @@ void DrawMeshInternal(const GX2RBuffer& vbo,
         BindTexture2DWithSampler(nullptr, 2u, TextureFilterMode::Point, TextureWrapMode::Clamp, TextureMipFilterMode::None);
     }
 
-    ApplyGLBlendAndDepthState(mat.depthTest, mat.depthWrite, depthCompare, mat.blendMode, mat.backfaceCull);
+    const bool effectiveCull = (shadingMode == 6u) ? false : mat.backfaceCull;
+    ApplyGLBlendAndDepthState(mat.depthTest, mat.depthWrite, depthCompare, mat.blendMode, effectiveCull);
 
     gl.BindVertexArray(g_state.staticVao);
     BindStaticVertexAttributes(vbo.glBufferId, static_cast<GLsizei>(vertexStride));
@@ -1727,4 +1728,4 @@ void ForwardRendererGX2::ApplyTextureFilterMode(TextureFilterMode mode) {
 void ForwardRendererGX2::ApplyMeshSamplerState() {
 }
 
-} // namespace WiiU
+} // namespace Neleo

@@ -5,7 +5,7 @@
 #include <cstdarg>
 #include <string_view>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Cadena de caracteres en memoria de pila (Stack-Allocated String) de tamaño fijo.
@@ -86,4 +86,4 @@ private:
     size_t m_length{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

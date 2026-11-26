@@ -6,7 +6,7 @@
 #include <gx2/registers.h>
 #endif
 
-namespace WiiU {
+namespace Neleo {
 
 DisplayCompositor& DisplayCompositor::Instance() noexcept {
     static DisplayCompositor s_instance;
@@ -103,4 +103,4 @@ void DisplayCompositor::ApplyViewport(const CameraComponent& camera) {
     SetExplicitViewport(x, y, w, h, camera.viewport.minDepth, camera.viewport.maxDepth);
 }
 
-} // namespace WiiU
+} // namespace Neleo

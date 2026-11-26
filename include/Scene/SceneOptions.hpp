@@ -7,7 +7,7 @@
 #include <functional>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Categorías de configuración global expuestas en la interfaz de opciones.
@@ -70,4 +70,4 @@ private:
     bool m_saveInFlight{false};
 };
 
-} // namespace WiiU
+} // namespace Neleo

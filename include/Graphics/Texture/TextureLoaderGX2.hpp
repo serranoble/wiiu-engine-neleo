@@ -16,7 +16,7 @@ struct GX2Texture {
 };
 #endif
 
-namespace WiiU::Graphics::TextureLoaderGX2 {
+namespace Neleo::Graphics::TextureLoaderGX2 {
 
 /**
  * @brief Carga una textura 2D cocinada (.wtex: RGBA8, BC1 o BC3) desde memoria alineada en MEM2.
@@ -125,4 +125,4 @@ namespace WiiU::Graphics::TextureLoaderGX2 {
  */
 void DestroyTexture(GX2Texture& tex) noexcept;
 
-} // namespace WiiU::Graphics::TextureLoaderGX2
+} // namespace Neleo::Graphics::TextureLoaderGX2

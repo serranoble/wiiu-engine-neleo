@@ -2,7 +2,7 @@
 
 #include "Core/Diagnostics/SelfTestTypes.hpp"
 
-namespace WiiU::Audio {
+namespace Neleo::Audio {
 
 /**
  * @brief Batería de pruebas deterministas de engine_audio (AudioEngine3D telemetría, listener y mezcla segura).
@@ -12,4 +12,4 @@ public:
     static void RunAll(Diagnostics::EngineSelfTestReport& outReport);
 };
 
-} // namespace WiiU::Audio
+} // namespace Neleo::Audio

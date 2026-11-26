@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [Hito 133] Utilidad compartida de raycast analitico para brazos de camara (Cap. 17).
@@ -161,4 +161,4 @@ struct CameraRaycastHelper {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

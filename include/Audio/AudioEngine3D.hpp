@@ -4,7 +4,7 @@
 #include <array>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief Motor de Audio Espacial 3D de Alto Rendimiento para Nintendo Wii U y Framework Multiplataforma.
@@ -114,4 +114,4 @@ private:
     SoundClip m_windAmbienceClip;
 };
 
-} // namespace WiiU
+} // namespace Neleo

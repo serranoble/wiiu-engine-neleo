@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace WiiU {
+namespace Neleo {
 
 namespace {
 
@@ -347,4 +347,4 @@ void RHIFullscreenShader::DrawQuad() noexcept {
     gl.DepthMask(GL_TRUE_VAL);
 }
 
-} // namespace WiiU
+} // namespace Neleo

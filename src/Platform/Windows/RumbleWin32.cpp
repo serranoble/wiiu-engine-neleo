@@ -8,7 +8,7 @@
 #include <xinput.h>
 #include <cstdint>
 
-namespace WiiU::Platform {
+namespace Neleo::Platform {
 
 namespace {
 
@@ -50,4 +50,4 @@ void SetWin32HardwareRumble(int playerIdx, float intensity, bool active) noexcep
     fn(static_cast<DWORD>(playerIdx), &vib);
 }
 
-} // namespace WiiU::Platform
+} // namespace Neleo::Platform

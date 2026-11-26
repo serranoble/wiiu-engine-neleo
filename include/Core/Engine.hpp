@@ -3,7 +3,7 @@
 #include "Core/Window.hpp"
 #include <memory>
 
-namespace WiiU {
+namespace Neleo {
 
 class IScene;
 
@@ -38,4 +38,4 @@ private:
     int m_lastSwapInterval{-1};
 };
 
-} // namespace WiiU
+} // namespace Neleo

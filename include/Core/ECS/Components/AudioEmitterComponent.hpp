@@ -2,7 +2,7 @@
 
 #include "Audio/Audio3DTypes.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-242] Componente Emisor de Sonido Espacial 3D orientado a datos.
@@ -54,4 +54,4 @@ struct AudioEmitterComponent {
     }
 };
 
-} // namespace WiiU
+} // namespace Neleo

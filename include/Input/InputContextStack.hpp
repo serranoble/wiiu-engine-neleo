@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-61 / OPT-204 / OPT-344 / OPT-400] Capa jerarquica de contexto de entrada.
@@ -55,4 +55,4 @@ private:
     uint32_t m_consumedActionsMask{0};
 };
 
-} // namespace WiiU
+} // namespace Neleo

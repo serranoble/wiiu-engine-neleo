@@ -5,7 +5,7 @@
 #endif
 #include <windows.h>
 
-namespace WiiU::PlatformClock {
+namespace Neleo::PlatformClock {
 
 uint64_t GetPerformanceFrequency() noexcept {
     LARGE_INTEGER freq{};
@@ -27,4 +27,4 @@ void SleepMs(uint32_t milliseconds) noexcept {
     Sleep(static_cast<DWORD>(milliseconds));
 }
 
-} // namespace WiiU::PlatformClock
+} // namespace Neleo::PlatformClock

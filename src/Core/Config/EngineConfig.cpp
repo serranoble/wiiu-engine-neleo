@@ -8,7 +8,7 @@
 #include <vector>
 #include <string>
 
-namespace WiiU {
+namespace Neleo {
 
 const char* GraphicsConfig::GetFilterName() const noexcept {
     switch (textureFilter) {
@@ -292,4 +292,4 @@ void EngineConfig::ApplyToSubsystems() {
     m_isApplying = false;
 }
 
-} // namespace WiiU
+} // namespace Neleo

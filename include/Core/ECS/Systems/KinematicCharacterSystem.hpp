@@ -5,7 +5,7 @@
 #include "Core/ECS/Components/KinematicCharacterComponent.hpp"
 #include "Graphics/Math3D.hpp"
 
-namespace WiiU {
+namespace Neleo {
 
 /**
  * @brief [OPT-207] Sistema Cinemático de Control de Personaje y Físicas Reactivas (KinematicCharacterSystem).
@@ -88,4 +88,4 @@ public:
     static bool CheckLineOfSight(const Point3D& from, const Point3D& to, float& outOcclusion) noexcept;
 };
 
-} // namespace WiiU
+} // namespace Neleo
