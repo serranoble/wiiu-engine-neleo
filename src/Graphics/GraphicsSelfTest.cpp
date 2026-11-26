@@ -7,6 +7,7 @@
 #include "Graphics/RHI/RenderTargetGX2.hpp"
 #include "Core/Window.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
+#include "Graphics/Render2DGX2.hpp"
 #include "Graphics/Math3D.hpp"
 #include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
 #include "Graphics/RHI/RHIPipelineState.hpp"
@@ -82,13 +83,15 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
     outReport.Record("GFX", "GX2_CONTEXT_STATE", true, "HOST PC STUB OK");
 #endif
 
-    // T4: ForwardRendererGX2 inicializado (shaders + PBR Uber + PBR Lite + fallbacks)
+    // T4: ForwardRendererGX2 inicializado (shaders + PBR Uber + PBR Lite + fallbacks) + Render2DGX2 Font Atlas
     {
         auto& renderer = ForwardRendererGX2::Instance();
+        auto& r2d = Render2DGX2::Instance();
         const bool ok = renderer.Initialize() && renderer.IsInitialized() &&
-                        renderer.IsPBRShaderLoaded() && renderer.IsPBRLiteShaderLoaded();
+                        renderer.IsPBRShaderLoaded() && renderer.IsPBRLiteShaderLoaded() &&
+                        r2d.Init() && r2d.IsFontAtlasReady();
         outReport.Record("GFX", "FORWARD_RENDERER", ok,
-                         ok ? "PIPELINES GX2 + PBR LITE LISTOS" : "FALLO INIT FORWARDRENDERER");
+                         ok ? "GX2 + PBR LITE + UI2D ATLAS OK" : "FALLO INIT RENDERERS GX2");
     }
 
     // T5: Math3D (Perspective, LookAt, Quaternion, FromTRS sin NaN/Inf)

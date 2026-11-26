@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("native_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2", "pbr_mesh_gx2", "pbr_lite_gx2")]
+    [ValidateSet("native_gx2", "ui2d_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2", "pbr_mesh_gx2", "pbr_lite_gx2")]
     [string] $Shader
 )
 
@@ -14,6 +14,12 @@ $shaderFiles = @{
         Header = "include/Graphics/NativeGX2ShaderBinary.hpp"
         SizeSymbol = "NATIVE_GX2_GSH_SIZE"
         DataSymbol = "NATIVE_GX2_GSH_DATA"
+    }
+    ui2d_gx2 = @{
+        Binary = "assets/shaders/ui2d_gx2.gsh"
+        Header = "include/Graphics/UI2DShaderBinary.hpp"
+        SizeSymbol = "UI2D_GX2_GSH_SIZE"
+        DataSymbol = "UI2D_GX2_GSH_DATA"
     }
     fullscreen_blit = @{
         Binary = "assets/shaders/fullscreen_blit.gsh"

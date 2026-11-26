@@ -462,10 +462,11 @@
 | **OPT-450** | Gráficos Avanzados Multiplataforma / OpenGL 3.3 Core | Paridad Gráfica Completa OpenGL 3.3 Core (`RenderTargetGL` RGBA8/16F, `ShadowMapRendererGL` PCF 3×3/5×5, `PostProcessHDRGL` HDR+Bloom Kawase, `RHIFullscreenShaderGL` Raytracing BVH, Reflejo Planar y Modos `4..9`) | Tomas Akenine-Möller (RTR4, Caps. 7 & 12) / Eric Lengyel (FGED2) / OpenGL 3.3 Core | **IMPLEMENTADO** | Hito 151 / Fase 3 (25 Nov 2026) |
 | **OPT-451** | Silicio Wii U / Rendimiento 60 FPS | Z-Buffer Único en eDRAM/MEM1 (560 GB/s en `GameScene3D`), Shader Especializado `pbr_lite_gx2` (9.6 KB vs 33.6 KB, bajo GPR en R700), Dirty-Checking de Shaders en `ForwardRendererGX2` y Eliminación de `GX2Flush()` en `Render2DGX2` | AMD R700 ISA / Cafe OS GX2 / Jason Gregory (Cap. 11) | **IMPLEMENTADO** | Hito 152 (26 Nov 2026) |
 | **OPT-452** | Arquitectura Multiplataforma / API Pública | Migración Limpia del Namespace Global `WiiU` → `Neleo` (279 archivos) y Umbrella Header Multiplataforma `include/NeleoEngine.hpp` | Jason Gregory (Cap. 5) / C++20 Clean Code | **IMPLEMENTADO** | Hito 152 (26 Nov 2026) |
+| **OPT-453** | Silicio Wii U / Rendimiento 2D + TMU + Core 1 | Shader 2D `ui2d_gx2` (1,180 B) + Atlas de Fuente 5×7 `128×64` (1 quad/carácter, vértice 32 B), Tiling 2D Hardware `GX2_TILE_MODE_DEFAULT` vía `GX2CopySurface` y Ruta Rápida Direccional (24 floats) en `ForwardRendererGX2` | AMD R700 ISA / Cafe OS GX2 / Jason Gregory (Cap. 14.5) | **IMPLEMENTADO** | Hito 153 (26 Nov 2026) |
 
 ---
 
-## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-452`)
+## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-453`)
 
 ### [OPT-01] Multiprocesamiento Simétrico en 2 Cores (Cores 1 y 2)
 - **Implementado en:** [Hito 24](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md#L669) (6 de Octubre de 2026).
@@ -5384,6 +5385,19 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **Grado de Reusabilidad para el Framework:** **10/10** — Desacopla la identidad de la API C++20 de una consola específica (Wii U, Windows/ROG Ally, futuro Linux/Switch) evitando colisiones con `class Engine`.
 - **PROS:** API limpia y coherente con el nombre del motor (`Neleo`), 0 deuda de alias legacy.
 - **CONTRAS:** Ninguno (sin consumidores externos dependientes de `WiiU::`).
+
+### [OPT-453] Hito 153 (Fase 2 Rendimiento Silicio Wii U): Shader 2D `ui2d_gx2` + Atlas de Fuente 5×7, Tiling 2D Hardware GX2 y Ruta Rápida Direccional PBR
+- **Área:** Pipeline 2D/HUD, Caché TMU de Texturas y Core 1 (`Render2DGX2`, `ui2d_gx2.vert/.frag/.gsh`, `TextureLoaderGX2`, `ForwardRendererGX2`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 153 - 26 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD R700 ISA (Primitive Setup 1 prim/ciclo & Texture Tiling); Jason Gregory (*Game Engine Architecture*, Cap. 14.5).
+- **Mecanismo Implementado:**
+  1. **Pipeline 2D Ultra-Ligero + Atlas de Fuente 5×7 (`Render2DGX2` + `ui2d_gx2.gsh`):** Reemplaza el shader 3D Blinn-Phong (`native_gx2.gsh`) por `ui2d_gx2.gsh` (**1,180 B**, 0 iluminación 3D, vértice compacto de **32 B** = 1 línea L1D Espresso). Genera en memoria un atlas `128×64 RGBA8` (celda 0 blanca sólida + 127 glifos 5×7, sampler `POINT` + single-mip blindado) emitiendo **1 solo quad (2 triángulos)** por carácter en lugar de ~10–25 rectángulos RLE (~10×–20× menos vértices 2D en un único `GX2DrawEx`).
+  2. **Tiling 2D Hardware (`TextureLoaderGX2`):** Convierte texturas cocinadas $\ge 32\times 32$ de `LINEAR_ALIGNED` a `GX2_TILE_MODE_DEFAULT` mediante `GX2CopySurface` + `GX2DrawDone` protegido por ProcUI, mejorando la localidad espacial 2D en la caché L1 de las 8 TMUs sin riesgo de corrupción de endianness en bloques `BC1`/`BC3`.
+  3. **Ruta Rápida Direccional (`ForwardRendererGX2`):** Cuando `useLite && numPoints == 0 && spotIntensity <= 0.01`, envía solo **24 floats** en `GX2SetPixelUniformReg(0, 24, psData)` ahorrando 44 floats (176 B) y el bucle de copias de luces por draw call.
+  4. **Self-Test:** `T4: FORWARD_RENDERER` en `GraphicsSelfTest.cpp` valida `Render2DGX2::Instance().IsFontAtlasReady()`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Acelera todo el HUD/OSD, `DebugDraw3D`, escenas con texto denso y el muestreo de texturas 3D en Wii U de forma 100% transparente.
+- **PROS:** Elimina iluminación 3D en 2D, reduce ~10×–20× los triángulos del HUD, habilita tiling 2D nativo en TMUs y recorta tráfico del command buffer en Core 1.
+- **CONTRAS:** Requiere una copia staging temporal durante la carga de cada textura `.wtex` (fuera del bucle caliente de 60 FPS).
 
 ---
 

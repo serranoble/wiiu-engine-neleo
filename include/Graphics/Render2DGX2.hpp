@@ -9,6 +9,8 @@
 #if defined(__WIIU__) || defined(__wiiu__)
 #include <gx2/shaders.h>
 #include <gx2/surface.h>
+#include <gx2/texture.h>
+#include <gx2/sampler.h>
 #include <gx2/state.h>
 #include <gx2/draw.h>
 #include <gx2/registers.h>
@@ -23,14 +25,15 @@
 namespace Neleo {
 
 /**
- * @brief Formato de vértice para renderizado 2D nativo por hardware GX2.
- * Coincide 1:1 con el shader CafeGLSL `native_gx2.gsh`.
+ * @brief Formato de vértice compacto (32 B = 1 línea L1D Espresso) para renderizado 2D GX2.
+ * Coincide 1:1 con el shader CafeGLSL `ui2d_gx2.gsh` y el atlas de fuente bitmap 5x7.
  */
 struct Render2DVertexGX2 {
-    float pos[3];    // Attribute 0: vec3 aPos (x, y, 0.0f)
-    float normal[3]; // Attribute 1: vec3 aNormal (0.0f, 0.0f, 1.0f)
-    float color[4];  // Attribute 2: vec4 aColor (r, g, b, a normalizados 0..1)
+    float pos[2];   // Attribute 0: vec2 aPos (x, y en espacio virtual 1280x720)
+    float uv[2];    // Attribute 1: vec2 aTexCoord (atlas de fuente o celda blanca sólida)
+    float color[4]; // Attribute 2: vec4 aColor (r, g, b, a normalizados 0..1)
 };
+static_assert(sizeof(Render2DVertexGX2) == 32u, "Render2DVertexGX2 must be 32 bytes (1 Espresso L1D line)");
 
 /**
  * @brief Subsistema de renderizado 2D 100% nativo sobre la GPU AMD Latte (GX2).
@@ -95,6 +98,13 @@ public:
     void NextFrame() noexcept;
 
     [[nodiscard]] bool IsInitialized() const noexcept { return m_initialized; }
+    [[nodiscard]] bool IsFontAtlasReady() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_initialized && m_fontAtlasCreated;
+#else
+        return m_initialized;
+#endif
+    }
     [[nodiscard]] size_t GetQueuedVertices() const noexcept { return m_vertexBatch.size(); }
 
 private:
@@ -126,6 +136,11 @@ private:
     void* m_directPsProgram{nullptr};
     GX2FetchShader m_directFetchShader{};
     void* m_directFsProgram{nullptr};
+
+    GX2Texture m_fontAtlas{};
+    GX2Sampler m_fontSampler{};
+    int32_t m_fontSamplerSlot{0};
+    bool m_fontAtlasCreated{false};
 #endif
 };
 

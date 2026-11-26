@@ -7,9 +7,13 @@
 #include <vector>
 
 #if defined(__WIIU__) || defined(__wiiu__)
+#include "Core/Window.hpp"
+#include <coreinit/core.h>
+#include <gx2/event.h>
 #include <gx2/mem.h>
 #include <gx2/registers.h>
 #include <gx2/surface.h>
+#include <proc_ui/procui.h>
 #endif
 
 namespace Neleo::Graphics::TextureLoaderGX2 {
@@ -334,6 +338,31 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
     }
 
     GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, outTex.surface.image, outTex.surface.imageSize);
+
+    // [OPT-453] Tiling 2D hardware (GX2_TILE_MODE_DEFAULT) vía GX2CopySurface en Core 1 (hilo GX2)
+    if (srcW >= 32u && srcH >= 32u && OSGetCoreId() == 1u &&
+        ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
+        Window::HasForeground() && !Window::IsExitingProcUI()) {
+        GX2Surface tiledSurf = outTex.surface;
+        tiledSurf.tileMode = GX2_TILE_MODE_DEFAULT;
+        tiledSurf.image = nullptr;
+        tiledSurf.mipmaps = nullptr;
+        tiledSurf.mipmapSize = 0u;
+        GX2CalcSurfaceSizeAndAlignment(&tiledSurf);
+
+        const uint32_t tiledAlign = (tiledSurf.alignment > 256u) ? tiledSurf.alignment : 256u;
+        tiledSurf.image = MemoryManager::Instance().AllocAligned(
+            tiledAlign, tiledSurf.imageSize, MemoryTag::Texture, SafeLabel(debugLabel, "CookedTexTiled"));
+        if (tiledSurf.image) {
+            // Purgar líneas L1D/L2 sucias previas de Espresso antes de la escritura DMA de Latte
+            GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tiledSurf.image, tiledSurf.imageSize);
+            GX2CopySurface(&outTex.surface, 0u, 0u, &tiledSurf, 0u, 0u);
+            GX2DrawDone();
+            GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tiledSurf.image, tiledSurf.imageSize);
+            MemoryManager::Instance().FreeAligned(outTex.surface.image);
+            outTex.surface = tiledSurf;
+        }
+    }
 
     outTex.surface.mipmaps = nullptr;
     outTex.surface.mipmapSize = 0u;

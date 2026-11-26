@@ -1323,24 +1323,33 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
     psData[21] = material.ubo.pbrParams[1];
     psData[22] = static_cast<float>(numPoints);
     psData[23] = lights.spotLightIntensity;
-    // [6..13] pointLights[0..3]
-    for (uint32_t i = 0u; i < 4u; ++i) {
-        std::memcpy(&psData[24u + i * 4u], lights.pointLightPosRadius[i], 4u * sizeof(float));
-        std::memcpy(&psData[40u + i * 4u], lights.pointLightColorIntensity[i], 4u * sizeof(float));
-    }
-    // [14..16] spotLight
-    std::memcpy(&psData[56], lights.spotLightPosRange, 4u * sizeof(float));
-    std::memcpy(&psData[60], lights.spotLightDirInner, 4u * sizeof(float));
-    std::memcpy(&psData[64], lights.spotLightColorOuter, 4u * sizeof(float));
-    if (useLite) {
-        GX2SetPixelUniformReg(0, 68, psData);
+
+    const bool hasExtraLights = (numPoints > 0u) || (lights.spotLightIntensity > 0.01f);
+    if (useLite && !hasExtraLights) {
+        // Ruta rápida direccional: pbr_lite_gx2 no lee uPsData[6..16], ahorra 44 floats (176 B) por draw
+        GX2SetPixelUniformReg(0, 24, psData);
     } else {
-        // [17] shadowParams (shadowMode, depthBias, texelSize, minLitFactor)
-        psData[68] = shadowActive ? static_cast<float>(m_shadowMode) : 0.0f;
-        psData[69] = m_shadowDepthBias;
-        psData[70] = m_shadowTexelSize;
-        psData[71] = m_shadowMinLit;
-        GX2SetPixelUniformReg(0, 72, psData);
+        // [6..13] pointLights[0..3]
+        for (uint32_t i = 0u; i < numPoints; ++i) {
+            std::memcpy(&psData[24u + i * 4u], lights.pointLightPosRadius[i], 4u * sizeof(float));
+            std::memcpy(&psData[40u + i * 4u], lights.pointLightColorIntensity[i], 4u * sizeof(float));
+        }
+        // [14..16] spotLight
+        if (lights.spotLightIntensity > 0.01f) {
+            std::memcpy(&psData[56], lights.spotLightPosRange, 4u * sizeof(float));
+            std::memcpy(&psData[60], lights.spotLightDirInner, 4u * sizeof(float));
+            std::memcpy(&psData[64], lights.spotLightColorOuter, 4u * sizeof(float));
+        }
+        if (useLite) {
+            GX2SetPixelUniformReg(0, 68, psData);
+        } else {
+            // [17] shadowParams (shadowMode, depthBias, texelSize, minLitFactor)
+            psData[68] = shadowActive ? static_cast<float>(m_shadowMode) : 0.0f;
+            psData[69] = m_shadowDepthBias;
+            psData[70] = m_shadowTexelSize;
+            psData[71] = m_shadowMinLit;
+            GX2SetPixelUniformReg(0, 72, psData);
+        }
     }
 
     GX2Texture* diffuseTex = static_cast<GX2Texture*>(material.diffuseTexture);
