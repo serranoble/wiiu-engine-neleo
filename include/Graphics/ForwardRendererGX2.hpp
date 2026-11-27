@@ -191,6 +191,11 @@ public:
 #endif
     }
 
+    // [OPT-464] Control y telemetria de Auto-Batching / Instancing automatico en FlushRenderQueue()
+    void SetAutoBatchingEnabled(bool enabled) noexcept { m_autoBatchingEnabled = enabled; }
+    [[nodiscard]] bool IsAutoBatchingEnabled() const noexcept { return m_autoBatchingEnabled; }
+    [[nodiscard]] uint32_t GetAutoBatchedDrawsCount() const noexcept { return m_autoBatchedDraws; }
+
     // [Suite G3] Configura estado de Shadow Mapping direccional para RenderStaticMeshPBR (se resetea a OFF en BeginFrame)
     // shadowMode: 0=OFF, 1=Hard (1-tap), 2=PCF 3x3, 3=PCF 5x5, 4=Debug Shadow Factor
     void SetDirectionalShadowState(const Matrix4x4& lightVP,
@@ -209,7 +214,8 @@ public:
                                    uint32_t instanceCount,
                                    GX2Texture* diffuseTexture,
                                    GX2Texture* envCubeMap = nullptr,
-                                   const MaterialPropertyBlock* material = nullptr);
+                                   const MaterialPropertyBlock* material = nullptr,
+                                   bool usePbrShading = false);
 
     // [OPT-343] Lote instanciado de mallas esqueléticas con enlace de pipeline único (zero redundant binds)
     void RenderSkinnedMeshInstanced(const StaticMesh& skinnedMesh,
@@ -334,12 +340,14 @@ private:
     uint32_t m_instancedDrawCalls{0};
     uint32_t m_instancedCount{0};
 
-    // Cola de renderizado Zero-Alloc compartida Wii U / PC [OPT-459] + Frustum Culling [OPT-460] + Z-Prepass [OPT-462]
+    // Cola de renderizado Zero-Alloc compartida Wii U / PC [OPT-459] + Frustum Culling [OPT-460] + Z-Prepass [OPT-462] + Auto-Batch [OPT-464]
     RenderQueuePBR m_renderQueue{};
     ViewFrustum m_activeFrustum{};
     bool m_frustumCullingEnabled{true};
     bool m_depthPrePassEnabled{false};
+    bool m_autoBatchingEnabled{true};
     uint32_t m_frustumCulledCount{0u};
+    uint32_t m_autoBatchedDraws{0u};
 
 #if defined(__WIIU__) || defined(__wiiu__)
     // 1. Pipeline Skydome
@@ -454,6 +462,16 @@ private:
     // 9. [OPT-458] Pipeline HDR Lineal + Niebla especializado (modo 7 — 56 floats uPsData[14], 7 PS_GPR)
     bool InitHDRFogShader();
     PBRShaderPipeline m_hdrFogPipe{};
+
+    // 10. [OPT-464] Pipeline PBR Direccional Instanciado (paridad 1:1 Cook-Torrance GGX + ACES para Auto-Batching)
+    bool InitPBRInstancedShader();
+    GX2VertexShader* m_pbrInstVs{nullptr};
+    void* m_pbrInstVsProgram{nullptr};
+    GX2PixelShader* m_pbrInstPs{nullptr};
+    void* m_pbrInstPsProgram{nullptr};
+    int32_t m_pbrInstDiffuseSlot{0};
+    int32_t m_pbrInstSkyboxSlot{-1};
+    bool m_pbrInstShaderLoaded{false};
 
     enum class BoundShaderKind : uint8_t {
         None = 0,

@@ -240,6 +240,65 @@ public:
         return m_commands[m_sortEntries[sortedIdx].cmdIndex];
     }
 
+    /**
+     * @brief [OPT-464] Evalua si dos comandos PBR ordenados son 100% compatibles para Auto-Batching.
+     * Exige paridad exacta de malla, shaderId, shadingMode==0 (PBR direccional), Opaque,
+     * sin normalMap ni emissive, y mismos parametros/texturas/estado depth/cull.
+     */
+    [[nodiscard]] static bool CanAutoBatchPair(const RenderCommandPBR& a,
+                                               const RenderCommandPBR& b) noexcept {
+        if (!a.mesh || a.mesh != b.mesh) return false;
+        if (a.shadingMode != 0u || b.shadingMode != 0u) return false;
+        if (a.material.shaderId != b.material.shaderId) return false;
+        if (a.material.blendMode != BlendMode::Opaque || b.material.blendMode != BlendMode::Opaque) return false;
+        if (a.material.diffuseTexture != b.material.diffuseTexture ||
+            a.material.envCubeMap != b.material.envCubeMap) {
+            return false;
+        }
+        if (a.material.depthTest != b.material.depthTest ||
+            a.material.depthWrite != b.material.depthWrite ||
+            a.material.backfaceCull != b.material.backfaceCull) {
+            return false;
+        }
+        // Excluir normalMap activo (pbr_inst_dir_gx2 no incluye TBN) y emissive no nulo
+        const bool hasNormalA = (a.material.diffuseTexture != nullptr) &&
+                                (a.material.materialParams[1] > 0.5f) &&
+                                (a.material.materialParams[2] > 0.01f);
+        const bool hasEmissiveA = (std::fabs(a.material.emissive[0]) +
+                                   std::fabs(a.material.emissive[1]) +
+                                   std::fabs(a.material.emissive[2])) > 0.001f;
+        if (hasNormalA || hasEmissiveA) {
+            return false;
+        }
+        return (std::memcmp(a.material.albedoTint, b.material.albedoTint, sizeof(a.material.albedoTint)) == 0) &&
+               (std::memcmp(a.material.materialParams, b.material.materialParams, sizeof(a.material.materialParams)) == 0) &&
+               (std::memcmp(a.material.pbrParams, b.material.pbrParams, sizeof(a.material.pbrParams)) == 0) &&
+               (std::memcmp(a.material.emissive, b.material.emissive, sizeof(a.material.emissive)) == 0);
+    }
+
+    /**
+     * @brief [OPT-464] Detecta una corrida contigua de comandos identicos para instancing automatico.
+     */
+    [[nodiscard]] uint32_t FindAutoBatchRun(uint32_t startSortedIdx,
+                                            Matrix4x4* outMatrices,
+                                            uint32_t maxOut) const noexcept {
+        if (!outMatrices || maxOut == 0u || startSortedIdx >= m_count) {
+            return 0u;
+        }
+        const RenderCommandPBR& first = GetSortedCommand(startSortedIdx);
+        outMatrices[0] = first.modelMatrix;
+        uint32_t run = 1u;
+        while ((startSortedIdx + run) < m_count && run < maxOut) {
+            const RenderCommandPBR& next = GetSortedCommand(startSortedIdx + run);
+            if (!CanAutoBatchPair(first, next)) {
+                break;
+            }
+            outMatrices[run] = next.modelMatrix;
+            ++run;
+        }
+        return run;
+    }
+
 private:
     SortEntryPBR m_sortEntries[MAX_COMMANDS]{};
     RenderCommandPBR m_commands[MAX_COMMANDS]{};

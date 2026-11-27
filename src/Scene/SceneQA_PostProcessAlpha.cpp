@@ -1,6 +1,7 @@
 #include "Scene/SceneQA_PostProcessAlpha.hpp"
 #include "Core/Window.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
+#include "Graphics/RenderGraph.hpp"
 #include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
@@ -281,18 +282,34 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
     // Despachar cola ordenada (Opacos Front-to-Back -> Cutout -> Vitrales Back-to-Front) antes de cerrar FBO HDR
     renderer.FlushRenderQueue();
 
-    // 5. RESOLVE HDR -> BLOOM MULTIPASE (BrightPass + BlurH + BlurV) -> COMPOSITE TV (1280x720)
+    // 5. [OPT-465] RESOLVE HDR -> BLOOM MULTIPASE -> COMPOSITE TV vía RenderGraph (perfilado automático ProfileZone::PostFX)
     if (hdrPassActive) {
+        struct PostFXPassCtx {
+            Graphics::PostProcessHDRGX2* postFX;
+            const Graphics::PostProcessHDRSettings* settings;
+        };
+        PostFXPassCtx ctx{&m_postFX, &m_settings};
+
+        RenderGraph postGraph;
+        (void)postGraph.AddPass(
+            "G5_HDR_BloomComposite",
+            ProfileZone::PostFX,
+            [](void* rawCtx) {
+                auto* c = static_cast<PostFXPassCtx*>(rawCtx);
 #if defined(__WIIU__) || defined(__wiiu__)
-        m_postFX.EndHDRScenePassAndCompose(
-            m_settings,
-            static_cast<GX2ContextState*>(Window::GetActiveNativeContextState()),
-            static_cast<GX2ColorBuffer*>(Window::GetActiveNativeColorBuffer()),
-            static_cast<GX2DepthBuffer*>(Window::GetActiveNativeDepthBuffer()),
-            1280u, 720u);
+                c->postFX->EndHDRScenePassAndCompose(
+                    *c->settings,
+                    static_cast<GX2ContextState*>(Window::GetActiveNativeContextState()),
+                    static_cast<GX2ColorBuffer*>(Window::GetActiveNativeColorBuffer()),
+                    static_cast<GX2DepthBuffer*>(Window::GetActiveNativeDepthBuffer()),
+                    1280u, 720u);
 #else
-        m_postFX.EndHDRScenePassAndCompose(m_settings, nullptr, nullptr, nullptr, 1280u, 720u);
+                c->postFX->EndHDRScenePassAndCompose(*c->settings, nullptr, nullptr, nullptr, 1280u, 720u);
 #endif
+            },
+            &ctx,
+            true);
+        postGraph.Execute();
     }
 }
 

@@ -1283,6 +1283,7 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     m_vpMatrix = projMatrix * viewMatrix;
     m_activeFrustum.ExtractFromViewProj(m_vpMatrix);
     m_frustumCulledCount = 0u;
+    m_autoBatchedDraws = 0u;
     m_depthPrePassEnabled = false;
     m_drawCallsCount = 0u;
     m_trianglesCount = 0u;
@@ -1361,16 +1362,47 @@ void ForwardRendererGX2::FlushRenderQueue() {
         }
     }
 
+    const LightBlockUBO& activeLights = MaterialRegistry::Instance().GetActiveLightBlock();
+    const bool canAutoBatch = m_autoBatchingEnabled && (m_shadowMode == 0u) &&
+                              (activeLights.activePointLights == 0u) &&
+                              (activeLights.spotLightIntensity <= 0.01f);
+    constexpr uint32_t kAutoBatchMinRun = 4u;
+    constexpr uint32_t kAutoBatchMaxRun = 64u;
+    Matrix4x4 batchMatrices[kAutoBatchMaxRun];
+
     MaterialPropertyBlock matBlock{};
-    for (uint32_t i = 0u; i < count; ++i) {
+    for (uint32_t i = 0u; i < count; ) {
         const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
-        if (cmd.mesh != nullptr) {
-            cmd.material.ToBlock(matBlock);
-            if (i < prePassedOpaques) {
-                matBlock.depthWrite = false;
-            }
-            RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
+        if (cmd.mesh == nullptr) {
+            ++i;
+            continue;
         }
+        cmd.material.ToBlock(matBlock);
+        if (i < prePassedOpaques) {
+            matBlock.depthWrite = false;
+        }
+
+        if (canAutoBatch) {
+            const uint32_t maxRun = (i < prePassedOpaques)
+                ? std::min(kAutoBatchMaxRun, prePassedOpaques - i)
+                : kAutoBatchMaxRun;
+            const uint32_t runLen = m_renderQueue.FindAutoBatchRun(i, batchMatrices, maxRun);
+            if (runLen >= kAutoBatchMinRun) {
+                RenderStaticMeshInstanced(*cmd.mesh,
+                                          batchMatrices,
+                                          runLen,
+                                          static_cast<GX2Texture*>(matBlock.diffuseTexture),
+                                          static_cast<GX2Texture*>(matBlock.envCubeMap),
+                                          &matBlock,
+                                          true);
+                m_autoBatchedDraws += runLen;
+                i += runLen;
+                continue;
+            }
+        }
+
+        RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
+        ++i;
     }
     m_renderQueue.Clear();
 }
@@ -1575,7 +1607,8 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
                                                    uint32_t instanceCount,
                                                    GX2Texture* diffuseTexture,
                                                    GX2Texture* envCubeMap,
-                                                   const MaterialPropertyBlock* material) {
+                                                   const MaterialPropertyBlock* material,
+                                                   bool usePbrShading) {
     if (!m_initialized || !IsLoaded() || !mesh.IsLoaded() || !modelMatrices || instanceCount == 0u ||
         !mesh.GetVBO() || !mesh.GetIBO() || g_state.instProgram == 0u) {
         return;
@@ -1616,7 +1649,7 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
                  material ? material->ubo.emissive[0] : 0.0f,
                  material ? material->ubo.emissive[1] : 0.0f,
                  material ? material->ubo.emissive[2] : 0.0f);
-    gl.Uniform1i(g_state.iShadingMode, 1);
+    gl.Uniform1i(g_state.iShadingMode, usePbrShading ? 0 : 1);
 
     UploadLightUniformsMesh(lights,
                             g_state.iDirLightDir, g_state.iDirLightColor,
@@ -1634,7 +1667,7 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
         material ? material->depthWrite : true,
         RHI_COMPARE_LEQUAL,
         material ? material->blendMode : BlendMode::Opaque,
-        false);
+        material ? material->backfaceCull : false);
 
     gl.BindVertexArray(g_state.instVao);
     BindStaticVertexAttributes(vbo.glBufferId, static_cast<GLsizei>(mesh.GetHeader().vertexStride));

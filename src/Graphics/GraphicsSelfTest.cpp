@@ -1,4 +1,5 @@
 #include "Graphics/GraphicsSelfTest.hpp"
+#include "Graphics/RenderGraph.hpp"
 #include "Graphics/ParticleSystem3D.hpp"
 #include "Graphics/RaytracingBVHShaderBinary.hpp"
 #include "Graphics/Mesh/MeshLODGroup.hpp"
@@ -640,6 +641,84 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         TextureLoaderGX2::DestroyTexture(mipTex);
         outReport.Record("GFX", "WTEX_MIPMAP_CHAIN", mipsOk,
                          mipsOk ? "WTEX 64X64 MIPMAP CHAIN OK" : "FALLO WTEX MIPMAPS");
+    }
+
+    // T28: [OPT-464] Auto-Batching / Instancing Automatico en RenderQueuePBR
+    {
+        StaticMesh cube;
+        const bool meshOk = ProceduralMeshBuilder::CreateCube(cube, 1.0f);
+
+        BasicRenderQueuePBR<16u> queue;
+        const Point3D cam{0.0f, 0.0f, 0.0f};
+        MaterialPropertyBlock matA{};
+        matA.blendMode = BlendMode::Opaque;
+        matA.ubo.albedoTint[0] = 0.8f; matA.ubo.albedoTint[1] = 0.4f; matA.ubo.albedoTint[2] = 0.2f;
+
+        MaterialPropertyBlock matB = matA;
+        matB.ubo.albedoTint[0] = 0.2f; matB.ubo.albedoTint[2] = 0.9f;
+
+        MaterialPropertyBlock matEmissive = matA;
+        matEmissive.ubo.emissive[0] = 2.0f;
+
+        MaterialPropertyBlock matShader2 = matA;
+        matShader2.shaderId = 7u;
+
+        // 5 cubos identicos + 1 distinto albedo + 2 emisivos (no deben agruparse) + 1 distinto shaderId
+        for (uint32_t k = 0u; k < 5u; ++k) {
+            (void)queue.Submit(cube, Matrix4x4::Translation(static_cast<float>(k) * 0.1f, 0.0f, -10.0f), matA, 0u, cam);
+        }
+        (void)queue.Submit(cube, Matrix4x4::Translation(0.0f, 0.0f, -20.0f), matB, 0u, cam);
+        (void)queue.Submit(cube, Matrix4x4::Translation(0.0f, 0.0f, -30.0f), matEmissive, 0u, cam);
+        (void)queue.Submit(cube, Matrix4x4::Translation(0.1f, 0.0f, -30.0f), matEmissive, 0u, cam);
+        (void)queue.Submit(cube, Matrix4x4::Translation(0.0f, 0.0f, -40.0f), matShader2, 0u, cam);
+        queue.Sort();
+
+        Matrix4x4 batchMats[8]{};
+        const uint32_t runA  = queue.FindAutoBatchRun(0u, batchMats, 8u);
+        const uint32_t runB  = queue.FindAutoBatchRun(runA, batchMats, 8u);
+        const uint32_t runEm = queue.FindAutoBatchRun(runA + runB, batchMats, 8u);
+
+        cube.Destroy();
+        const bool ok = meshOk && (runA == 5u) && (runB == 1u) && (runEm == 1u);
+        outReport.Record("GFX", "AUTO_BATCH_RUNS", ok,
+                         ok ? "AUTO-BATCH PBR 5+1+EMIS OK" : "FALLO AUTO-BATCH RUNS");
+    }
+
+    // T29: [OPT-465] RenderGraph declarativo Zero-Alloc (orden topologico, skip disabled, tope MAX_PASSES)
+    {
+        struct GraphCtx {
+            uint32_t order[4]{};
+            uint32_t count{0u};
+        } ctx{};
+
+        RenderGraph graph;
+        const bool a1 = graph.AddPass("PassA", ProfileZone::ShadowPass, [](void* p) {
+            auto* c = static_cast<GraphCtx*>(p); c->order[c->count++] = 1u;
+        }, &ctx, true);
+        const bool a2 = graph.AddPass("PassDisabled", ProfileZone::Render3D, [](void* p) {
+            auto* c = static_cast<GraphCtx*>(p); c->order[c->count++] = 99u;
+        }, &ctx, false);
+        const bool a3 = graph.AddPass("PassB", ProfileZone::PostFX, [](void* p) {
+            auto* c = static_cast<GraphCtx*>(p); c->order[c->count++] = 2u;
+        }, &ctx, true);
+        graph.Execute();
+
+        const bool execOk = a1 && a2 && a3 && (graph.GetPassCount() == 3u) &&
+                            (graph.GetExecutedCount() == 2u) && (ctx.count == 2u) &&
+                            (ctx.order[0] == 1u) && (ctx.order[1] == 2u);
+
+        // Prueba de capacidad maxima sin overflow
+        graph.Reset();
+        uint32_t added = 0u;
+        for (uint32_t i = 0u; i < RenderGraph::MAX_PASSES + 4u; ++i) {
+            if (graph.AddPass("P", ProfileZone::Render3D, [](void*) {}, nullptr, true)) {
+                ++added;
+            }
+        }
+        const bool capOk = (added == RenderGraph::MAX_PASSES) && (graph.GetPassCount() == RenderGraph::MAX_PASSES);
+
+        outReport.Record("GFX", "RENDER_GRAPH_EXEC", execOk && capOk,
+                         (execOk && capOk) ? "RENDER GRAPH ZERO-ALLOC OK" : "FALLO RENDER GRAPH");
     }
 }
 

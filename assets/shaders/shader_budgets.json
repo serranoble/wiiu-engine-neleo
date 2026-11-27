@@ -22,6 +22,11 @@
       "max_ps_gprs": 16,
       "role": "hot_path_pbr_dir"
     },
+    "pbr_inst_dir_gx2.gsh": {
+      "max_bytes": 7168,
+      "max_ps_gprs": 16,
+      "role": "hot_path_pbr_inst_dir"
+    },
     "pbr_dir_bump_gx2.gsh": {
       "max_bytes": 8192,
       "max_ps_gprs": 16,

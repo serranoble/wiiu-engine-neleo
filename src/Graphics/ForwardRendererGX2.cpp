@@ -85,6 +85,7 @@ bool ForwardRendererGX2::Initialize() {
     (void)InitPBRVariants();
     (void)InitWaterGlassShader();
     (void)InitHDRFogShader();
+    (void)InitPBRInstancedShader();
 
     // Inicializar Samplers GX2 (todos los samplers single-mip fijan MIP_FILTER_NONE + MIP_PERF_DISABLE + LOD 0..0
     // para evitar bloqueos TA/TD en AMD Latte R700 cuando MIP_ADDRESS == NULL)
@@ -179,9 +180,9 @@ void ForwardRendererGX2::Shutdown() {
     const bool hasGpuResources =
         m_skyShaderLoaded || m_meshShaderLoaded || m_skelShaderLoaded ||
         m_instShaderLoaded || m_depthPreShaderLoaded || m_pbrShaderLoaded || anyPbrVariant ||
-        m_waterGlassShaderLoaded || m_hdrFogPipe.loaded || m_instanceBufferCreated ||
+        m_waterGlassShaderLoaded || m_hdrFogPipe.loaded || m_pbrInstShaderLoaded || m_instanceBufferCreated ||
         m_skyVs || m_meshVs || m_skelVs || m_instVs || m_depthPreVs || m_pbrVs ||
-        m_waterGlassVs || m_hdrFogPipe.vs;
+        m_waterGlassVs || m_hdrFogPipe.vs || m_pbrInstVs;
     if (hasGpuResources && ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
         Window::HasForeground() && !Window::IsExitingProcUI()) {
         GX2DrawDone();
@@ -251,6 +252,12 @@ void ForwardRendererGX2::Shutdown() {
     m_hdrFogPipe.shadowSlot = -1;
     m_hdrFogPipe.loaded = false;
 
+    void* dummyFs = nullptr;
+    freeShaderPtrs(m_pbrInstVs, m_pbrInstVsProgram, m_pbrInstPs, m_pbrInstPsProgram, dummyFs);
+    m_pbrInstDiffuseSlot = 0;
+    m_pbrInstSkyboxSlot = -1;
+    m_pbrInstShaderLoaded = false;
+
     m_boundShaderKind = BoundShaderKind::None;
     m_boundPbrVariantIndex = 0xFFu;
 #endif
@@ -276,6 +283,7 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     m_vpMatrix = projMatrix * viewMatrix;
     m_activeFrustum.ExtractFromViewProj(m_vpMatrix);
     m_frustumCulledCount = 0u;
+    m_autoBatchedDraws = 0u;
     m_depthPrePassEnabled = false;
     m_drawCallsCount = 0;
     m_trianglesCount = 0;
@@ -619,17 +627,53 @@ void ForwardRendererGX2::FlushRenderQueue() {
         }
     }
 
+    const LightBlockUBO& activeLights = MaterialRegistry::Instance().GetActiveLightBlock();
+#if defined(__WIIU__) || defined(__wiiu__)
+    const bool pbrInstReady = m_pbrInstShaderLoaded && m_instShaderLoaded && m_instanceBufferCreated;
+#else
+    const bool pbrInstReady = true;
+#endif
+    const bool canAutoBatch = m_autoBatchingEnabled && pbrInstReady && (m_shadowMode == 0u) &&
+                              (activeLights.activePointLights == 0u) &&
+                              (activeLights.spotLightIntensity <= 0.01f);
+    constexpr uint32_t kAutoBatchMinRun = 4u;
+    constexpr uint32_t kAutoBatchMaxRun = 64u;
+    Matrix4x4 batchMatrices[kAutoBatchMaxRun];
+
     MaterialPropertyBlock matBlock{};
-    for (uint32_t i = 0u; i < count; ++i) {
+    for (uint32_t i = 0u; i < count; ) {
         const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
-        if (cmd.mesh != nullptr) {
-            cmd.material.ToBlock(matBlock);
-            if (i < prePassedOpaques) {
-                // Z-Buffer ya poblado en el Pre-Pass: desactivar escritura Z en pase de color para Early-Z/HiZ
-                matBlock.depthWrite = false;
-            }
-            RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
+        if (cmd.mesh == nullptr) {
+            ++i;
+            continue;
         }
+        cmd.material.ToBlock(matBlock);
+        if (i < prePassedOpaques) {
+            // Z-Buffer ya poblado en el Pre-Pass: desactivar escritura Z en pase de color para Early-Z/HiZ
+            matBlock.depthWrite = false;
+        }
+
+        if (canAutoBatch) {
+            const uint32_t maxRun = (i < prePassedOpaques)
+                ? std::min(kAutoBatchMaxRun, prePassedOpaques - i)
+                : kAutoBatchMaxRun;
+            const uint32_t runLen = m_renderQueue.FindAutoBatchRun(i, batchMatrices, maxRun);
+            if (runLen >= kAutoBatchMinRun) {
+                RenderStaticMeshInstanced(*cmd.mesh,
+                                          batchMatrices,
+                                          runLen,
+                                          static_cast<GX2Texture*>(matBlock.diffuseTexture),
+                                          static_cast<GX2Texture*>(matBlock.envCubeMap),
+                                          &matBlock,
+                                          true);
+                m_autoBatchedDraws += runLen;
+                i += runLen;
+                continue;
+            }
+        }
+
+        RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
+        ++i;
     }
     m_renderQueue.Clear();
 }
@@ -1358,6 +1402,59 @@ bool ForwardRendererGX2::InitHDRFogShader() {
 #endif
 }
 
+bool ForwardRendererGX2::InitPBRInstancedShader() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (m_pbrInstShaderLoaded) return true;
+    const uint8_t* raw = PBR_INST_DIR_GX2_GSH_DATA;
+    const uint32_t rawSize = PBR_INST_DIR_GX2_GSH_SIZE;
+    if (!raw || rawSize == 0u) return false;
+
+    const uint32_t vsHdrSize  = GFDGetVertexShaderHeaderSize(0, raw);
+    const uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, raw);
+    const uint32_t psHdrSize  = GFDGetPixelShaderHeaderSize(0, raw);
+    const uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, raw);
+    if (vsHdrSize == 0u || vsProgSize == 0u || psHdrSize == 0u || psProgSize == 0u) return false;
+
+    auto cleanupPartial = [this]() {
+        if (m_pbrInstVs)        { void* p = m_pbrInstVs; MemoryManager::Instance().Free(p); m_pbrInstVs = nullptr; }
+        if (m_pbrInstVsProgram) { MemoryManager::Instance().FreeAligned(m_pbrInstVsProgram); m_pbrInstVsProgram = nullptr; }
+        if (m_pbrInstPs)        { void* p = m_pbrInstPs; MemoryManager::Instance().Free(p); m_pbrInstPs = nullptr; }
+        if (m_pbrInstPsProgram) { MemoryManager::Instance().FreeAligned(m_pbrInstPsProgram); m_pbrInstPsProgram = nullptr; }
+    };
+
+    m_pbrInstVs        = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "PBRInst_VS_Hdr"));
+    m_pbrInstVsProgram = MemoryManager::Instance().AllocAligned(256u, vsProgSize, MemoryTag::ShaderProgram, "PBRInst_VS_Prog");
+    m_pbrInstPs        = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "PBRInst_PS_Hdr"));
+    m_pbrInstPsProgram = MemoryManager::Instance().AllocAligned(256u, psProgSize, MemoryTag::ShaderProgram, "PBRInst_PS_Prog");
+
+    if (!m_pbrInstVs || !m_pbrInstVsProgram || !m_pbrInstPs || !m_pbrInstPsProgram ||
+        !GFDGetVertexShader(m_pbrInstVs, m_pbrInstVsProgram, 0, raw) ||
+        !GFDGetPixelShader(m_pbrInstPs, m_pbrInstPsProgram, 0, raw)) {
+        cleanupPartial();
+        return false;
+    }
+
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_pbrInstVsProgram, vsProgSize);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_pbrInstPsProgram, psProgSize);
+
+    m_pbrInstDiffuseSlot = 0;
+    m_pbrInstSkyboxSlot = -1;
+    if (m_pbrInstPs->samplerVars) {
+        for (uint32_t i = 0u; i < m_pbrInstPs->samplerVarCount; ++i) {
+            const char* sname = m_pbrInstPs->samplerVars[i].name;
+            if (!sname) continue;
+            if (std::strcmp(sname, "uTexture") == 0) m_pbrInstDiffuseSlot = static_cast<int32_t>(m_pbrInstPs->samplerVars[i].location);
+            else if (std::strcmp(sname, "uSkybox") == 0) m_pbrInstSkyboxSlot = static_cast<int32_t>(m_pbrInstPs->samplerVars[i].location);
+        }
+    }
+
+    m_pbrInstShaderLoaded = true;
+    return true;
+#else
+    return true;
+#endif
+}
+
 void ForwardRendererGX2::SetDirectionalShadowState(const Matrix4x4& lightVP,
                                                    uint32_t shadowMode,
                                                    float depthBias,
@@ -1553,14 +1650,20 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
                                                    uint32_t instanceCount,
                                                    GX2Texture* diffuseTexture,
                                                    GX2Texture* envCubeMap,
-                                                   const MaterialPropertyBlock* material) {
+                                                   const MaterialPropertyBlock* material,
+                                                   bool usePbrShading) {
 #if defined(__WIIU__) || defined(__wiiu__)
     if (!mesh.IsLoaded() || !modelMatrices || instanceCount == 0 || !mesh.GetVBO() || !mesh.GetIBO()) return;
 
-    if (!m_instShaderLoaded || !m_instanceBufferCreated) {
+    const bool pbrPath = usePbrShading && m_pbrInstShaderLoaded;
+    if (!m_instShaderLoaded || !m_instanceBufferCreated || (usePbrShading && !m_pbrInstShaderLoaded)) {
         for (uint32_t i = 0; i < instanceCount; ++i) {
             if (material) {
-                RenderStaticMeshWithMaterial(mesh, modelMatrices[i], *material);
+                if (usePbrShading) {
+                    RenderStaticMeshPBR(mesh, modelMatrices[i], *material, 0u);
+                } else {
+                    RenderStaticMeshWithMaterial(mesh, modelMatrices[i], *material);
+                }
             } else {
                 RenderStaticMesh(mesh, modelMatrices[i], diffuseTexture, envCubeMap);
             }
@@ -1572,33 +1675,66 @@ void ForwardRendererGX2::RenderStaticMeshInstanced(const StaticMesh& mesh,
 
     GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
     m_boundShaderKind = BoundShaderKind::None;
+    m_boundPbrVariantIndex = 0xFFu;
     GX2SetFetchShader(&m_instFs);
-    GX2SetVertexShader(m_instVs);
-    GX2SetPixelShader(m_instPs);
+    GX2SetVertexShader(pbrPath ? m_pbrInstVs : m_instVs);
+    GX2SetPixelShader(pbrPath ? m_pbrInstPs : m_instPs);
 
     alignas(256) float vpUniform[16];
     std::memcpy(vpUniform, m_vpMatrix.m, sizeof(vpUniform));
     GX2SetVertexUniformReg(0, 16, vpUniform);
 
-    alignas(256) float psParams[16];
-    psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
-    psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
-    psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
-    psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? (material ? material->ubo.materialParams[0] : 0.0f) : 0.0f;
-    psParams[13] = material ? material->ubo.materialParams[1] : 1.0f;
-    psParams[14] = material ? material->ubo.materialParams[2] : 2.0f;
-    psParams[15] = material ? material->ubo.materialParams[3] : 0.38f;
-    GX2SetPixelUniformReg(0, 16, psParams);
-
     const GX2Texture* activeDiffuseTex = diffuseTexture ? diffuseTexture : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
-    BindMeshTextureAndSampler(activeDiffuseTex, 0u);
+    if (pbrPath) {
+        alignas(256) float psData[24]{};
+        psData[0] = m_camPos.x; psData[1] = m_camPos.y; psData[2] = m_camPos.z; psData[3] = 0.0f;
+        psData[4] = lights.dirLightDir[0]; psData[5] = lights.dirLightDir[1]; psData[6] = lights.dirLightDir[2]; psData[7] = m_shaderTime;
+        psData[8] = lights.dirLightColor[0]; psData[9] = lights.dirLightColor[1]; psData[10] = lights.dirLightColor[2]; psData[11] = lights.dirLightColor[3];
+        psData[12] = material ? material->ubo.albedoTint[0] : 1.0f;
+        psData[13] = material ? material->ubo.albedoTint[1] : 1.0f;
+        psData[14] = material ? material->ubo.albedoTint[2] : 1.0f;
+        psData[15] = (material && material->blendMode == BlendMode::AlphaCutout) ? 1.0f : 0.0f;
+        psData[16] = material ? material->ubo.materialParams[0] : 0.0f;
+        psData[17] = 0.0f; // normalMap OFF en pbr_inst_dir_gx2
+        psData[18] = material ? material->ubo.materialParams[2] : 2.0f;
+        psData[19] = material ? material->ubo.materialParams[3] : 0.38f;
+        psData[20] = material ? material->ubo.pbrParams[0] : 0.5f;
+        psData[21] = material ? material->ubo.pbrParams[1] : 0.0f;
+        psData[22] = 0.0f;
+        psData[23] = 0.0f;
+        GX2SetPixelUniformReg(0, 24, psData);
+
+        if (m_pbrInstDiffuseSlot >= 0 && activeDiffuseTex) {
+            BindMeshTextureAndSampler(activeDiffuseTex, static_cast<uint32_t>(m_pbrInstDiffuseSlot));
+        }
+        if (m_pbrInstSkyboxSlot >= 0 && m_cubeSamplerCreated) {
+            const bool validAtlas2D = (envCubeMap != nullptr) && (envCubeMap->surface.dim == GX2_SURFACE_DIM_TEXTURE_2D);
+            GX2Texture* activeCube = validAtlas2D ? envCubeMap : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
+            if (activeCube) {
+                const uint32_t slot = static_cast<uint32_t>(m_pbrInstSkyboxSlot);
+                GX2SetPixelTexture(activeCube, slot);
+                GX2SetPixelSampler(&m_cubeSampler, slot);
+            }
+        }
+    } else {
+        alignas(256) float psParams[16];
+        psParams[0] = m_camPos.x; psParams[1] = m_camPos.y; psParams[2] = m_camPos.z; psParams[3] = 0.0f;
+        psParams[4] = lights.dirLightDir[0]; psParams[5] = lights.dirLightDir[1]; psParams[6] = lights.dirLightDir[2]; psParams[7] = lights.dirLightDir[3];
+        psParams[8] = lights.dirLightColor[0]; psParams[9] = lights.dirLightColor[1]; psParams[10] = lights.dirLightColor[2]; psParams[11] = lights.dirLightColor[3];
+        psParams[12] = (envCubeMap && m_cubeSamplerCreated) ? (material ? material->ubo.materialParams[0] : 0.0f) : 0.0f;
+        psParams[13] = material ? material->ubo.materialParams[1] : 1.0f;
+        psParams[14] = material ? material->ubo.materialParams[2] : 2.0f;
+        psParams[15] = material ? material->ubo.materialParams[3] : 0.38f;
+        GX2SetPixelUniformReg(0, 16, psParams);
+        BindMeshTextureAndSampler(activeDiffuseTex, 0u);
+    }
 
     RHIPipelineCache::Instance().BindState(RHIPipelineState(
         material ? material->depthTest : true,
         material ? material->depthWrite : true,
         RHI_COMPARE_LEQUAL,
         material ? material->blendMode : BlendMode::Opaque,
-        false));
+        material ? material->backfaceCull : false));
 
     const GX2IndexType idxType = (mesh.GetHeader().indexFormat == 1) ? GX2_INDEX_TYPE_U32 : GX2_INDEX_TYPE_U16;
     GX2RSetAttributeBuffer(const_cast<GX2RBuffer*>(mesh.GetVBO()), 0, mesh.GetHeader().vertexStride, 0);

@@ -5486,6 +5486,15 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **PROS:** Elimina *overdraw* en escenas densas al acercar la cámara y mejora calidad/caché TMU en texturas `2048×2048`.
 - **CONTRAS:** Ninguno.
 
+### `OPT-464` & `OPT-465` — Oleada 3: Auto-Batching PBR 1:1 en `RenderQueuePBR` + `RenderGraph` Declarativo Zero-Alloc
+- **Estado:** `IMPLEMENTADO` (Hito 162 — Doble `APROBACIÓN FINAL`, 53/53 pruebas con `T28: AUTO_BATCH_RUNS` y `T29: RENDER_GRAPH_EXEC`).
+- **Referencia:** Christer Ericson (*Order your graphics draw calls around!*); Jason Gregory (*GEA*, Cap. 11.1.4); Yuriy O'Donnell (Frostbite GDC 2017, *FrameGraph*).
+- **Solución:**
+  1. `OPT-464`: Cocinado `pbr_inst_dir_gx2.gsh` (`5,536 B`, `9 VS_GPR`, `12 PS_GPR`) desde `CookShaders.py` con paridad 1:1 Cook-Torrance GGX + ACES Filmic; `CanAutoBatchPair` + `FindAutoBatchRun` en `RenderQueuePBR.hpp` validan `shaderId`, `emissive == 0`, sin `normalMap` y mismos parámetros; `FlushRenderQueue()` agrupa `>= 4` instancias hacia `RenderStaticMeshInstanced(..., usePbrShading=true)` en Wii U y OpenGL 3.3 respetando `prePassedOpaques` y `backfaceCull`.
+  2. `OPT-465`: Creado `include/Graphics/RenderGraph.hpp` (`BasicRenderGraph<16u>`, `sizeof <= 1 KB`, 0 `std::function`, perfilado RAII automático en `EngineProfiler`), conectado en Suite G5 (`G5_HDR_BloomComposite`).
+- **PROS:** Reducción automática de draw calls con 0 *popping* visual y orquestación limpia de pasadas multi-pass con perfilado integrado.
+- **CONTRAS:** Ninguno.
+
 ---
 
 ## 📌 PROTOCOLO DE MANTENIMIENTO CONTINUO DEL ANEXO

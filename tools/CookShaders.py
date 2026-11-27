@@ -18,15 +18,17 @@ ROOT = Path(__file__).resolve().parent.parent
 COMPILER = ROOT / "tools" / "cafeglsl" / "cafeglsl-1.0.0-rc1-windows-x86_64" / "bin" / "glslcompiler.exe"
 SHADER_DIR = ROOT / "assets" / "shaders"
 VS_PATH = SHADER_DIR / "pbr_mesh_gx2.vert"
+INST_VS_PATH = SHADER_DIR / "instanced_mesh_gx2.vert"
 TEMPLATE_PS_PATH = SHADER_DIR / "pbr_template_gx2.frag"
 OUT_HEADER = ROOT / "include" / "Graphics" / "PBRVariantsShaderBinary.hpp"
 
 VARIANTS = [
-    ("pbr_dir_gx2",        "PBR_DIR_GX2",        {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 0, "USE_SHADOWS": 0}),
-    ("pbr_dir_bump_gx2",   "PBR_DIR_BUMP_GX2",   {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 0}),
-    ("pbr_multi_gx2",      "PBR_MULTI_GX2",      {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 0, "USE_SHADOWS": 0}),
-    ("pbr_multi_bump_gx2", "PBR_MULTI_BUMP_GX2", {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 0}),
-    ("pbr_shadow_gx2",     "PBR_SHADOW_GX2",     {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 1}),
+    ("pbr_dir_gx2",        "PBR_DIR_GX2",        VS_PATH,      {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 0, "USE_SHADOWS": 0}),
+    ("pbr_dir_bump_gx2",   "PBR_DIR_BUMP_GX2",   VS_PATH,      {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 0}),
+    ("pbr_multi_gx2",      "PBR_MULTI_GX2",      VS_PATH,      {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 0, "USE_SHADOWS": 0}),
+    ("pbr_multi_bump_gx2", "PBR_MULTI_BUMP_GX2", VS_PATH,      {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 0}),
+    ("pbr_shadow_gx2",     "PBR_SHADOW_GX2",     VS_PATH,      {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 1}),
+    ("pbr_inst_dir_gx2",   "PBR_INST_DIR_GX2",   INST_VS_PATH, {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 0, "USE_SHADOWS": 0}),
 ]
 
 
@@ -97,7 +99,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="neleo_shader_cook_") as tmpdir:
         tmp = Path(tmpdir)
-        for name, sym_prefix, defines in VARIANTS:
+        for name, sym_prefix, vs_path, defines in VARIANTS:
             ps_tmp = tmp / f"{name}.frag"
             ps_tmp.write_text(inject_defines(template_src, defines), encoding="utf-8", newline="\n")
             gsh_out = SHADER_DIR / f"{name}.gsh"
@@ -105,7 +107,7 @@ def main() -> int:
             cmd = [
                 str(COMPILER),
                 "--uniform-mode", "register",
-                "-vs", str(VS_PATH),
+                "-vs", str(vs_path),
                 "-ps", str(ps_tmp),
                 "-o", str(gsh_out),
             ]
