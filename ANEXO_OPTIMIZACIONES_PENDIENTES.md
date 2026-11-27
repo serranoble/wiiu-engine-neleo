@@ -5461,6 +5461,13 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **PROS:** Suite G5 sube de 30 a **60 FPS** en Wii U física (todas las escenas a 60 FPS en cámara estática), 5× menos GPRs en Modo 7 y 0 regresiones de enlace VS↔PS.
 - **CONTRAS:** Ninguno (solo +4 KB en `.rpx`).
 
+### `OPT-459` — `RenderQueuePBR` Multiplataforma Zero-Alloc con `SortKey` 64-bit (`Front-to-Back` Opacos + `Back-to-Front` Translúcidos)
+- **Estado:** `IMPLEMENTADO` (Hito 159 — Doble `APROBACIÓN FINAL`, 47/47 pruebas con `T24: RENDER_QUEUE_SORT`).
+- **Referencia:** Christer Ericson (*Order your graphics draw calls around!*); Jason Gregory (*Game Engine Architecture*, Cap. 11).
+- **Solución:** Creado `include/Graphics/RenderQueuePBR.hpp` (`BasicRenderQueuePBR<Capacity>`, `CompactMaterialPBR` sin `alignas(256)` con `sizeof(RenderCommandPBR) <= 192 B`, `SortEntryPBR` de 16 B = 4 KB en caché L1D de Espresso, `sizeof(RenderQueuePBR) <= 64 KB`). Integrado `SubmitStaticMeshPBR` + `FlushRenderQueue` en `ForwardRendererGX2` (Wii U) y `ForwardRendererGL` (PC), migrando Suites G2 y G5 (eliminando el sorting manual de vitrales en G5).
+- **PROS:** Maximiza Early-Z/HiZ en AMD Latte y OpenGL 3.3, automatiza Back-to-Front para transparencias a nivel de motor y mantiene 0 alocaciones en heap.
+- **CONTRAS:** Ninguno.
+
 ---
 
 ## 📌 PROTOCOLO DE MANTENIMIENTO CONTINUO DEL ANEXO

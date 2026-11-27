@@ -6,6 +6,7 @@
 #include "Graphics/RHI/RHIPipelineState.hpp"
 #include "Graphics/Mesh/StaticMesh.hpp"
 #include "Graphics/ShaderVariantKey.hpp"
+#include "Graphics/RenderQueuePBR.hpp"
 #include "Core/Config/EngineConfig.hpp"
 #include <cstdint>
 #include <string_view>
@@ -162,6 +163,17 @@ public:
                              const MaterialPropertyBlock& material,
                              uint32_t shadingMode = 0u);
 
+    // [OPT-459] Encola un draw call PBR en la RenderQueue del motor (Zero-Alloc) para ordenamiento
+    // automatico Front-to-Back (Opacos/Cutout -> Early-Z/HiZ) y Back-to-Front (Translucidos).
+    void SubmitStaticMeshPBR(const StaticMesh& mesh,
+                             const Matrix4x4& modelMatrix,
+                             const MaterialPropertyBlock& material,
+                             uint32_t shadingMode = 0u);
+
+    // [OPT-459] Ordena y ejecuta todos los comandos encolados (invocado automaticamente en EndFrame(),
+    // o manualmente antes de cambiar de Render Target en escenas multi-pass como G5 HDR).
+    void FlushRenderQueue();
+
     // [Suite G3] Configura estado de Shadow Mapping direccional para RenderStaticMeshPBR (se resetea a OFF en BeginFrame)
     // shadowMode: 0=OFF, 1=Hard (1-tap), 2=PCF 3x3, 3=PCF 5x5, 4=Debug Shadow Factor
     void SetDirectionalShadowState(const Matrix4x4& lightVP,
@@ -304,6 +316,9 @@ private:
     uint32_t m_trianglesCount{0};
     uint32_t m_instancedDrawCalls{0};
     uint32_t m_instancedCount{0};
+
+    // Cola de renderizado Zero-Alloc compartida Wii U / PC [OPT-459]
+    RenderQueuePBR m_renderQueue{};
 
 #if defined(__WIIU__) || defined(__wiiu__)
     // 1. Pipeline Skydome

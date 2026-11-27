@@ -1271,6 +1271,7 @@ void ForwardRendererGX2::Shutdown() {
         }
     }
     g_state = GLRendererState{};
+    m_renderQueue.Clear();
     m_initialized = false;
 }
 
@@ -1285,6 +1286,7 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     m_instancedCount = 0u;
     m_shadowMode = 0u;
     g_state.inDepthPrePass = false;
+    m_renderQueue.Clear();
 
     if (!m_initialized) {
         (void)Initialize();
@@ -1299,7 +1301,38 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     }
 }
 
+void ForwardRendererGX2::SubmitStaticMeshPBR(const StaticMesh& mesh,
+                                             const Matrix4x4& modelMatrix,
+                                             const MaterialPropertyBlock& material,
+                                             uint32_t shadingMode) {
+    if (!m_initialized || !mesh.IsLoaded()) {
+        return;
+    }
+    if (!m_renderQueue.Submit(mesh, modelMatrix, material, shadingMode, m_camPos)) {
+        FlushRenderQueue();
+        (void)m_renderQueue.Submit(mesh, modelMatrix, material, shadingMode, m_camPos);
+    }
+}
+
+void ForwardRendererGX2::FlushRenderQueue() {
+    if (m_renderQueue.GetCount() == 0u) {
+        return;
+    }
+    m_renderQueue.Sort();
+    const uint32_t count = m_renderQueue.GetCount();
+    MaterialPropertyBlock matBlock{};
+    for (uint32_t i = 0u; i < count; ++i) {
+        const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
+        if (cmd.mesh != nullptr) {
+            cmd.material.ToBlock(matBlock);
+            RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
+        }
+    }
+    m_renderQueue.Clear();
+}
+
 void ForwardRendererGX2::EndFrame() {
+    FlushRenderQueue();
     if (!IsLoaded()) return;
     const auto& gl = GetFunctions();
     gl.ActiveTexture(GL_TEXTURE2_VAL);

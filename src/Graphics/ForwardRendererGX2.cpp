@@ -250,6 +250,7 @@ void ForwardRendererGX2::Shutdown() {
     m_boundShaderKind = BoundShaderKind::None;
     m_boundPbrVariantIndex = 0xFFu;
 #endif
+    m_renderQueue.Clear();
     m_initialized = false;
 }
 
@@ -266,6 +267,7 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
 #endif
     m_camPos = camPos;
     m_viewMatrix = viewMatrix;
+    m_renderQueue.Clear();
     m_projMatrix = projMatrix;
     m_vpMatrix = projMatrix * viewMatrix;
     m_drawCallsCount = 0;
@@ -552,7 +554,39 @@ void ForwardRendererGX2::RenderSkinnedMesh(GX2RBuffer& vbo,
 #endif
 }
 
+void ForwardRendererGX2::SubmitStaticMeshPBR(const StaticMesh& mesh,
+                                             const Matrix4x4& modelMatrix,
+                                             const MaterialPropertyBlock& material,
+                                             uint32_t shadingMode) {
+    if (!m_initialized || !mesh.IsLoaded()) {
+        return;
+    }
+    if (!m_renderQueue.Submit(mesh, modelMatrix, material, shadingMode, m_camPos)) {
+        // Fallback seguro si la cola alcanza MAX_COMMANDS: vaciar y encolar sin perder draws
+        FlushRenderQueue();
+        (void)m_renderQueue.Submit(mesh, modelMatrix, material, shadingMode, m_camPos);
+    }
+}
+
+void ForwardRendererGX2::FlushRenderQueue() {
+    if (m_renderQueue.GetCount() == 0u) {
+        return;
+    }
+    m_renderQueue.Sort();
+    const uint32_t count = m_renderQueue.GetCount();
+    MaterialPropertyBlock matBlock{};
+    for (uint32_t i = 0u; i < count; ++i) {
+        const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
+        if (cmd.mesh != nullptr) {
+            cmd.material.ToBlock(matBlock);
+            RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
+        }
+    }
+    m_renderQueue.Clear();
+}
+
 void ForwardRendererGX2::EndFrame() {
+    FlushRenderQueue();
 #if defined(__WIIU__) || defined(__wiiu__)
     m_boundShaderKind = BoundShaderKind::None;
 #endif

@@ -192,7 +192,7 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
         floorMat.ubo.materialParams[3] = 1.0f; // alpha=1
         floorMat.ubo.pbrParams[0] = 0.45f;
         floorMat.ubo.pbrParams[3] = 0.0f; // emissive OFF
-        renderer.RenderStaticMeshPBR(m_floorMesh, Matrix4x4::Translation(0.0f, 0.0f, 0.0f), floorMat, 7u);
+        renderer.SubmitStaticMeshPBR(m_floorMesh, Matrix4x4::Translation(0.0f, 0.0f, 0.0f), floorMat, 7u);
 
         const float pillarX[4] = {-6.5f, -2.5f, 2.5f, 6.5f};
         const float pillarZ[2] = {-7.5f, -14.5f};
@@ -203,7 +203,7 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
             for (uint32_t rx = 0u; rx < 4u; ++rx) {
                 const Matrix4x4 m = Matrix4x4::Translation(pillarX[rx], 2.4f, pillarZ[rz]) *
                                     Matrix4x4::Scale(0.95f, 4.8f, 0.95f);
-                renderer.RenderStaticMeshPBR(m_pillarMesh, m, pillarMat, 7u);
+                renderer.SubmitStaticMeshPBR(m_pillarMesh, m, pillarMat, 7u);
             }
         }
     }
@@ -219,7 +219,7 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
         emMat.ubo.materialParams[2] = fogDensity;
         emMat.ubo.materialParams[3] = 1.0f;
         emMat.ubo.pbrParams[3] = 5.8f; // Emisivo HDR > 1.0
-        renderer.RenderStaticMeshPBR(m_orbMesh, Matrix4x4::Translation(orbPos[i].x, orbPos[i].y, orbPos[i].z), emMat, 7u);
+        renderer.SubmitStaticMeshPBR(m_orbMesh, Matrix4x4::Translation(orbPos[i].x, orbPos[i].y, orbPos[i].z), emMat, 7u);
     }
 
     // 3. ALPHA-CUTOUT (discard): 4 Celosías con follaje recortado por canal Alpha
@@ -239,11 +239,11 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
             const float z = (i == 0u || i == 3u) ? -0.4f : -1.8f;
             const Matrix4x4 m = Matrix4x4::Translation(cutX[i], 1.45f, z) *
                                 Matrix4x4::Scale(2.1f, 2.6f, 0.06f);
-            renderer.RenderStaticMeshPBR(m_panelMesh, m, cutMat, 7u);
+            renderer.SubmitStaticMeshPBR(m_panelMesh, m, cutMat, 7u);
         }
     }
 
-    // 4. VITRALES TRANSLÚCIDOS ORDENADOS BACK-TO-FRONT (RTR4 Cap. 5.5, BlendMode::AlphaBlend, depthWrite OFF)
+    // 4. VITRALES TRANSLÚCIDOS: ordenamiento Back-to-Front delegado 100% a RenderQueue del motor [OPT-459]
     {
         struct GlassPanel {
             Point3D pos;
@@ -256,21 +256,8 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
             {Point3D{ 0.65f, 2.05f, -1.0f}, {0.22f, 0.56f, 0.98f}, 0.42f}  // Azul
         };
 
-        float distSq[3]{};
-        uint32_t order[3] = {0u, 1u, 2u};
-        for (uint32_t i = 0u; i < 3u; ++i) {
-            const float dx = cam.x - panels[i].pos.x;
-            const float dy = cam.y - panels[i].pos.y;
-            const float dz = cam.z - panels[i].pos.z;
-            distSq[i] = dx * dx + dy * dy + dz * dz;
-        }
-        // Ordenamiento descendente (más lejano primero -> Back-to-Front) sin heap
-        if (distSq[order[0]] < distSq[order[1]]) std::swap(order[0], order[1]);
-        if (distSq[order[1]] < distSq[order[2]]) std::swap(order[1], order[2]);
-        if (distSq[order[0]] < distSq[order[1]]) std::swap(order[0], order[1]);
-
         for (uint32_t k = 0u; k < 3u; ++k) {
-            const GlassPanel& gp = panels[order[k]];
+            const GlassPanel& gp = panels[k];
             MaterialPropertyBlock glassMat{};
             glassMat.blendMode = BlendMode::AlphaBlend;
             glassMat.depthTest = true;
@@ -286,9 +273,12 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
             glassMat.ubo.pbrParams[3] = 0.35f; // Leve auto-luminiscencia de vitral retroiluminado
             const Matrix4x4 m = Matrix4x4::Translation(gp.pos.x, gp.pos.y, gp.pos.z) *
                                 Matrix4x4::Scale(2.6f, 2.9f, 0.06f);
-            renderer.RenderStaticMeshPBR(m_panelMesh, m, glassMat, 7u);
+            renderer.SubmitStaticMeshPBR(m_panelMesh, m, glassMat, 7u);
         }
     }
+
+    // Despachar cola ordenada (Opacos Front-to-Back -> Cutout -> Vitrales Back-to-Front) antes de cerrar FBO HDR
+    renderer.FlushRenderQueue();
 
     // 5. RESOLVE HDR -> BLOOM MULTIPASE (BrightPass + BlurH + BlurV) -> COMPOSITE TV (1280x720)
     if (hdrPassActive) {

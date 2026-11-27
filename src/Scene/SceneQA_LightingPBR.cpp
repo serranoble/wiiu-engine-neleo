@@ -169,18 +169,18 @@ void SceneQA_LightingPBR::OnQARender3D(const Matrix4x4& /*viewMatrix*/, const Ma
     floorMat.ubo.materialParams[3] = 0.25f;
     floorMat.ubo.pbrParams[0] = 0.65f; // roughness
     floorMat.ubo.pbrParams[1] = 0.05f; // dielectrico
-    renderer.RenderStaticMeshPBR(m_floorPlane, Matrix4x4::Translation(0.0f, 0.0f, -4.0f), floorMat, m_shadingMode);
+    renderer.SubmitStaticMeshPBR(m_floorPlane, Matrix4x4::Translation(0.0f, 0.0f, -4.0f), floorMat, m_shadingMode);
 
     // 3. Dos cubos laterales de prueba de Normal / Bump Mapping TBN bajo luces rasantes
     MaterialPropertyBlock reliefMat = floorMat;
     reliefMat.ubo.pbrParams[0] = 0.42f;
     reliefMat.ubo.pbrParams[1] = 0.10f;
     const Quaternion slowSpin = Quaternion::FromAxisAngle(Point3D{0.0f, 1.0f, 0.0f}, t * 0.30f);
-    renderer.RenderStaticMeshPBR(
+    renderer.SubmitStaticMeshPBR(
         m_reliefCubeMesh,
         Matrix4x4::FromTRS(Point3D{-8.2f, 2.2f, -2.8f}, slowSpin, Point3D{1.0f, 1.0f, 1.0f}),
         reliefMat, m_shadingMode);
-    renderer.RenderStaticMeshPBR(
+    renderer.SubmitStaticMeshPBR(
         m_reliefCubeMesh,
         Matrix4x4::FromTRS(Point3D{8.2f, 2.2f, -2.8f}, slowSpin.Conjugate(), Point3D{1.0f, 1.0f, 1.0f}),
         reliefMat, m_shadingMode);
@@ -207,7 +207,7 @@ void SceneQA_LightingPBR::OnQARender3D(const Matrix4x4& /*viewMatrix*/, const Ma
 
             sphereMat.ubo.pbrParams[0] = roughness;
             sphereMat.ubo.pbrParams[1] = metallic;
-            renderer.RenderStaticMeshPBR(
+            renderer.SubmitStaticMeshPBR(
                 m_sphereMesh,
                 Matrix4x4::Translation(px, py, -4.0f),
                 sphereMat, m_shadingMode);
@@ -223,7 +223,7 @@ void SceneQA_LightingPBR::OnQARender3D(const Matrix4x4& /*viewMatrix*/, const Ma
         markerMat.ubo.materialParams[3] = 1.0f;
         markerMat.ubo.pbrParams[0] = 0.1f;
         markerMat.ubo.pbrParams[1] = 0.0f;
-        renderer.RenderStaticMeshPBR(
+        renderer.SubmitStaticMeshPBR(
             m_lightMarkerMesh,
             Matrix4x4::Translation(pPos[i].x, pPos[i].y, pPos[i].z),
             markerMat, 1u);

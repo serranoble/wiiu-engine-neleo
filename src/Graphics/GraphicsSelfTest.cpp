@@ -523,6 +523,62 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         outReport.Record("GFX", "LIGHT_CULL_VARIANT", ok,
                          ok ? "SPHERE CULL + 5 VARIANTS OK" : "FALLO CULLING/VARIANT KEY");
     }
+
+    // T24: [OPT-459] RenderQueuePBR SortKey 64-bit (Opacos F2B -> Cutout F2B -> Translucidos B2F)
+    {
+        StaticMesh unitMesh;
+        const bool meshOk = ProceduralMeshBuilder::CreateCube(unitMesh, 1.0f);
+
+        BasicRenderQueuePBR<16u> queue;
+        const Point3D cam{0.0f, 0.0f, 0.0f};
+
+        MaterialPropertyBlock opMat{};
+        opMat.blendMode = BlendMode::Opaque;
+        MaterialPropertyBlock cutMat{};
+        cutMat.blendMode = BlendMode::AlphaCutout;
+        MaterialPropertyBlock trMat{};
+        trMat.blendMode = BlendMode::AlphaBlend;
+
+        // Enviar deliberadamente desordenados (translucido cercano, opaco lejano, cutout, translucido lejano, opaco cercano)
+        bool subOk = true;
+        subOk = subOk && queue.Submit(unitMesh, Matrix4x4::Translation(0.0f, 0.0f, -5.0f),  trMat,  0u, cam);
+        subOk = subOk && queue.Submit(unitMesh, Matrix4x4::Translation(0.0f, 0.0f, -20.0f), opMat,  0u, cam);
+        subOk = subOk && queue.Submit(unitMesh, Matrix4x4::Translation(0.0f, 0.0f, -12.0f), cutMat, 0u, cam);
+        subOk = subOk && queue.Submit(unitMesh, Matrix4x4::Translation(0.0f, 0.0f, -30.0f), trMat,  0u, cam);
+        subOk = subOk && queue.Submit(unitMesh, Matrix4x4::Translation(0.0f, 0.0f, -4.0f),  opMat,  0u, cam);
+
+        queue.Sort();
+        bool orderOk = (queue.GetCount() == 5u);
+        if (orderOk) {
+            const RenderCommandPBR& c0 = queue.GetSortedCommand(0u);
+            const RenderCommandPBR& c1 = queue.GetSortedCommand(1u);
+            const RenderCommandPBR& c2 = queue.GetSortedCommand(2u);
+            const RenderCommandPBR& c3 = queue.GetSortedCommand(3u);
+            const RenderCommandPBR& c4 = queue.GetSortedCommand(4u);
+            // [0]=op near (-4), [1]=op far (-20), [2]=cutout (-12), [3]=tr far (-30), [4]=tr near (-5)
+            orderOk = (c0.material.blendMode == BlendMode::Opaque) && (c0.modelMatrix.m[14] > c1.modelMatrix.m[14]) &&
+                      (c1.material.blendMode == BlendMode::Opaque) &&
+                      (c2.material.blendMode == BlendMode::AlphaCutout) &&
+                      (c3.material.blendMode == BlendMode::AlphaBlend) && (c3.modelMatrix.m[14] < c4.modelMatrix.m[14]) &&
+                      (c4.material.blendMode == BlendMode::AlphaBlend);
+        }
+
+        // Prueba de limite de capacidad (0 overflow)
+        queue.Clear();
+        uint32_t accepted = 0u;
+        for (uint32_t i = 0u; i < BasicRenderQueuePBR<16u>::MAX_COMMANDS + 6u; ++i) {
+            if (queue.Submit(unitMesh, Matrix4x4::Identity(), opMat, 0u, cam)) {
+                ++accepted;
+            }
+        }
+        const bool capOk = (accepted == BasicRenderQueuePBR<16u>::MAX_COMMANDS) &&
+                           (queue.GetCount() == BasicRenderQueuePBR<16u>::MAX_COMMANDS);
+
+        unitMesh.Destroy();
+        const bool ok = meshOk && subOk && orderOk && capOk;
+        outReport.Record("GFX", "RENDER_QUEUE_SORT", ok,
+                         ok ? "F2B OPAQUE + B2F TRANSPARENT OK" : "FALLO RENDER QUEUE SORT");
+    }
 }
 
 } // namespace Neleo::Graphics
