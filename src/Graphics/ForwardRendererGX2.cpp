@@ -15,6 +15,7 @@
 #include "Graphics/PBRVariantsShaderBinary.hpp"
 #include "Graphics/WaterGlassShaderBinary.hpp"
 #include "Graphics/HDRFogShaderBinary.hpp"
+#include "Graphics/NPRProcShaderBinary.hpp"
 #include "Graphics/ShadowMapRendererGX2.hpp"
 #include <algorithm>
 #include <cstring>
@@ -85,6 +86,7 @@ bool ForwardRendererGX2::Initialize() {
     (void)InitPBRVariants();
     (void)InitWaterGlassShader();
     (void)InitHDRFogShader();
+    (void)InitNPRProcShader();
     (void)InitPBRInstancedShader();
 
     // Inicializar Samplers GX2 (todos los samplers single-mip fijan MIP_FILTER_NONE + MIP_PERF_DISABLE + LOD 0..0
@@ -180,9 +182,9 @@ void ForwardRendererGX2::Shutdown() {
     const bool hasGpuResources =
         m_skyShaderLoaded || m_meshShaderLoaded || m_skelShaderLoaded ||
         m_instShaderLoaded || m_depthPreShaderLoaded || m_pbrShaderLoaded || anyPbrVariant ||
-        m_waterGlassShaderLoaded || m_hdrFogPipe.loaded || m_pbrInstShaderLoaded || m_instanceBufferCreated ||
+        m_waterGlassShaderLoaded || m_hdrFogPipe.loaded || m_nprProcPipe.loaded || m_pbrInstShaderLoaded || m_instanceBufferCreated ||
         m_skyVs || m_meshVs || m_skelVs || m_instVs || m_depthPreVs || m_pbrVs ||
-        m_waterGlassVs || m_hdrFogPipe.vs || m_pbrInstVs;
+        m_waterGlassVs || m_hdrFogPipe.vs || m_nprProcPipe.vs || m_pbrInstVs;
     if (hasGpuResources && ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
         Window::HasForeground() && !Window::IsExitingProcUI()) {
         GX2DrawDone();
@@ -251,6 +253,12 @@ void ForwardRendererGX2::Shutdown() {
     m_hdrFogPipe.skyboxSlot = -1;
     m_hdrFogPipe.shadowSlot = -1;
     m_hdrFogPipe.loaded = false;
+
+    freeShaderPtrs(m_nprProcPipe.vs, m_nprProcPipe.vsProgram, m_nprProcPipe.ps, m_nprProcPipe.psProgram, m_nprProcPipe.fsProgram);
+    m_nprProcPipe.diffuseSlot = -1;
+    m_nprProcPipe.skyboxSlot = -1;
+    m_nprProcPipe.shadowSlot = -1;
+    m_nprProcPipe.loaded = false;
 
     void* dummyFs = nullptr;
     freeShaderPtrs(m_pbrInstVs, m_pbrInstVsProgram, m_pbrInstPs, m_pbrInstPsProgram, dummyFs);
@@ -1352,6 +1360,8 @@ bool ForwardRendererGX2::InitPBRVariants() {
          "PBRMlt_VS_Hdr",  "PBRMlt_VS_Prog",  "PBRMlt_PS_Hdr",  "PBRMlt_PS_Prog",  "PBRMlt_FS_Prog",  false},
         {PBRVariantIndex::MultiBump,  PBR_MULTI_BUMP_GX2_GSH_DATA, PBR_MULTI_BUMP_GX2_GSH_SIZE,
          "PBRMltB_VS_Hdr", "PBRMltB_VS_Prog", "PBRMltB_PS_Hdr", "PBRMltB_PS_Prog", "PBRMltB_FS_Prog", false},
+        {PBRVariantIndex::ShadowDir,  PBR_SHADOW_DIR_GX2_GSH_DATA, PBR_SHADOW_DIR_GX2_GSH_SIZE,
+         "PBRShD_VS_Hdr",  "PBRShD_VS_Prog",  "PBRShD_PS_Hdr",  "PBRShD_PS_Prog",  "PBRShD_FS_Prog",  true},
         {PBRVariantIndex::Shadow,     PBR_SHADOW_GX2_GSH_DATA,     PBR_SHADOW_GX2_GSH_SIZE,
          "PBRShd_VS_Hdr",  "PBRShd_VS_Prog",  "PBRShd_PS_Hdr",  "PBRShd_PS_Prog",  "PBRShd_FS_Prog",  true}
     };
@@ -1397,6 +1407,20 @@ bool ForwardRendererGX2::InitHDRFogShader() {
         m_hdrFogPipe.vs, m_hdrFogPipe.vsProgram, m_hdrFogPipe.ps, m_hdrFogPipe.psProgram, m_hdrFogPipe.fs, m_hdrFogPipe.fsProgram,
         m_hdrFogPipe.diffuseSlot, m_hdrFogPipe.skyboxSlot, nullptr);
     return m_hdrFogPipe.loaded;
+#else
+    return true;
+#endif
+}
+
+bool ForwardRendererGX2::InitNPRProcShader() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    if (m_nprProcPipe.loaded) return true;
+    m_nprProcPipe.loaded = LoadPBRVariantFromGSH(
+        NPR_PROC_GX2_GSH_DATA, NPR_PROC_GX2_GSH_SIZE,
+        "NPRProc_VS_Hdr", "NPRProc_VS_Prog", "NPRProc_PS_Hdr", "NPRProc_PS_Prog", "NPRProc_FS_Prog",
+        m_nprProcPipe.vs, m_nprProcPipe.vsProgram, m_nprProcPipe.ps, m_nprProcPipe.psProgram, m_nprProcPipe.fs, m_nprProcPipe.fsProgram,
+        m_nprProcPipe.diffuseSlot, m_nprProcPipe.skyboxSlot, nullptr);
+    return m_nprProcPipe.loaded;
 #else
     return true;
 #endif
@@ -1482,6 +1506,7 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
     const bool shadowActive = (m_shadowMode > 0u) && ShadowMapRendererGX2::Instance().IsReady();
     const bool useWaterGlass = (shadingMode >= 4u && shadingMode <= 6u) && m_waterGlassShaderLoaded;
     const bool useHdrFog = (shadingMode == 7u) && m_hdrFogPipe.loaded;
+    const bool useNprProc = (shadingMode == 8u) && m_nprProcPipe.loaded;
 
     // [OPT-457] Light-Culling por Bounding Sphere en CPU (Zero-Alloc) + seleccion O(1) por ShaderVariantKey
     uint32_t culledIdx[4]{};
@@ -1497,7 +1522,7 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
         MakeShaderVariantKey(hasExtraLights, hasNormalMap, shadowActive));
     const uint8_t variantIdxU8 = static_cast<uint8_t>(chosenVariant);
     const PBRShaderPipeline& variantPipe = m_pbrVariants[variantIdxU8];
-    const bool useVariant = !useWaterGlass && !useHdrFog && (shadingMode <= 1u) && variantPipe.loaded;
+    const bool useVariant = !useWaterGlass && !useHdrFog && !useNprProc && (shadingMode <= 1u) && variantPipe.loaded;
 
     if (useWaterGlass) {
         if (m_boundShaderKind != BoundShaderKind::WaterGlass) {
@@ -1513,6 +1538,14 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
             GX2SetVertexShader(m_hdrFogPipe.vs);
             GX2SetPixelShader(m_hdrFogPipe.ps);
             m_boundShaderKind = BoundShaderKind::HDRFog;
+            m_boundPbrVariantIndex = 0xFFu;
+        }
+    } else if (useNprProc) {
+        if (m_boundShaderKind != BoundShaderKind::NPRProc) {
+            GX2SetFetchShader(&m_nprProcPipe.fs);
+            GX2SetVertexShader(m_nprProcPipe.vs);
+            GX2SetPixelShader(m_nprProcPipe.ps);
+            m_boundShaderKind = BoundShaderKind::NPRProc;
             m_boundPbrVariantIndex = 0xFFu;
         }
     } else if (useVariant) {
@@ -1567,9 +1600,17 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
 
     const bool isDirOnlyVariant = useVariant &&
         (chosenVariant == PBRVariantIndex::DirOnly || chosenVariant == PBRVariantIndex::DirBump);
+    const bool isShadowDirVariant = useVariant && (chosenVariant == PBRVariantIndex::ShadowDir);
     if (useWaterGlass || isDirOnlyVariant) {
         // Ruta rapida 24 floats: water_glass_gx2 o variantes direccionales (pbr_dir / pbr_dir_bump)
         GX2SetPixelUniformReg(0, 24, psData);
+    } else if (isShadowDirVariant) {
+        // [OPT-467] Ruta rapida 28 floats: pbr_shadow_dir_gx2 (uPsData[6] = shadowParams, 16 PS_GPR)
+        psData[24] = shadowActive ? static_cast<float>(m_shadowMode) : 0.0f;
+        psData[25] = m_shadowDepthBias;
+        psData[26] = m_shadowTexelSize;
+        psData[27] = m_shadowMinLit;
+        GX2SetPixelUniformReg(0, 28, psData);
     } else {
         // [6..13] pointLights compactadas tras Light-Culling por Bounding Sphere
         for (uint32_t i = 0u; i < numPoints; ++i) {
@@ -1583,7 +1624,10 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
             std::memcpy(&psData[60], lights.spotLightDirInner, 4u * sizeof(float));
             std::memcpy(&psData[64], lights.spotLightColorOuter, 4u * sizeof(float));
         }
-        if (useHdrFog) {
+        if (useNprProc) {
+            // [OPT-467] Ruta rapida 44 floats: npr_proc_gx2 (uPsData[11], sin Spot ni Shadow)
+            GX2SetPixelUniformReg(0, 44, psData);
+        } else if (useHdrFog) {
             // Ruta rapida 56 floats: hdr_fog_gx2 (uPsData[14], sin Spot ni Shadow)
             GX2SetPixelUniformReg(0, 56, psData);
         } else if (useVariant && chosenVariant != PBRVariantIndex::Shadow) {
@@ -1603,12 +1647,13 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
     const GX2Texture* activeDiffuse = diffuseTex ? diffuseTex : (m_defaultTexCreated ? &m_defaultNeutralTex : nullptr);
     const int32_t diffSlot = useWaterGlass ? m_waterGlassDiffuseSlot
                            : (useHdrFog ? m_hdrFogPipe.diffuseSlot
-                           : (useVariant ? variantPipe.diffuseSlot : m_pbrDiffuseSlot));
+                           : (useNprProc ? -1
+                           : (useVariant ? variantPipe.diffuseSlot : m_pbrDiffuseSlot)));
     const int32_t skySlot  = useWaterGlass ? m_waterGlassSkyboxSlot
-                           : (useHdrFog ? -1
+                           : ((useHdrFog || useNprProc) ? -1
                            : (useVariant ? variantPipe.skyboxSlot : m_pbrSkyboxSlot));
     const int32_t shdSlot  = useVariant ? variantPipe.shadowSlot
-                           : ((useWaterGlass || useHdrFog) ? -1 : m_pbrShadowSlot);
+                           : ((useWaterGlass || useHdrFog || useNprProc) ? -1 : m_pbrShadowSlot);
     if (diffSlot >= 0 && activeDiffuse) {
         BindMeshTextureAndSampler(activeDiffuse, static_cast<uint32_t>(diffSlot));
     }

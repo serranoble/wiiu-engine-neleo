@@ -91,9 +91,10 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         const bool ok = renderer.Initialize() && renderer.IsInitialized() &&
                         renderer.IsPBRShaderLoaded() && renderer.IsPBRVariantsReady() &&
                         renderer.IsWaterGlassShaderLoaded() && renderer.IsHDRFogShaderLoaded() &&
+                        renderer.IsNPRProcShaderLoaded() &&
                         r2d.Init() && r2d.IsFontAtlasReady();
         outReport.Record("GFX", "FORWARD_RENDERER", ok,
-                         ok ? "GX2 + 5 PBR + HDRFOG + UI2D OK" : "FALLO INIT RENDERERS GX2");
+                         ok ? "GX2 + 6 PBR + HDRFOG + NPR + UI2D OK" : "FALLO INIT RENDERERS GX2");
     }
 
     // T5: Math3D (Perspective, LookAt, Quaternion, FromTRS sin NaN/Inf)
@@ -506,10 +507,11 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         const uint32_t cntMany = CullPointLightsForMesh(
             sphere, Matrix4x4::Identity(), manyLights, idxMany, 4u);
 
-        const PBRVariantIndex vDir   = SelectPBRVariant(MakeShaderVariantKey(false, false, false));
-        const PBRVariantIndex vDirB  = SelectPBRVariant(MakeShaderVariantKey(false, true,  false));
-        const PBRVariantIndex vMulti = SelectPBRVariant(MakeShaderVariantKey(true,  false, false));
-        const PBRVariantIndex vShd   = SelectPBRVariant(MakeShaderVariantKey(false, false, true));
+        const PBRVariantIndex vDir    = SelectPBRVariant(MakeShaderVariantKey(false, false, false));
+        const PBRVariantIndex vDirB   = SelectPBRVariant(MakeShaderVariantKey(false, true,  false));
+        const PBRVariantIndex vMulti  = SelectPBRVariant(MakeShaderVariantKey(true,  false, false));
+        const PBRVariantIndex vShdDir = SelectPBRVariant(MakeShaderVariantKey(false, false, true));
+        const PBRVariantIndex vShdMlt = SelectPBRVariant(MakeShaderVariantKey(true,  false, true));
 
         sphere.Destroy();
 
@@ -520,7 +522,8 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
                         (vDir == PBRVariantIndex::DirOnly) &&
                         (vDirB == PBRVariantIndex::DirBump) &&
                         (vMulti == PBRVariantIndex::MultiLight) &&
-                        (vShd == PBRVariantIndex::Shadow);
+                        (vShdDir == PBRVariantIndex::ShadowDir) &&
+                        (vShdMlt == PBRVariantIndex::Shadow);
         outReport.Record("GFX", "LIGHT_CULL_VARIANT", ok,
                          ok ? "SPHERE CULL + 5 VARIANTS OK" : "FALLO CULLING/VARIANT KEY");
     }

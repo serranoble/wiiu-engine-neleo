@@ -27,6 +27,7 @@ VARIANTS = [
     ("pbr_dir_bump_gx2",   "PBR_DIR_BUMP_GX2",   VS_PATH,      {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 0}),
     ("pbr_multi_gx2",      "PBR_MULTI_GX2",      VS_PATH,      {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 0, "USE_SHADOWS": 0}),
     ("pbr_multi_bump_gx2", "PBR_MULTI_BUMP_GX2", VS_PATH,      {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 0}),
+    ("pbr_shadow_dir_gx2", "PBR_SHADOW_DIR_GX2", VS_PATH,      {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 1}),
     ("pbr_shadow_gx2",     "PBR_SHADOW_GX2",     VS_PATH,      {"USE_MULTILIGHT": 1, "USE_NORMAL_MAP": 1, "USE_SHADOWS": 1}),
     ("pbr_inst_dir_gx2",   "PBR_INST_DIR_GX2",   INST_VS_PATH, {"USE_MULTILIGHT": 0, "USE_NORMAL_MAP": 0, "USE_SHADOWS": 0}),
 ]

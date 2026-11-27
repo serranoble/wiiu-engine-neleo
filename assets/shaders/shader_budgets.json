@@ -17,6 +17,11 @@
       "max_ps_gprs": 16,
       "role": "hot_path_hdr_fog"
     },
+    "npr_proc_gx2.gsh": {
+      "max_bytes": 11264,
+      "max_ps_gprs": 18,
+      "role": "hot_path_npr_proc"
+    },
     "pbr_dir_gx2.gsh": {
       "max_bytes": 7168,
       "max_ps_gprs": 16,
@@ -46,6 +51,11 @@
       "max_bytes": 12288,
       "max_ps_gprs": 20,
       "role": "hot_path_pbr_lite"
+    },
+    "pbr_shadow_dir_gx2.gsh": {
+      "max_bytes": 10240,
+      "max_ps_gprs": 22,
+      "role": "hot_path_pbr_shadow_dir"
     },
     "pbr_shadow_gx2.gsh": {
       "max_bytes": 14336,

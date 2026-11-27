@@ -33,7 +33,13 @@ uniform sampler2D uTexture;
 uniform sampler2D uSkybox;
 #if USE_SHADOWS
 uniform sampler2D uShadowMap;
+#if USE_MULTILIGHT
 uniform vec4 uPsData[18];
+#define SHADOW_DATA_IDX 17
+#else
+uniform vec4 uPsData[7];
+#define SHADOW_DATA_IDX 6
+#endif
 #elif USE_MULTILIGHT
 uniform vec4 uPsData[17];
 #else
@@ -88,18 +94,19 @@ vec3 ToneMapACES(vec3 x) {
 }
 
 vec3 EvalPBRLightFast(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 diffBase, vec3 F0,
-                      float a2, float a2m1, float k, float inv1mK, float ggxV, float inv4NdotV) {
+                      float specScale, float a2m1, float k, float inv1mK) {
     float NdotL = max(dot(N, L), 0.0);
     if (NdotL <= 0.0) return vec3(0.0);
 
-    vec3 H = normalize(V + L);
+    vec3 hv = V + L;
+    vec3 H = hv * inversesqrt(max(dot(hv, hv), 1e-6));
     float NdotH = max(dot(N, H), 0.0);
     float denom = NdotH * NdotH * a2m1 + 1.0;
-    float NDF = a2 / max(PI * denom * denom, 0.0001);
-    float ggxL = NdotL / (NdotL * inv1mK + k);
+    // [OPT-468] 1 sola division RCP en unidad trascendental T de AMD Latte (fusiona GGX + Smith)
+    float specScalar = (specScale * NdotL) / max((denom * denom) * (NdotL * inv1mK + k), 0.00001);
     vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
 
-    vec3 spec = F * (NDF * ggxV * ggxL * inv4NdotV);
+    vec3 spec = F * specScalar;
     vec3 diff = diffBase * (vec3(1.0) - F) * NdotL;
     return (diff + spec) * radiance;
 }
@@ -115,7 +122,7 @@ vec3 EvalBlinnPhongLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, flo
 
 #if USE_SHADOWS
 float ComputeDirectionalShadow(vec4 lightSpacePos, vec3 N, vec3 L) {
-    float shadowMode = uPsData[17].x;
+    float shadowMode = uPsData[SHADOW_DATA_IDX].x;
     if (shadowMode < 0.5) return 1.0;
 
     vec3 projCoords = lightSpacePos.xyz / max(lightSpacePos.w, 0.0001);
@@ -128,34 +135,36 @@ float ComputeDirectionalShadow(vec4 lightSpacePos, vec3 N, vec3 L) {
         return 1.0;
     }
 
-    float baseBias = uPsData[17].y;
+    float baseBias = uPsData[SHADOW_DATA_IDX].y;
     float NdotL = clamp(dot(N, L), 0.0, 1.0);
     float bias = (baseBias > 0.00001) ? max(baseBias * (1.0 - NdotL) * 2.5, baseBias) : 0.0;
-    float texelSize = max(uPsData[17].z, 1.0 / 2048.0);
-    float minLit = uPsData[17].w;
+    float texelSize = max(uPsData[SHADOW_DATA_IDX].z, 1.0 / 2048.0);
+    float minLit = uPsData[SHADOW_DATA_IDX].w;
+    float cmpZ = currentDepth - bias;
 
     float lit = 1.0;
     if (shadowMode < 1.5) {
         float closestDepth = texture(uShadowMap, shadowUV).r;
-        lit = ((currentDepth - bias) <= closestDepth) ? 1.0 : 0.0;
+        lit = (cmpZ <= closestDepth) ? 1.0 : 0.0;
     } else if (shadowMode < 2.5) {
+        // [OPT-467] PCF 4-tap Rotated Grid (55% menos lecturas TMU en AMD Latte vs 3x3 9-tap)
+        vec2 o1 = vec2( 0.75,  0.35) * texelSize;
+        vec2 o2 = vec2(-0.35,  0.75) * texelSize;
+        float s0 = (cmpZ <= texture(uShadowMap, shadowUV + o1).r) ? 1.0 : 0.0;
+        float s1 = (cmpZ <= texture(uShadowMap, shadowUV - o1).r) ? 1.0 : 0.0;
+        float s2 = (cmpZ <= texture(uShadowMap, shadowUV + o2).r) ? 1.0 : 0.0;
+        float s3 = (cmpZ <= texture(uShadowMap, shadowUV - o2).r) ? 1.0 : 0.0;
+        lit = (s0 + s1 + s2 + s3) * 0.25;
+    } else {
+        // [OPT-467] PCF 3x3 9-tap (64% menos lecturas TMU en AMD Latte vs 5x5 25-tap)
         float sum = 0.0;
         for (int y = -1; y <= 1; ++y) {
             for (int x = -1; x <= 1; ++x) {
-                float d = texture(uShadowMap, shadowUV + vec2(float(x), float(y)) * texelSize).r;
-                sum += ((currentDepth - bias) <= d) ? 1.0 : 0.0;
+                float d = texture(uShadowMap, shadowUV + vec2(float(x), float(y)) * (texelSize * 1.4)).r;
+                sum += (cmpZ <= d) ? 1.0 : 0.0;
             }
         }
-        lit = sum / 9.0;
-    } else {
-        float sum = 0.0;
-        for (int y = -2; y <= 2; ++y) {
-            for (int x = -2; x <= 2; ++x) {
-                float d = texture(uShadowMap, shadowUV + vec2(float(x), float(y)) * texelSize).r;
-                sum += ((currentDepth - bias) <= d) ? 1.0 : 0.0;
-            }
-        }
-        lit = sum / 25.0;
+        lit = sum * (1.0 / 9.0);
     }
 
     return mix(minLit, 1.0, lit);
@@ -180,32 +189,23 @@ void main() {
     float normalMapEnabled = uPsData[4].y;
     float bumpScale = uPsData[4].z;
     if (normalMapEnabled > 0.5 && hasTex && bumpScale > 0.01) {
-        vec3 dp1 = dFdx(vWorldPos);
-        vec3 dp2 = dFdy(vWorldPos);
-        vec2 duv1 = dFdx(vTexCoord);
-        vec2 duv2 = dFdy(vTexCoord);
-
-        vec3 dp2perp = cross(dp2, N);
-        vec3 dp1perp = cross(N, dp1);
-        vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-        vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
-
-        float invmax = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-8));
-        mat3 TBN = mat3(T * invmax, B * invmax, N);
-
-        float dUV = 0.00390625;
+        // [OPT-467] Screen-Space Bump Mapping de 1 sola lectura de textura (Mikkelsen):
+        // Elimina 2 texture fetches + dFdx/dFdy(UV) + mat3 TBN por pixel (-66% presion TMU en AMD Latte).
         float hC = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-        float hR = dot(texture(uTexture, vTexCoord + vec2(dUV, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
-        float hU = dot(texture(uTexture, vTexCoord + vec2(0.0, dUV)).rgb, vec3(0.299, 0.587, 0.114));
-
-        vec3 tanPerturb = normalize(vec3((hC - hR) * bumpScale, (hC - hU) * bumpScale, 1.0));
-        N = normalize(TBN * tanPerturb);
+        vec3 dPosX = dFdx(vWorldPos);
+        vec3 dPosY = dFdy(vWorldPos);
+        vec3 r1 = cross(dPosY, N);
+        vec3 r2 = cross(N, dPosX);
+        float det = dot(dPosX, r1);
+        vec3 surfGrad = sign(det) * (dFdx(hC) * r1 + dFdy(hC) * r2);
+        vec3 bumped = abs(det) * N - surfGrad * (bumpScale * 0.25);
+        N = bumped * inversesqrt(max(dot(bumped, bumped), 1e-12));
     }
 #endif
 
 #if USE_SHADOWS
     float shadowFactor = ComputeDirectionalShadow(vLightSpacePos, N, dirL);
-    if (uPsData[17].x > 3.5) {
+    if (uPsData[SHADOW_DATA_IDX].x > 3.5) {
         vec3 dbgCol = mix(vec3(0.08, 0.12, 0.28), vec3(0.95, 0.96, 0.98), shadowFactor);
         fragColor = vec4(dbgCol, 1.0);
         return;
@@ -277,7 +277,7 @@ void main() {
         return;
     }
 
-    // Ruta PBR Cook-Torrance pre-factorizada para AMD Latte VLIW5
+    // Ruta PBR Cook-Torrance pre-factorizada para AMD Latte VLIW5 [OPT-468: 1 RCP/luz]
     vec3 F0 = mix(vec3(0.04), albedoLin, metallic);
     float NdotV = max(dot(N, V), 0.001);
     float a = roughness * roughness;
@@ -287,10 +287,10 @@ void main() {
     float k = (r1 * r1) * 0.125;
     float inv1mK = 1.0 - k;
     float ggxV = NdotV / (NdotV * inv1mK + k);
-    float inv4NdotV = 0.25 / NdotV;
+    float specScale = (a2 * (0.25 / PI)) * (ggxV / NdotV);
     vec3 diffBase = albedoLin * ((1.0 - metallic) * (1.0 / PI));
 
-    vec3 Lo = EvalPBRLightFast(N, V, dirL, dirRad, diffBase, F0, a2, a2m1, k, inv1mK, ggxV, inv4NdotV);
+    vec3 Lo = EvalPBRLightFast(N, V, dirL, dirRad, diffBase, F0, specScale, a2m1, k, inv1mK);
 
 #if USE_MULTILIGHT
     for (int i = 0; i < 4; ++i) {
@@ -307,7 +307,7 @@ void main() {
             float falloff = clamp(1.0 - (dist / radius), 0.0, 1.0);
             float atten = (falloff * falloff) / (1.0 + 0.08 * distSq);
             vec3 rad = pColInt.rgb * (pColInt.w * atten);
-            Lo += EvalPBRLightFast(N, V, L, rad, diffBase, F0, a2, a2m1, k, inv1mK, ggxV, inv4NdotV);
+            Lo += EvalPBRLightFast(N, V, L, rad, diffBase, F0, specScale, a2m1, k, inv1mK);
         }
     }
 
@@ -330,7 +330,7 @@ void main() {
             float cone = coneT * coneT * (3.0 - 2.0 * coneT);
             float falloff = clamp(1.0 - (dist / spotRange), 0.0, 1.0);
             vec3 rad = spotCol * (spotIntensity * cone * falloff * falloff);
-            Lo += EvalPBRLightFast(N, V, L, rad, diffBase, F0, a2, a2m1, k, inv1mK, ggxV, inv4NdotV);
+            Lo += EvalPBRLightFast(N, V, L, rad, diffBase, F0, specScale, a2m1, k, inv1mK);
         }
     }
 #endif
@@ -338,11 +338,11 @@ void main() {
     vec3 ambient = hemiColor * albedoLin * ambScale * (1.0 - 0.55 * metallic);
     vec3 envRefl = vec3(0.0);
     if (iblStrength > 0.01) {
+        // [OPT-468] IBL 1-fetch: SampleCubeAtlas(R) para reflejos nitidos + irradiancia hemisferica analitica (-50% costo IBL)
         vec3 R = reflect(-V, N);
         vec3 envSpecS = clamp(SampleCubeAtlas(R), 0.0, 1.0);
-        vec3 envIrrS  = clamp(SampleCubeAtlas(N), 0.0, 1.0);
         vec3 envSpec = envSpecS * envSpecS;
-        vec3 envIrr  = envIrrS * envIrrS;
+        vec3 envIrr  = hemiColor * hemiColor * 0.65;
         vec3 F_ibl = FresnelSchlick(NdotV, F0);
         vec3 kD_ibl = (vec3(1.0) - F_ibl) * (1.0 - metallic);
         vec3 specBlur = mix(envSpec, envIrr, a);

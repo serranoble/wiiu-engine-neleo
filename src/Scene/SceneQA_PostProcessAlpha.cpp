@@ -50,7 +50,12 @@ void SceneQA_PostProcessAlpha::OnQAEnter() {
     m_cutoutTexLoaded = Graphics::TextureLoaderGX2::CreateProceduralAlphaCutoutTexture(
         m_cutoutTex, 128u, "QA_G5_AlphaCutout");
 
+#if defined(__WIIU__) || defined(__wiiu__)
+    // [OPT-467] Resolucion interna HDR 960x540 (-44% pixeles RGBA16F) con Composite + HUD 2D nitidos a 1280x720
+    (void)m_postFX.Initialize(960u, 540u);
+#else
     (void)m_postFX.Initialize(1280u, 720u);
+#endif
 }
 
 void SceneQA_PostProcessAlpha::OnQAExit() {

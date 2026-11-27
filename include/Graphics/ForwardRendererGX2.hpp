@@ -110,6 +110,14 @@ public:
 #endif
     }
 
+    [[nodiscard]] bool IsNPRProcShaderLoaded() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_nprProcPipe.loaded;
+#else
+        return m_initialized;
+#endif
+    }
+
     [[nodiscard]] bool HasAllPBRSamplerSlots() const noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
         return m_pbrShaderLoaded && (m_pbrDiffuseSlot >= 0) && (m_pbrSkyboxSlot >= 0) && (m_pbrShadowSlot >= 0);
@@ -463,6 +471,10 @@ private:
     bool InitHDRFogShader();
     PBRShaderPipeline m_hdrFogPipe{};
 
+    // 11. [OPT-467] Pipeline NPR Procedural especializado (modo 8 — 44 floats uPsData[11], 17 PS_GPR)
+    bool InitNPRProcShader();
+    PBRShaderPipeline m_nprProcPipe{};
+
     // 10. [OPT-464] Pipeline PBR Direccional Instanciado (paridad 1:1 Cook-Torrance GGX + ACES para Auto-Batching)
     bool InitPBRInstancedShader();
     GX2VertexShader* m_pbrInstVs{nullptr};
@@ -480,7 +492,8 @@ private:
         PBRUber,
         PBRVariant,
         WaterGlass,
-        HDRFog
+        HDRFog,
+        NPRProc
     };
     BoundShaderKind m_boundShaderKind{BoundShaderKind::None};
     uint8_t m_boundPbrVariantIndex{0xFFu};

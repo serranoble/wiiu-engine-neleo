@@ -28,8 +28,9 @@ enum class PBRVariantIndex : uint8_t {
     DirBump       = 1u, // MULTILIGHT=0, NORMAL_MAP=1, SHADOWS=0 (24 floats)
     MultiLight    = 2u, // MULTILIGHT=1, NORMAL_MAP=0, SHADOWS=0 (68 floats)
     MultiBump     = 3u, // MULTILIGHT=1, NORMAL_MAP=1, SHADOWS=0 (68 floats)
-    Shadow        = 4u, // MULTILIGHT=1, NORMAL_MAP=1, SHADOWS=1 (72 floats)
-    Count         = 5u
+    ShadowDir     = 4u, // MULTILIGHT=0, NORMAL_MAP=1, SHADOWS=1 (28 floats — G3 sin luces extra)
+    Shadow        = 5u, // MULTILIGHT=1, NORMAL_MAP=1, SHADOWS=1 (72 floats)
+    Count         = 6u
 };
 
 [[nodiscard]] constexpr uint8_t MakeShaderVariantKey(bool hasMultiLight,
@@ -43,11 +44,11 @@ enum class PBRVariantIndex : uint8_t {
 }
 
 [[nodiscard]] constexpr PBRVariantIndex SelectPBRVariant(uint8_t variantKey) noexcept {
-    if ((variantKey & SHADER_VARIANT_SHADOWS) != 0u) {
-        return PBRVariantIndex::Shadow;
-    }
     const bool multi = (variantKey & SHADER_VARIANT_MULTILIGHT) != 0u;
     const bool bump  = (variantKey & SHADER_VARIANT_NORMAL_MAP) != 0u;
+    if ((variantKey & SHADER_VARIANT_SHADOWS) != 0u) {
+        return multi ? PBRVariantIndex::Shadow : PBRVariantIndex::ShadowDir;
+    }
     if (multi) {
         return bump ? PBRVariantIndex::MultiBump : PBRVariantIndex::MultiLight;
     }

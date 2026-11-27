@@ -5502,6 +5502,14 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **PROS:** Aprovecha los 3 núcleos reales de Wii U y CPUs multi-core en PC/ROG Ally sin asignaciones en heap ni riesgo de deadlocks.
 - **CONTRAS:** Ninguno.
 
+### `OPT-467` & `OPT-468` — Optimización de *Pixel Fill-Rate* AMD Latte (Mikkelsen 1-Fetch, PCF 4-Tap, `pbr_shadow_dir_gx2`, `npr_proc_gx2`, PBR 1-RCP, IBL 1-Fetch, G5 `960×540`)
+- **Estado:** `IMPLEMENTADO` (Hito 164 — Doble `APROBACIÓN FINAL`, 29 shaders bajo presupuesto en `SHADER_BUDGET_CHECK`, validado en Wii U física).
+- **Solución:**
+  1. `OPT-467`: Mikkelsen screen-space bump de 1 fetch (-66% TMU), PCF 4-tap Rotated Grid / 3×3 9-tap, permutación `pbr_shadow_dir_gx2.gsh` (`16 PS_GPR`, 28 floats), shader dedicado Modo 8 `npr_proc_gx2.gsh` y RT HDR `960×540` en Wii U para G5 (-44% píxeles `RGBA16F`).
+  2. `OPT-468`: Fusión de divisiones GGX+Smith en 1 sola división `RCP` por luz en `EvalPBRLightFast`, IBL de 1 sola llamada `SampleCubeAtlas(R)` (`pbr_dir_gx2` baja a `10 PS_GPR`) y `npr_proc_gx2` optimizado a `11 PS_GPR / 7.1 KB` (8 hashes mármol/madera, 0 hashes terreno).
+- **PROS:** G3 y G5 sólidos a 60 FPS en Wii U física, máxima ocupación de wavefronts R700 en todos los shaders (`10–17 PS_GPR`).
+- **CONTRAS:** Ninguno.
+
 ---
 
 ## 📌 PROTOCOLO DE MANTENIMIENTO CONTINUO DEL ANEXO

@@ -326,6 +326,7 @@ def check_gx2_invariants() -> list[str]:
             "pbr_shadow_gx2.frag",
             "water_glass_gx2.frag",
             "hdr_fog_gx2.frag",
+            "npr_proc_gx2.frag",
         ):
             fp = ROOT / "assets" / "shaders" / frag_name
             if not fp.exists():
