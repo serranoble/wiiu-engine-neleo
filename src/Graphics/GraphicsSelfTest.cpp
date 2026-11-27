@@ -88,10 +88,11 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         auto& renderer = ForwardRendererGX2::Instance();
         auto& r2d = Render2DGX2::Instance();
         const bool ok = renderer.Initialize() && renderer.IsInitialized() &&
-                        renderer.IsPBRShaderLoaded() && renderer.IsPBRLiteShaderLoaded() &&
+                        renderer.IsPBRShaderLoaded() && renderer.IsPBRVariantsReady() &&
+                        renderer.IsWaterGlassShaderLoaded() && renderer.IsHDRFogShaderLoaded() &&
                         r2d.Init() && r2d.IsFontAtlasReady();
         outReport.Record("GFX", "FORWARD_RENDERER", ok,
-                         ok ? "GX2 + PBR LITE + UI2D ATLAS OK" : "FALLO INIT RENDERERS GX2");
+                         ok ? "GX2 + 5 PBR + HDRFOG + UI2D OK" : "FALLO INIT RENDERERS GX2");
     }
 
     // T5: Math3D (Perspective, LookAt, Quaternion, FromTRS sin NaN/Inf)
@@ -471,6 +472,56 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         TextureLoaderGX2::DestroyTexture(decodedTex);
         outReport.Record("GFX", "WTEX_BC_DECODE_GX2", ok,
                          ok ? "BC3 LE->RGBA8 ALIGN>=256 OK" : "FALLO DECODIFICADOR WTEX");
+    }
+
+    // T23: [OPT-457] Light-Culling por Bounding Sphere + ShaderVariantKey O(1)
+    {
+        StaticMesh sphere;
+        const bool meshOk = ProceduralMeshBuilder::CreateUVSphere(sphere, 1.0f, 8u, 6u);
+
+        LightBlockUBO lights{};
+        lights.ClearPointLights();
+        (void)lights.AddPointLight(Point3D{0.0f, 0.0f, 0.0f}, 4.0f, Point3D{1.0f, 0.5f, 0.2f}, 8.0f);
+        (void)lights.AddPointLight(Point3D{50.0f, 0.0f, 0.0f}, 4.0f, Point3D{0.2f, 0.8f, 1.0f}, 8.0f);
+
+        uint32_t idxNear[4]{};
+        const uint32_t cntNear = CullPointLightsForMesh(
+            sphere, Matrix4x4::Translation(2.0f, 0.0f, 0.0f), lights, idxNear, 4u);
+
+        uint32_t idxFar[4]{};
+        const uint32_t cntFar = CullPointLightsForMesh(
+            sphere, Matrix4x4::Translation(-25.0f, 0.0f, 0.0f), lights, idxFar, 4u);
+
+        // Caso > 4 luces: 4 primeras fuera de rango, indices 4 y 5 intersectan con maxOut=4u
+        LightBlockUBO manyLights{};
+        manyLights.ClearPointLights();
+        for (uint32_t k = 0u; k < 4u; ++k) {
+            (void)manyLights.AddPointLight(Point3D{100.0f + static_cast<float>(k) * 10.0f, 0.0f, 0.0f}, 3.0f,
+                                           Point3D{1.0f, 1.0f, 1.0f}, 5.0f);
+        }
+        (void)manyLights.AddPointLight(Point3D{0.5f, 0.0f, 0.0f}, 4.0f, Point3D{1.0f, 0.2f, 0.2f}, 8.0f);
+        (void)manyLights.AddPointLight(Point3D{-0.5f, 0.0f, 0.0f}, 4.0f, Point3D{0.2f, 1.0f, 0.2f}, 8.0f);
+        uint32_t idxMany[4]{};
+        const uint32_t cntMany = CullPointLightsForMesh(
+            sphere, Matrix4x4::Identity(), manyLights, idxMany, 4u);
+
+        const PBRVariantIndex vDir   = SelectPBRVariant(MakeShaderVariantKey(false, false, false));
+        const PBRVariantIndex vDirB  = SelectPBRVariant(MakeShaderVariantKey(false, true,  false));
+        const PBRVariantIndex vMulti = SelectPBRVariant(MakeShaderVariantKey(true,  false, false));
+        const PBRVariantIndex vShd   = SelectPBRVariant(MakeShaderVariantKey(false, false, true));
+
+        sphere.Destroy();
+
+        const bool ok = meshOk &&
+                        (cntNear == 1u) && (idxNear[0] == 0u) &&
+                        (cntFar == 0u) &&
+                        (cntMany == 2u) && (idxMany[0] == 4u) && (idxMany[1] == 5u) &&
+                        (vDir == PBRVariantIndex::DirOnly) &&
+                        (vDirB == PBRVariantIndex::DirBump) &&
+                        (vMulti == PBRVariantIndex::MultiLight) &&
+                        (vShd == PBRVariantIndex::Shadow);
+        outReport.Record("GFX", "LIGHT_CULL_VARIANT", ok,
+                         ok ? "SPHERE CULL + 5 VARIANTS OK" : "FALLO CULLING/VARIANT KEY");
     }
 }
 

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("native_gx2", "ui2d_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2", "pbr_mesh_gx2", "pbr_lite_gx2")]
+    [ValidateSet("native_gx2", "ui2d_gx2", "raytracing", "raytracing_bvh", "fullscreen_blit", "water", "shadows_gx2", "environment_gx2", "skinning_gx2", "pbr_mesh_gx2", "pbr_lite_gx2", "pbr_shadow_gx2", "water_glass_gx2")]
     [string] $Shader
 )
 
@@ -74,6 +74,18 @@ $shaderFiles = @{
         Header = "include/Graphics/PBRLiteShaderBinary.hpp"
         SizeSymbol = "PBR_LITE_GX2_GSH_SIZE"
         DataSymbol = "PBR_LITE_GX2_GSH_DATA"
+    }
+    pbr_shadow_gx2 = @{
+        Binary = "assets/shaders/pbr_shadow_gx2.gsh"
+        Header = "include/Graphics/PBRShadowShaderBinary.hpp"
+        SizeSymbol = "PBR_SHADOW_GX2_GSH_SIZE"
+        DataSymbol = "PBR_SHADOW_GX2_GSH_DATA"
+    }
+    water_glass_gx2 = @{
+        Binary = "assets/shaders/water_glass_gx2.gsh"
+        Header = "include/Graphics/WaterGlassShaderBinary.hpp"
+        SizeSymbol = "WATER_GLASS_GX2_GSH_SIZE"
+        DataSymbol = "WATER_GLASS_GX2_GSH_DATA"
     }
 }
 

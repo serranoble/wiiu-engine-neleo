@@ -28,6 +28,10 @@ description: Hardware invariants for Nintendo Wii U (IBM Espresso PPC 750CL, AMD
 - **Samplers & CubeMaps:** Always bind fallback `&m_defaultNeutralTex` / `&m_defaultNeutralCubeMap` when a texture is null; unmapped TMU slots stall Latte and trigger watchdog reboots.
 - **Skinning fetch shader:** `boneIndices` (`GX2_ATTRIB_FORMAT_UINT_8_8_8_8`) must use `GX2_ENDIAN_SWAP_NONE`.
 - **Render2DGX2:** Uses triple-buffering (`BUFFER_SLOTS = 3`) with sub-range `GX2DrawEx`; call `Render2DGX2::Instance().Shutdown()` and `ForwardRendererGX2::Instance().Shutdown()` before `Window::Shutdown()`.
+- **Shader Specialization & GPR Discipline (R700 VLIW5):**
+  - Never add runtime `if (mode == ...)` branches for unrelated material domains (water, terrain, NPR, UI2D) into hot-path fragment shaders; AMD Latte allocates physical GPRs for the worst-case path in the binary, collapsing wavefront occupancy from 60 to 30 FPS.
+  - Precompute loop invariants (`NdotV`, `a2`, `k`, `ggxV`, `0.25/NdotV`, `albedo/PI`) once per pixel outside light loops; replace `pow(x, 2.2)` / `pow(x, 5.0)` with `x*x` / `f2*f2*f` and `length()` + divide with `dot()` + `inversesqrt(max(distSq, 1e-6))`.
+  - All compiled `.gsh` binaries must stay within `assets/shaders/shader_budgets.json` (`SHADER_BUDGET_CHECK` in `scripts/agent_harness.py check`).
 
 ## 4. Audio DMA (`sndcore2` / AX) & Espresso SMP
 - Ping-pong DMA buffer in MEM2 (`16,384` B, `AX_BUFFER_SAMPLES = 2048`) must not cross a 512 MB physical boundary (`OSEffectiveToPhysical`). Flush with `DCStoreRange` before DMA reads.

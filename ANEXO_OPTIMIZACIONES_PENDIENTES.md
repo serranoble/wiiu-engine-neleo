@@ -463,10 +463,14 @@
 | **OPT-451** | Silicio Wii U / Rendimiento 60 FPS | Z-Buffer Único en eDRAM/MEM1 (560 GB/s en `GameScene3D`), Shader Especializado `pbr_lite_gx2` (9.6 KB vs 33.6 KB, bajo GPR en R700), Dirty-Checking de Shaders en `ForwardRendererGX2` y Eliminación de `GX2Flush()` en `Render2DGX2` | AMD R700 ISA / Cafe OS GX2 / Jason Gregory (Cap. 11) | **IMPLEMENTADO** | Hito 152 (26 Nov 2026) |
 | **OPT-452** | Arquitectura Multiplataforma / API Pública | Migración Limpia del Namespace Global `WiiU` → `Neleo` (279 archivos) y Umbrella Header Multiplataforma `include/NeleoEngine.hpp` | Jason Gregory (Cap. 5) / C++20 Clean Code | **IMPLEMENTADO** | Hito 152 (26 Nov 2026) |
 | **OPT-453** | Silicio Wii U / Rendimiento 2D + TMU + Core 1 | Shader 2D `ui2d_gx2` (1,180 B) + Atlas de Fuente 5×7 `128×64` (1 quad/carácter, vértice 32 B), Tiling 2D Hardware `GX2_TILE_MODE_DEFAULT` vía `GX2CopySurface` y Ruta Rápida Direccional (24 floats) en `ForwardRendererGX2` | AMD R700 ISA / Cafe OS GX2 / Jason Gregory (Cap. 14.5) | **IMPLEMENTADO** | Hito 153 (26 Nov 2026) |
+| **OPT-454** | Pulido Visual / Paridad PC↔Wii U & Shaders 60 FPS | Texturas `2048×2048` Full-Res en Wii U, ACES Filmic + IBL Físico Real Unificado PC↔Wii U, Shaders Especializados `pbr_shadow_gx2` (10,828 B) y `water_glass_gx2` (8,076 B) + Fast Fresnel/Gamma en `pbr_lite_gx2` | Narkowicz (ACES Filmic) / Karis (Epic IBL) / AMD R700 ISA | **IMPLEMENTADO** | Hito 154 (26 Nov 2026) |
+| **OPT-455** | Paridad Lumínica PC↔Wii U & Rendimiento G2 | Unificación 1:1 de Atenuación Point (`0.08`), Spot (`cone*falloff²`) y Ambiente Hemisférico + Cook-Torrance Pre-factorizado VLIW5 (`EvalPBRLightFast` + `inversesqrt`) en `pbr_lite_gx2` y Teselación `20×14` en `SceneQA_LightingPBR` | AMD R700 ISA (VLIW5 ALU Hoisting) / RTR4 Cap. 9 | **IMPLEMENTADO** | Hito 155 (26 Nov 2026) |
+| **OPT-456** | Gobernanza de Shaders / CI Silicio | Disciplina Anti-Uber-Shader en `AGENTS.md` / `wiiu-gx2-silicon` / `graphics_code_reviewer` + Manifiesto `assets/shaders/shader_budgets.json` + 9º Gate Automático `SHADER_BUDGET_CHECK` (parser GFD `PS_GPR` + tamaño) en `agent_harness.py` | AMD R700 ISA (GFD `sq_pgm_resources_ps.num_gprs`) / Jason Gregory (Cap. 7) | **IMPLEMENTADO** | Hito 156 (26 Nov 2026) |
+| **OPT-457** | Permutaciones de Shaders & Light-Culling | Capa 3: Fuente PBR Única (`pbr_template_gx2.frag`) + `tools/CookShaders.py` (5 variantes GX2 `pbr_dir`/`dir_bump`/`multi`/`multi_bump`/`shadow`) + `ShaderVariantKey` O(1) + Light-Culling por *Bounding Sphere* compartido Wii U/PC + `T23: LIGHT_CULL_VARIANT` | Jason Gregory (Cap. 11) / RTR4 Cap. 9 / AMD R700 ISA | **IMPLEMENTADO** | Hito 157 (26 Nov 2026) |
 
 ---
 
-## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-453`)
+## 🟢 1. OPTIMIZACIONES IMPLEMENTADAS Y BACKLOG DETALLADO (`OPT-01` a `OPT-457`)
 
 ### [OPT-01] Multiprocesamiento Simétrico en 2 Cores (Cores 1 y 2)
 - **Implementado en:** [Hito 24](file:///g:/Mi%20unidad/wiiu_demo/HANDOFF_ANTIGRAVITY.md#L669) (6 de Octubre de 2026).
@@ -5398,6 +5402,64 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **Grado de Reusabilidad para el Framework:** **10/10** — Acelera todo el HUD/OSD, `DebugDraw3D`, escenas con texto denso y el muestreo de texturas 3D en Wii U de forma 100% transparente.
 - **PROS:** Elimina iluminación 3D en 2D, reduce ~10×–20× los triángulos del HUD, habilita tiling 2D nativo en TMUs y recorta tráfico del command buffer en Core 1.
 - **CONTRAS:** Requiere una copia staging temporal durante la carga de cada textura `.wtex` (fuera del bucle caliente de 60 FPS).
+
+### [OPT-454] Hito 154 (Fase 3): Pulido Visual, Paridad PC↔Wii U y Shaders Especializados 60 FPS (`pbr_shadow_gx2` & `water_glass_gx2`)
+- **Área:** Calidad Visual, Paridad Multiplataforma y Ocupación ALU/GPR en AMD Latte R700 (`TextureLoaderGX2`, `ForwardRendererGX2`, `ForwardRendererGL`, `pbr_lite_gx2`, `pbr_shadow_gx2`, `water_glass_gx2`, `pbr_mesh_gx2`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 154 - 26 de Noviembre de 2026).
+- **Referencia de Literatura:** Krzysztof Narkowicz (*ACES Filmic Tone Mapping Curve*); Brian Karis (*Real Shading in Unreal Engine 4*, SIGGRAPH 2013); AMD R700 ISA (VLIW5 GPR Occupancy & Fast Transcendentals).
+- **Mecanismo Implementado:**
+  1. **Resolución Completa `2048×2048` en Wii U (`TextureLoaderGX2`):** Eliminado el recorte a Mip 1 (`1024×1024`) para texturas BC1/BC3 de `2048×2048`; ahora `SceneModelHouse` carga el nivel 0 completo con hardware tiling `GX2_TILE_MODE_DEFAULT` a 60 FPS.
+  2. **Paridad Visual PC ↔ Wii U (ACES Filmic + IBL Físico Real):** Unificado el tonemapping a `ToneMapACES(color * 1.18)` + `sqrt(color)` (lineal `albedo * albedo`) tanto en `pbr_lite_gx2`/`pbr_shadow_gx2`/`pbr_mesh_gx2` como en `ForwardRendererGL.cpp`, igualando contraste y viveza de luces/sombras en G2/G3. Portado el bloque IBL físico real (`envSpec` + `envIrr` + `roughness²` + `F_ibl` + `kD_ibl`) a `ForwardRendererGL.cpp` para igualar los reflejos de G4 en PC con Wii U.
+  3. **Shaders Especializados para G3 y G4 (`pbr_shadow_gx2.gsh` [10,828 B] y `water_glass_gx2.gsh` [8,076 B]):** Desacoplados del uber-shader `pbr_mesh_gx2.gsh` (33,652 B) y enrutados automáticamente en `ForwardRendererGX2::RenderStaticMeshPBR()` con dirty-checking (`BoundShaderKind::PBRShadow` / `WaterGlass`), ruta rápida de 24 floats en `WaterGlass` y reemplazo de `pow(..., 5.0)` / `pow(..., 2.2)` por `f2*f2*f` / `x*x` / `sqrt(x)` en VLIW5.
+  4. **Self-Test & DRY:** Extraído el cargador `LoadPBRVariantFromGSH` (con limpieza parcial anti-leak) y ampliado `T4: FORWARD_RENDERER` en `GraphicsSelfTest.cpp` para validar `IsPBRShadowShaderLoaded()` e `IsWaterGlassShaderLoaded()`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Mejora simultáneamente fidelidad visual en ambas plataformas (PC y Wii U) y libera ocupación de wavefronts R700 en escenas con sombras direccionales y agua/cristal.
+- **PROS:** Nitidez `2048×2048` nativa, paridad visual real PC↔Wii U, reducción 3.4×–4.2× del tamaño de shader en G3/G4 y menos instrucciones transcendentales.
+- **CONTRAS:** Añade ~17.9 KB de binarios `.gsh` embebidos adicionales en el ejecutable Wii U.
+
+### [OPT-455] Hito 155: Paridad Lumínica 1:1 PC↔Wii U y Optimización ALU/Geometría de Suite G2 (`pbr_lite_gx2` & `SceneQA_LightingPBR`)
+- **Área:** Paridad de Iluminación Multi-Luz y Ocupación ALU/Primitive Setup en AMD Latte R700 (`pbr_lite_gx2.frag`, `pbr_shadow_gx2.frag`, `pbr_mesh_gx2.frag`, `SceneQA_LightingPBR.cpp`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 155 - 26 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD R700 ISA (VLIW5 Loop-Invariant Hoisting & `inversesqrt`); Tomas Akenine-Möller (*Real-Time Rendering*, 4ª Ed., Cap. 9).
+- **Mecanismo Implementado:**
+  1. **Paridad 1:1 de Atenuación y Ambiente:** Igualada la atenuación de luces puntuales (`0.18` → `0.08 * dist²`), Spot Light (eliminado divisor extra `1 + 0.06 * dist²`, usando cono smoothstep `coneT²(3-2coneT) * falloff²`) y ambiente hemisférico (`0.52..1.05` × `ambScale`) entre Wii U y `ForwardRendererGL.cpp`.
+  2. **Pre-factorización ALU Cook-Torrance (`EvalPBRLightFast`):** En `pbr_lite_gx2.frag`, `NdotV`, `a²`, `k`, `ggxV`, `0.25/NdotV` y `albedo*(1-metal)/PI` se calculan una sola vez por píxel fuera del bucle de 6 luces, cancelando `NdotL` en el denominador especular, separando la rama Blinn-Phong y usando `dot()` + `inversesqrt()` en las 4 luces puntuales y la spot light.
+  3. **Teselación Óptima en `SceneQA_LightingPBR`:** Esferas 5×5 ajustadas de `32×22` (35,200 tris) a `20×14` (14,000 tris, 2.5× menos carga de Primitive Setup y overshading 2×2 en 720p).
+- **Grado de Reusabilidad para el Framework:** **10/10** — Acelera y unifica todas las escenas PBR multi-luz en Wii U.
+- **PROS:** Brillos de luces puntuales/spot idénticos a PC, reducción drástica de ciclos ALU por píxel y 2.5× menos micro-triángulos en G2.
+- **CONTRAS:** Ninguno (matemáticamente equivalente a Cook-Torrance GGX).
+
+### [OPT-456] Hito 156: Gobernanza de Presupuesto de Shaders GX2 (Capas 1–2: Reglas Anti-Uber-Shader + Gate `SHADER_BUDGET_CHECK` GFD/GPR)
+- **Área:** Gobernanza de Ingeniería Gráfica, CI Local y Ocupación de Wavefronts AMD Latte R700 (`AGENTS.md`, `wiiu-gx2-silicon`, `graphics_code_reviewer`, `assets/shaders/shader_budgets.json`, `scripts/agent_harness.py`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 156 - 26 de Noviembre de 2026).
+- **Referencia de Literatura:** AMD R700 ISA (`sq_pgm_resources_ps.num_gprs` & Wavefront Occupancy); Jason Gregory (*Game Engine Architecture*, Cap. 7).
+- **Mecanismo Implementado:**
+  1. **Capa 1 (Reglas Obligatorias y Criterios de Rechazo):** Formalizada en `AGENTS.md`, `.agents/skills/wiiu-gx2-silicon/SKILL.md` y `.agents/agents/graphics_code_reviewer/agent.md` la prohibición de mezclar dominios incompatibles mediante ramas dinámicas en shaders de ruta caliente, el cumplimiento del manifiesto de presupuestos y la higiene ALU VLIW5 (sin `pow()` de exponentes constantes ni `length()`+división dentro de bucles de luces).
+  2. **Capa 2 (Gate Automático `SHADER_BUDGET_CHECK`):** Creado `assets/shaders/shader_budgets.json` con techos por shader (`ui2d_gx2`, `water_glass_gx2`, `pbr_lite_gx2`, `pbr_shadow_gx2`, `advanced_mesh_gx2`, `instanced_mesh_gx2`, `raytracing_bvh`, `pbr_mesh_gx2` congelado + techo por defecto `16 KB / 24 PS_GPR`) y parser GFD binario (`Gfx2` / `BLK{`) en `scripts/agent_harness.py check` como 9º gate obligatorio.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Protege mecánicamente la ocupación de GPU en cada commit futuro sin afectar la compilación ni el binario de Windows/PC.
+- **PROS:** Impide regresiones silenciosas de GPRs/tamaño de shader en Wii U, 0 impacto en runtime y 0 cambios en el ejecutable de PC.
+- **CONTRAS:** Al añadir un shader nuevo con perfil atípico (p. ej. raytracing full-screen) requiere declarar su presupuesto explícito en `shader_budgets.json`.
+
+### [OPT-457] Hito 157 (Capa 3): Shader Permutation Cooker (`CookShaders.py`), `ShaderVariantKey` O(1) y Light-Culling Multiplataforma por *Bounding Sphere*
+- **Área:** Pipeline de Shaders Especializados, Ocupación R700 y Culling de Luces CPU (`pbr_template_gx2.frag`, `tools/CookShaders.py`, `PBRVariantsShaderBinary.hpp`, `ShaderVariantKey.hpp`, `ForwardRendererGX2`, `ForwardRendererGL`, `GraphicsSelfTest`).
+- **Estado:** **`IMPLEMENTADO`** (Hito 157 - 26 de Noviembre de 2026).
+- **Referencia de Literatura:** Jason Gregory (*Game Engine Architecture*, Cap. 11); Tomas Akenine-Möller (*RTR4*, Cap. 9); AMD R700 ISA (Wavefront Occupancy).
+- **Mecanismo Implementado:**
+  1. **Fuente PBR Única + Cooker de Permutaciones (`pbr_template_gx2.frag` + `tools/CookShaders.py`):** Elimina la duplicación manual de código PBR generando 5 binarios `.gsh` especializados por `#define` (`USE_MULTILIGHT`, `USE_NORMAL_MAP`, `USE_SHADOWS`): `pbr_dir_gx2` (`5,696 B`, `13 PS_GPR`), `pbr_dir_bump_gx2` (`6,640 B`, `12 PS_GPR`), `pbr_multi_gx2` (`9,628 B`, `17 PS_GPR`, sin TBN para las 25 esferas lisas de G2), `pbr_multi_bump_gx2` (`10,556 B`, `17 PS_GPR`) y `pbr_shadow_gx2` (`13,116 B`, `31 PS_GPR`, bajó desde 33 GPRs y ahora soporta spot light).
+  2. **Selección $\mathcal{O}(1)$ por Bitmask (`ShaderVariantKey.hpp`):** `MakeShaderVariantKey()` + `SelectPBRVariant()` indexan `m_pbrVariants[5]` en `ForwardRendererGX2` con dirty-checking por índice (`m_boundPbrVariantIndex`), enviando solo 24 floats en variantes direccionales.
+  3. **Light-Culling por *Bounding Sphere* Multiplataforma (`CullPointLightsForMesh`):** Filtra en CPU (Zero-Alloc) las luces puntuales que intersectan la esfera envolvente de cada `StaticMesh` transformada por `modelMatrix`, tanto en `ForwardRendererGX2` (Wii U) como en `ForwardRendererGL` (Windows/ROG Ally).
+  4. **Self-Test:** `T4: FORWARD_RENDERER` valida `IsPBRVariantsReady()` y el nuevo `T23: LIGHT_CULL_VARIANT` valida el culling por esfera y el mapeo de `ShaderVariantKey`.
+- **Grado de Reusabilidad para el Framework:** **10/10** — Arquitectura estándar de industria (compile-time shader permutations + light culling por esfera) reutilizable en cualquier escena y consola del motor.
+- **PROS:** Cero código duplicado PBR, 0 código TBN/shadow muerto en mallas lisas, salto automático a 24 floats/`pbr_dir` cuando ninguna luz puntual toca un objeto y beneficio compartido con PC/ROG Ally.
+- **CONTRAS:** Incrementa el tamaño embebido de shaders en el `.rpx` en ~24 KB (compensado por un binario más pequeño y rápido en L1i/GPRs por draw).
+
+### `OPT-458` — Shader Especializado Modo 7 (`hdr_fog_gx2`, 7 PS_GPR) + Paridad de Contraste en Sombras + Guarda VS↔PS (`SPI_PS_INPUT_CNTL`)
+- **Estado:** `IMPLEMENTADO` (Hito 158 — Validado a **60 FPS en todas las escenas en Wii U real**).
+- **Problema:** Suite G5 (`SceneQA_PostProcessAlpha`, Modo 7 HDR + Niebla) seguía cayendo en el uber-shader legacy `pbr_mesh_gx2.gsh` (`36 PS_GPR` / `28.3 KB`) a 30 FPS sobre `1280×720 RGBA16F`. Además, `pbr_template_gx2.frag` sumaba `envRefl` incluso con `iblStrength == 0` levantando sombras respecto a PC, y `#version 450` con `layout(location)` desalineó `SPI_PS_INPUT_CNTL` respecto a `pbr_mesh_gx2.vert`.
+- **Solución:**
+  1. Creado `assets/shaders/hdr_fog_gx2.frag` → `hdr_fog_gx2.gsh` (`4,048 B`, **`7 PS_GPR`**) + `HDRFogShaderBinary.hpp`, integrado en `ForwardRendererGX2` vía `PBRShaderPipeline m_hdrFogPipe` + `LoadPBRVariantFromGSH` (56 floats `uPsData[14]`) y validado en `T4 (FORWARD_RENDERER)` y `shader_budgets.json`.
+  2. Alineado `pbr_template_gx2.frag` a `#version 330 core` sin `layout(location)` (enlace por nombre) y `vec3 envRefl = vec3(0.0);` sin IBL; blindado en `check_gx2_invariants()` (`scripts/agent_harness.py`).
+- **PROS:** Suite G5 sube de 30 a **60 FPS** en Wii U física (todas las escenas a 60 FPS en cámara estática), 5× menos GPRs en Modo 7 y 0 regresiones de enlace VS↔PS.
+- **CONTRAS:** Ninguno (solo +4 KB en `.rpx`).
 
 ---
 

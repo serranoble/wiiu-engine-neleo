@@ -54,6 +54,7 @@ Este documento establece las reglas obligatorias e inviolables de desarrollo, co
   - Cero asignaciones dinámicas en el bucle caliente (60 FPS).
   - Manejo de memoria consciente de MEM1 (16 MB rápidos) y MEM2 (2 GB principales).
   - Limpieza y sincronización de contextos gráficos al alternar entre 3D (`ForwardRenderer*`/FBOs) y 2D (`Render2D*`), manteniendo **0 SDL2** en todo el repositorio y **0 DLLs de terceros** en Windows.
+  - **Disciplina de Shaders Especializados (Anti-Uber-Shader):** Prohibido mezclar dominios incompatibles (PBR opaco, agua/vidrio, terreno procedural, NPR/partículas, UI 2D) mediante ramas `if (mode == ...)` en shaders de ruta caliente. Todo `.gsh` debe respetar los techos de tamaño y GPRs en `assets/shaders/shader_budgets.json` (validados por `SHADER_BUDGET_CHECK`), evitando `pow()` con exponentes constantes o `length()`+división dentro de bucles de luces y precalculando invariantes fuera del bucle.
 
 ---
 

@@ -5,6 +5,7 @@
 #include "Graphics/RHI/RHIPipelineCache.hpp"
 #include "Graphics/RHI/RHIPipelineState.hpp"
 #include "Graphics/Mesh/StaticMesh.hpp"
+#include "Graphics/ShaderVariantKey.hpp"
 #include "Core/Config/EngineConfig.hpp"
 #include <cstdint>
 #include <string_view>
@@ -71,7 +72,38 @@ public:
 
     [[nodiscard]] bool IsPBRLiteShaderLoaded() const noexcept {
 #if defined(__WIIU__) || defined(__wiiu__)
-        return m_pbrLiteShaderLoaded;
+        return m_pbrVariants[static_cast<size_t>(PBRVariantIndex::DirOnly)].loaded &&
+               m_pbrVariants[static_cast<size_t>(PBRVariantIndex::DirBump)].loaded &&
+               m_pbrVariants[static_cast<size_t>(PBRVariantIndex::MultiLight)].loaded &&
+               m_pbrVariants[static_cast<size_t>(PBRVariantIndex::MultiBump)].loaded;
+#else
+        return m_initialized;
+#endif
+    }
+
+    [[nodiscard]] bool IsPBRShadowShaderLoaded() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_pbrVariants[static_cast<size_t>(PBRVariantIndex::Shadow)].loaded;
+#else
+        return m_initialized;
+#endif
+    }
+
+    [[nodiscard]] bool IsPBRVariantsReady() const noexcept {
+        return IsPBRLiteShaderLoaded() && IsPBRShadowShaderLoaded();
+    }
+
+    [[nodiscard]] bool IsWaterGlassShaderLoaded() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_waterGlassShaderLoaded;
+#else
+        return m_initialized;
+#endif
+    }
+
+    [[nodiscard]] bool IsHDRFogShaderLoaded() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_hdrFogPipe.loaded;
 #else
         return m_initialized;
 #endif
@@ -353,26 +385,49 @@ private:
     int32_t m_pbrShadowSlot{1};
     bool m_pbrShaderLoaded{false};
 
-    // 7. [OPT-451] Pipeline PBR Lite especializado (modos 0..1 sin sombras/PCF/Fbm3D — bajo conteo de GPRs en Latte R700)
-    bool InitPBRLiteShader();
-    GX2VertexShader* m_pbrLiteVs{nullptr};
-    void* m_pbrLiteVsProgram{nullptr};
-    GX2PixelShader* m_pbrLitePs{nullptr};
-    void* m_pbrLitePsProgram{nullptr};
-    GX2FetchShader m_pbrLiteFs{};
-    void* m_pbrLiteFsProgram{nullptr};
-    int32_t m_pbrLiteDiffuseSlot{0};
-    int32_t m_pbrLiteSkyboxSlot{-1};
-    bool m_pbrLiteShaderLoaded{false};
+    // 7. [OPT-457] Tabla de Permutaciones PBR compiladas (DirOnly, DirBump, MultiLight, MultiBump, Shadow)
+    struct PBRShaderPipeline {
+        GX2VertexShader* vs{nullptr};
+        void* vsProgram{nullptr};
+        GX2PixelShader* ps{nullptr};
+        void* psProgram{nullptr};
+        GX2FetchShader fs{};
+        void* fsProgram{nullptr};
+        int32_t diffuseSlot{0};
+        int32_t skyboxSlot{-1};
+        int32_t shadowSlot{-1};
+        bool loaded{false};
+    };
+    bool InitPBRVariants();
+    PBRShaderPipeline m_pbrVariants[static_cast<size_t>(PBRVariantIndex::Count)]{};
+
+    // 8. [OPT-454] Pipeline Water/Glass/Skybox especializado (modos 4..6 — 24 floats uPsData[6], sin PBR/sombras/terreno)
+    bool InitWaterGlassShader();
+    GX2VertexShader* m_waterGlassVs{nullptr};
+    void* m_waterGlassVsProgram{nullptr};
+    GX2PixelShader* m_waterGlassPs{nullptr};
+    void* m_waterGlassPsProgram{nullptr};
+    GX2FetchShader m_waterGlassFs{};
+    void* m_waterGlassFsProgram{nullptr};
+    int32_t m_waterGlassDiffuseSlot{0};
+    int32_t m_waterGlassSkyboxSlot{-1};
+    bool m_waterGlassShaderLoaded{false};
+
+    // 9. [OPT-458] Pipeline HDR Lineal + Niebla especializado (modo 7 — 56 floats uPsData[14], 7 PS_GPR)
+    bool InitHDRFogShader();
+    PBRShaderPipeline m_hdrFogPipe{};
 
     enum class BoundShaderKind : uint8_t {
         None = 0,
         Sky,
         Mesh,
         PBRUber,
-        PBRLite
+        PBRVariant,
+        WaterGlass,
+        HDRFog
     };
     BoundShaderKind m_boundShaderKind{BoundShaderKind::None};
+    uint8_t m_boundPbrVariantIndex{0xFFu};
 #endif
 };
 

@@ -28,7 +28,7 @@ void SceneQA_LightingPBR::OnQAEnter() {
     m_savedLightBlock = MaterialRegistry::Instance().GetActiveLightBlock();
     m_lightBlockSaved = true;
 
-    (void)Graphics::ProceduralMeshBuilder::CreateUVSphere(m_sphereMesh, 0.82f, 32u, 22u, 1.0f, 1.0f, 1.0f);
+    (void)Graphics::ProceduralMeshBuilder::CreateUVSphere(m_sphereMesh, 0.82f, 20u, 14u, 1.0f, 1.0f, 1.0f);
     (void)Graphics::ProceduralMeshBuilder::CreateUVSphere(m_lightMarkerMesh, 0.22f, 14u, 10u, 1.0f, 1.0f, 1.0f);
     (void)Graphics::ProceduralMeshBuilder::CreateCube(m_reliefCubeMesh, 2.8f, 2.0f, 1.0f, 1.0f, 1.0f);
     (void)Graphics::ProceduralMeshBuilder::CreatePlane(m_floorPlane, 36.0f, 36.0f, 8.0f, 8.0f, 2u, 2u, 1.0f, 1.0f, 1.0f);

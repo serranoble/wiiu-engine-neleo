@@ -142,7 +142,13 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 }
 
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+    float f = clamp(1.0 - cosTheta, 0.0, 1.0);
+    float f2 = f * f;
+    return F0 + (1.0 - F0) * (f2 * f2 * f);
+}
+
+vec3 ToneMapACES(vec3 x) {
+    return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
 
 vec3 EvalPBRLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, float roughness, float metallic, vec3 F0) {
@@ -623,7 +629,7 @@ void main() {
         if (dist < radius) {
             vec3 L = toLight / max(dist, 0.0001);
             float falloff = clamp(1.0 - (dist / radius), 0.0, 1.0);
-            float atten = (falloff * falloff) / (1.0 + 0.18 * dist * dist);
+            float atten = (falloff * falloff) / (1.0 + 0.08 * dist * dist);
             vec3 rad = pColInt.rgb * (pColInt.w * atten);
             if (useBlinnPhong) {
                 Lo += EvalBlinnPhongLight(N, V, L, rad, baseAlbedo, roughness, metallic);
@@ -649,9 +655,10 @@ void main() {
             vec3 L = toSpot / max(dist, 0.0001);
             float theta = dot(-L, spotDir);
             float eps = max(cosInner - cosOuter, 0.001);
-            float cone = clamp((theta - cosOuter) / eps, 0.0, 1.0);
+            float coneT = clamp((theta - cosOuter) / eps, 0.0, 1.0);
+            float cone = coneT * coneT * (3.0 - 2.0 * coneT);
             float falloff = clamp(1.0 - (dist / spotRange), 0.0, 1.0);
-            float atten = (falloff * falloff) * cone / (1.0 + 0.06 * dist * dist);
+            float atten = (falloff * falloff) * cone;
             vec3 rad = spotCol * (spotIntensity * atten);
             if (useBlinnPhong) {
                 Lo += EvalBlinnPhongLight(N, V, L, rad, baseAlbedo, roughness, metallic);
@@ -663,15 +670,15 @@ void main() {
 
     // 4. Luz Ambiental Hemisférica + IBL real desde CubeMap (RTR4 Cap. 10)
     float iblStrength = uPsData[4].x;
-    float ambScale = uPsData[4].w;
-    vec3 hemiColor = mix(vec3(0.08, 0.09, 0.12), vec3(0.24, 0.28, 0.36), N.y * 0.5 + 0.5);
+    float ambScale = max(uPsData[4].w, 0.08);
+    vec3 hemiColor = mix(vec3(0.52, 0.56, 0.64), vec3(0.95, 0.98, 1.05), N.y * 0.5 + 0.5);
     vec3 color;
     if (useBlinnPhong) {
-        color = baseAlbedo * (hemiColor * ambScale * 1.4) + Lo;
+        color = baseAlbedo * (hemiColor * ambScale) + Lo;
         color = clamp(color, 0.0, 1.0);
     } else {
         vec3 ambient = hemiColor * albedoLin * ambScale * (1.0 - 0.55 * metallic);
-        vec3 envRefl = hemiColor * F0 * (1.0 - roughness * 0.85) * 0.9;
+        vec3 envRefl = hemiColor * F0 * (1.0 - roughness * 0.85) * 0.25;
         if (iblStrength > 0.01) {
             vec3 R = reflect(-V, N);
             vec3 envSpec = pow(clamp(SampleCubeAtlas(R), 0.0, 1.0), vec3(2.2));
@@ -684,8 +691,8 @@ void main() {
             envRefl = F_ibl * specBlur * ((1.0 - roughness * 0.72) * iblStrength * 1.35);
         }
         color = ambient + envRefl + Lo;
-        color = color / (color + vec3(1.0));
-        color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));
+        color = ToneMapACES(color * 1.18);
+        color = sqrt(color);
     }
 
     fragColor = vec4(color, 1.0);

@@ -1,0 +1,72 @@
+{
+  "default_max_bytes": 16384,
+  "default_max_ps_gprs": 24,
+  "shaders": {
+    "ui2d_gx2.gsh": {
+      "max_bytes": 2048,
+      "max_ps_gprs": 8,
+      "role": "hot_path_ui2d"
+    },
+    "water_glass_gx2.gsh": {
+      "max_bytes": 10240,
+      "max_ps_gprs": 16,
+      "role": "hot_path_water_glass"
+    },
+    "hdr_fog_gx2.gsh": {
+      "max_bytes": 8192,
+      "max_ps_gprs": 16,
+      "role": "hot_path_hdr_fog"
+    },
+    "pbr_dir_gx2.gsh": {
+      "max_bytes": 7168,
+      "max_ps_gprs": 16,
+      "role": "hot_path_pbr_dir"
+    },
+    "pbr_dir_bump_gx2.gsh": {
+      "max_bytes": 8192,
+      "max_ps_gprs": 16,
+      "role": "hot_path_pbr_dir_bump"
+    },
+    "pbr_multi_gx2.gsh": {
+      "max_bytes": 11264,
+      "max_ps_gprs": 20,
+      "role": "hot_path_pbr_multi"
+    },
+    "pbr_multi_bump_gx2.gsh": {
+      "max_bytes": 12288,
+      "max_ps_gprs": 20,
+      "role": "hot_path_pbr_multi_bump"
+    },
+    "pbr_lite_gx2.gsh": {
+      "max_bytes": 12288,
+      "max_ps_gprs": 20,
+      "role": "hot_path_pbr_lite"
+    },
+    "pbr_shadow_gx2.gsh": {
+      "max_bytes": 14336,
+      "max_ps_gprs": 32,
+      "role": "hot_path_pbr_shadow"
+    },
+    "advanced_mesh_gx2.gsh": {
+      "max_bytes": 4608,
+      "max_ps_gprs": 14,
+      "role": "hot_path_mesh"
+    },
+    "instanced_mesh_gx2.gsh": {
+      "max_bytes": 4096,
+      "max_ps_gprs": 12,
+      "role": "hot_path_instanced"
+    },
+    "raytracing_bvh.gsh": {
+      "max_bytes": 28672,
+      "max_ps_gprs": 26,
+      "role": "fullscreen_raytracer_bvh"
+    },
+    "pbr_mesh_gx2.gsh": {
+      "max_bytes": 34816,
+      "max_ps_gprs": 36,
+      "role": "legacy_uber_frozen",
+      "legacy_frozen": true
+    }
+  }
+}

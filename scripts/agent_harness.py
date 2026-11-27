@@ -8,6 +8,7 @@ structured summaries.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import re
@@ -18,7 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TEXT_EXTS = {".cpp", ".hpp", ".h", ".c", ".py", ".sh", ".md", ".txt", ".cmake", ".vert", ".frag"}
+TEXT_EXTS = {".cpp", ".hpp", ".h", ".c", ".py", ".sh", ".md", ".txt", ".cmake", ".vert", ".frag", ".json"}
 TEXT_NAMES = {"CMakeLists.txt"}
 
 
@@ -308,6 +309,32 @@ def check_gx2_invariants() -> list[str]:
                     "ProcUIInForeground" not in text and
                     "WaitForGpuIdleSafe" not in text):
                     issues.append(f"{p.relative_to(ROOT)}: unguarded GX2DrawDone() without foreground check")
+
+    # CafeGLSL VS<->PS varying linkage contract: if pbr_mesh_gx2.vert omits layout(location) on out,
+    # paired PBR/water fragment shaders must also omit layout(location) on in so SPI_PS_INPUT_CNTL links by name.
+    pbr_vs = ROOT / "assets" / "shaders" / "pbr_mesh_gx2.vert"
+    if pbr_vs.exists():
+        vs_text = pbr_vs.read_text(encoding="utf-8", errors="replace")
+        vs_has_loc_out = bool(re.search(r"layout\s*\(\s*location\s*=\s*\d+\s*\)\s*out\b", vs_text))
+        loc_in_pat = re.compile(r"layout\s*\(\s*location\s*=\s*\d+\s*\)\s*in\b")
+        for frag_name in (
+            "pbr_template_gx2.frag",
+            "pbr_mesh_gx2.frag",
+            "pbr_lite_gx2.frag",
+            "pbr_shadow_gx2.frag",
+            "water_glass_gx2.frag",
+            "hdr_fog_gx2.frag",
+        ):
+            fp = ROOT / "assets" / "shaders" / frag_name
+            if not fp.exists():
+                continue
+            ftext = fp.read_text(encoding="utf-8", errors="replace")
+            fs_has_loc_in = bool(loc_in_pat.search(ftext))
+            if fs_has_loc_in != vs_has_loc_out:
+                issues.append(
+                    f"assets/shaders/{frag_name}: varying layout(location) mismatch with pbr_mesh_gx2.vert "
+                    f"(VS={vs_has_loc_out}, PS={fs_has_loc_in}) — corrupts SPI_PS_INPUT_CNTL in CafeGLSL"
+                )
     return issues
 
 
@@ -373,6 +400,72 @@ def check_cooked_wmesh() -> tuple[int, list[str]]:
     return len(wmesh_files), issues
 
 
+def parse_gsh_metrics(path: Path) -> tuple[int, int | None, int | None, int]:
+    """Parse GFD/GX2 header blocks to extract (file_size, vs_gprs, ps_gprs, ps_prog_bytes)."""
+    data = path.read_bytes()
+    if len(data) < 32 or data[:4] != b"Gfx2":
+        return len(data), None, None, 0
+    off = struct.unpack(">I", data[4:8])[0]
+    vs_gprs: int | None = None
+    ps_gprs: int | None = None
+    ps_prog = 0
+    while off + 32 <= len(data):
+        magic, hsz, _maj, _minv, btype, bsz, _bidx, _resv = struct.unpack(">4sIIIIIII", data[off:off + 32])
+        if magic != b"BLK{" or hsz < 32:
+            break
+        body_start = off + hsz
+        body_end = body_start + bsz
+        if body_end > len(data):
+            break
+        if btype == 3 and bsz >= 4:  # GX2_BLOCK_TYPE_VERTEX_SHADER_HEADER
+            vs_gprs = struct.unpack(">I", data[body_start:body_start + 4])[0] & 0xFF
+        elif btype == 6 and bsz >= 4:  # GX2_BLOCK_TYPE_PIXEL_SHADER_HEADER
+            ps_gprs = struct.unpack(">I", data[body_start:body_start + 4])[0] & 0xFF
+        elif btype == 7:  # GX2_BLOCK_TYPE_PIXEL_SHADER_PROGRAM
+            ps_prog = bsz
+        off = body_end
+    return len(data), vs_gprs, ps_gprs, ps_prog
+
+
+def check_shader_budgets() -> tuple[int, list[str]]:
+    shader_dir = ROOT / "assets" / "shaders"
+    manifest_path = shader_dir / "shader_budgets.json"
+    if not manifest_path.exists():
+        return 0, ["assets/shaders/shader_budgets.json: missing shader budget manifest"]
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return 0, [f"assets/shaders/shader_budgets.json: invalid JSON ({exc})"]
+
+    default_max_bytes = int(manifest.get("default_max_bytes", 16384))
+    default_max_ps_gprs = int(manifest.get("default_max_ps_gprs", 24))
+    overrides = manifest.get("shaders", {})
+
+    gsh_files = sorted(shader_dir.glob("*.gsh"))
+    seen_names: set[str] = set()
+    issues: list[str] = []
+
+    for gsh in gsh_files:
+        name = gsh.name
+        seen_names.add(name)
+        size, _vs_gprs, ps_gprs, _ps_prog = parse_gsh_metrics(gsh)
+        rule = overrides.get(name, {})
+        max_bytes = int(rule.get("max_bytes", default_max_bytes))
+        max_ps_gprs = int(rule.get("max_ps_gprs", default_max_ps_gprs))
+
+        if size > max_bytes:
+            issues.append(f"{name}: size {size} B > budget {max_bytes} B")
+        if ps_gprs is not None and ps_gprs > max_ps_gprs:
+            issues.append(f"{name}: PS_GPR {ps_gprs} > budget {max_ps_gprs}")
+
+    for listed_name in sorted(overrides.keys()):
+        if listed_name not in seen_names:
+            issues.append(f"{listed_name}: listed in shader_budgets.json but missing on disk")
+
+    return len(gsh_files), issues
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     crlf = check_crlf(fix=args.fix_lf)
     leaks = check_core_leaks()
@@ -380,6 +473,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     gx2_issues = check_gx2_invariants()
     gl_issues = check_gl_invariants()
     wmesh_count, wmesh_issues = check_cooked_wmesh()
+    shader_count, shader_budget_issues = check_shader_budgets()
     sdl_status, sdl_count = check_sdl_symbols()
     dll_status, dll_unexpected = check_win_dlls()
 
@@ -407,6 +501,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     for wi in wmesh_issues[:15]:
         print(f"  WMESH: {wi}")
 
+    print(f"SHADER_BUDGET_CHECK: {'PASS' if not shader_budget_issues else 'FAIL'} ({shader_count} shaders, {len(shader_budget_issues)} issues)")
+    for sbi in shader_budget_issues[:15]:
+        print(f"  SHADER: {sbi}")
+
     print(f"ELF_SDL_SYMBOLS: {sdl_status} ({sdl_count})")
     print(f"WIN_DLL_CHECK: {dll_status} ({len(dll_unexpected)})")
     for du in dll_unexpected[:15]:
@@ -421,6 +519,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         or bool(gx2_issues)
         or bool(gl_issues)
         or bool(wmesh_issues)
+        or bool(shader_budget_issues)
         or (sdl_count > 0)
         or bool(dll_unexpected)
         or dll_status.startswith("ERROR")

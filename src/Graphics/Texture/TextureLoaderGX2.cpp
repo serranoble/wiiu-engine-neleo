@@ -157,24 +157,13 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
         return false;
     }
 
-    // Para texturas 2048x2048 BC1/BC3 con mipmaps en disco, usar Mip 1 (1024x1024) decodificado a RGBA8:
-    // conserva 4 MB exactos en MEM2, decodifica en ~2 ms en Espresso y elimina el riesgo de bloqueo de BC1/BC3
-    // sobre GX2_TILE_MODE_LINEAR_ALIGNED y el desajuste Little-Endian vs 8IN16 en AMD Latte R700.
-    uint32_t srcW = width;
-    uint32_t srcH = height;
-    size_t srcOffset = 16ULL;
-    size_t srcBytes = level0Bytes;
-    if (isBlockCompressed && (width > 1024u || height > 1024u) && mipCount >= 2u) {
-        const uint32_t m1W = (width > 1u) ? (width >> 1u) : 1u;
-        const uint32_t m1H = (height > 1u) ? (height >> 1u) : 1u;
-        const size_t m1Bytes = calcLevelBytes(m1W, m1H);
-        if (size >= (16ULL + level0Bytes + m1Bytes)) {
-            srcW = m1W;
-            srcH = m1H;
-            srcOffset = 16ULL + level0Bytes;
-            srcBytes = m1Bytes;
-        }
-    }
+    // [OPT-454] Cargar siempre nivel 0 a resolución completa (incl. 2048x2048) aprovechando MEM2 (2 GB)
+    // y el tiling 2D hardware (GX2_TILE_MODE_DEFAULT) para máxima nitidez en SceneModelHouse y modelos hero.
+    const uint32_t srcW = width;
+    const uint32_t srcH = height;
+    const size_t srcOffset = 16ULL;
+    const size_t srcBytes = level0Bytes;
+    (void)mipCount;
 
 #if defined(__WIIU__) || defined(__wiiu__)
     DestroyTexture(outTex);

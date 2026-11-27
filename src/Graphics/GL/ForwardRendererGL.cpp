@@ -353,6 +353,18 @@ float GeometrySmith(float NdotV, float NdotL, float roughness) {
     return ggxV * ggxL;
 }
 
+vec3 FresnelSchlick(float cosTheta, vec3 F0) {
+    float f = clamp(1.0 - cosTheta, 0.0, 1.0);
+    float f2 = f * f;
+    return F0 + (vec3(1.0) - F0) * (f2 * f2 * f);
+}
+
+vec3 ToneMapACES(vec3 x) {
+    vec3 a = x * (2.51 * x + vec3(0.03));
+    vec3 b = x * (2.43 * x + vec3(0.59)) + vec3(0.14);
+    return clamp(a / max(b, vec3(0.0001)), 0.0, 1.0);
+}
+
 vec3 EvalPBRLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0, float roughness, float metallic) {
     float NdotL = max(dot(N, L), 0.0);
     if (NdotL <= 0.0) return vec3(0.0);
@@ -655,13 +667,14 @@ void main() {
         return;
     }
 
+    vec3 albedoLin = albedo * albedo;
     vec3 dirRad = uDirLightColor.rgb * (1.25 * shadowFactor);
     vec3 color = vec3(0.0);
     if (uShadingMode == 0) {
         float rough = clamp(uRoughness, 0.06, 1.0);
         float metal = clamp(uMetallic, 0.0, 1.0);
-        vec3 F0 = mix(vec3(0.04), albedo, metal);
-        color += EvalPBRLight(N, V, Ldir, dirRad, albedo, F0, rough, metal);
+        vec3 F0 = mix(vec3(0.04), albedoLin, metal);
+        color += EvalPBRLight(N, V, Ldir, dirRad, albedoLin, F0, rough, metal);
 
         int ptCount = clamp(uPointLightCount, 0, 8);
         for (int i = 0; i < ptCount; ++i) {
@@ -672,7 +685,7 @@ void main() {
                 float att = clamp(1.0 - (dist / rad), 0.0, 1.0);
                 att = att * att / (1.0 + dist * dist * 0.08);
                 vec3 pRad = uPointLightColorIntensity[i].rgb * uPointLightColorIntensity[i].w * att;
-                color += EvalPBRLight(N, V, toLight / max(dist, 0.0001), pRad, albedo, F0, rough, metal);
+                color += EvalPBRLight(N, V, toLight / max(dist, 0.0001), pRad, albedoLin, F0, rough, metal);
             }
         }
 
@@ -687,27 +700,43 @@ void main() {
                 float cone = coneT * coneT * (3.0 - 2.0 * coneT);
                 float att = clamp(1.0 - dist / range, 0.0, 1.0);
                 vec3 sRad = uSpotColorOuter.rgb * uSpotIntensity * cone * att * att;
-                color += EvalPBRLight(N, V, sL, sRad, albedo, F0, rough, metal);
+                color += EvalPBRLight(N, V, sL, sRad, albedoLin, F0, rough, metal);
             }
         }
-        color += albedo * uMatParams.w;
+
+        // [OPT-454] Paridad IBL fisico real PC <-> Wii U (envSpec + envIrr + roughness^2 + F_ibl + kD_ibl)
+        vec3 ambient = albedoLin * max(uMatParams.w, 0.08);
+        if (uHasEnvTex != 0 && uMatParams.x > 0.01) {
+            vec3 R = reflect(-V, N);
+            vec3 envSpec = SampleSkyAtlas(R);
+            envSpec = envSpec * envSpec;
+            vec3 envIrr = SampleSkyAtlas(N);
+            envIrr = envIrr * envIrr;
+            vec3 envColor = mix(envSpec, envIrr, rough * rough);
+            vec3 F_ibl = FresnelSchlick(max(dot(N, V), 0.0), F0);
+            vec3 kD_ibl = (vec3(1.0) - F_ibl) * (1.0 - metal);
+            ambient = (kD_ibl * envIrr * albedoLin * 0.55) +
+                      (envColor * F_ibl * uMatParams.x * (1.0 - rough * 0.45));
+        }
+        color += ambient;
     } else {
         float halfLam = dot(N, Ldir) * 0.5 + 0.5;
         vec3 H = normalize(V + Ldir);
         float spec = pow(max(dot(N, H), 0.0), max(uDirLightColor.w, 4.0)) * 0.35 * shadowFactor;
-        color = albedo * (uMatParams.w + uDirLightColor.rgb * (halfLam * 0.85 * shadowFactor)) + uDirLightColor.rgb * spec;
-    }
-
-    if (uHasEnvTex != 0 && uMatParams.x > 0.001) {
-        vec3 R = reflect(-V, N);
-        vec3 envCol = SampleSkyAtlas(R);
-        float fresnel = 0.08 + 0.92 * pow(1.0 - max(dot(N, V), 0.0), 4.0);
-        color = mix(color, envCol, clamp(uMatParams.x * fresnel, 0.0, 0.9));
+        color = albedoLin * (max(uMatParams.w, 0.08) + uDirLightColor.rgb * (halfLam * 0.85 * shadowFactor)) + uDirLightColor.rgb * spec;
+        if (uHasEnvTex != 0 && uMatParams.x > 0.01) {
+            vec3 R = reflect(-V, N);
+            vec3 envSpec = SampleSkyAtlas(R);
+            envSpec = envSpec * envSpec;
+            float fresnel = FresnelSchlick(max(dot(N, V), 0.0), vec3(0.08)).r;
+            color = mix(color, envSpec, clamp(uMatParams.x * fresnel, 0.0, 0.9));
+        }
     }
 
     color += uEmissive;
-    color = color / (color + vec3(1.0)) * 1.45;
-    FragColor = vec4(clamp(color, 0.0, 1.0), alpha);
+    color = ToneMapACES(color * 1.18);
+    color = sqrt(clamp(color, 0.0, 1.0));
+    FragColor = vec4(color, alpha);
 }
 )";
 
@@ -1012,7 +1041,8 @@ void DrawMeshInternal(const GX2RBuffer& vbo,
                       TextureWrapMode wrapMode,
                       TextureMipFilterMode mipMode,
                       uint32_t& drawCalls,
-                      uint32_t& triangles) noexcept {
+                      uint32_t& triangles,
+                      const LightBlockUBO* overrideLights = nullptr) noexcept {
     if (!IsLoaded() || g_state.meshProgram == 0u || vbo.glBufferId == 0u || ibo.glBufferId == 0u ||
         indexCount == 0u || vertexStride < sizeof(MeshVertex)) {
         return;
@@ -1050,7 +1080,8 @@ void DrawMeshInternal(const GX2RBuffer& vbo,
     gl.Uniform3f(g_state.mEmissive, mat.ubo.emissive[0], mat.ubo.emissive[1], mat.ubo.emissive[2]);
     gl.Uniform1i(g_state.mShadingMode, static_cast<GLint>(shadingMode));
 
-    UploadLightUniformsMesh(MaterialRegistry::Instance().GetActiveLightBlock(),
+    const LightBlockUBO& activeLights = overrideLights ? *overrideLights : MaterialRegistry::Instance().GetActiveLightBlock();
+    UploadLightUniformsMesh(activeLights,
                             g_state.mDirLightDir, g_state.mDirLightColor,
                             g_state.mPointCount, g_state.mPointPosRad, g_state.mPointColInt,
                             g_state.mSpotPosRange, g_state.mSpotDirInner, g_state.mSpotColOuter, g_state.mSpotInt);
@@ -1383,6 +1414,25 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
                                              const MaterialPropertyBlock& material,
                                              uint32_t shadingMode) {
     if (!m_initialized || !mesh.IsLoaded() || !mesh.GetVBO() || !mesh.GetIBO()) return;
+
+    const LightBlockUBO& activeLights = MaterialRegistry::Instance().GetActiveLightBlock();
+    LightBlockUBO culledLights{};
+    const LightBlockUBO* lightsPtr = &activeLights;
+    if (shadingMode <= 1u && activeLights.activePointLights > 0u) {
+        uint32_t culledIdx[8]{};
+        const uint32_t culledCount = CullPointLightsForMesh(mesh, modelMatrix, activeLights, culledIdx, 8u);
+        if (culledCount < activeLights.activePointLights) {
+            culledLights = activeLights;
+            culledLights.activePointLights = culledCount;
+            for (uint32_t i = 0u; i < culledCount; ++i) {
+                const uint32_t src = culledIdx[i];
+                std::memcpy(culledLights.pointLightPosRadius[i], activeLights.pointLightPosRadius[src], 4u * sizeof(float));
+                std::memcpy(culledLights.pointLightColorIntensity[i], activeLights.pointLightColorIntensity[src], 4u * sizeof(float));
+            }
+            lightsPtr = &culledLights;
+        }
+    }
+
     DrawMeshInternal(*mesh.GetVBO(), *mesh.GetIBO(), mesh.GetIndexCount(), mesh.GetHeader().vertexStride,
                      modelMatrix, m_vpMatrix, m_shadowLightVP, m_shadowMode,
                      m_shadowDepthBias, m_shadowTexelSize, m_shadowMinLit, m_shaderTime,
@@ -1391,7 +1441,7 @@ void ForwardRendererGX2::RenderStaticMeshPBR(const StaticMesh& mesh,
                      static_cast<const GX2Texture*>(material.envCubeMap),
                      material, shadingMode, mesh.GetHeader().indexFormat == 1u, RHI_COMPARE_LEQUAL,
                      m_activeFilterMode, m_activeWrapMode, m_activeMipFilterMode,
-                     m_drawCallsCount, m_trianglesCount);
+                     m_drawCallsCount, m_trianglesCount, lightsPtr);
 }
 
 void ForwardRendererGX2::SetDirectionalShadowState(const Matrix4x4& lightVP,

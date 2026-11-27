@@ -33,6 +33,7 @@ Reject or condition approval if ANY of the following exists:
 1. **Single-use / demo-coupled graphics:** Shaders, pipelines, or buffers hardcoded into one scene instead of reusable `engine_*` / `GameScene3D` components.
 2. **Silicon or GL Core hazards:**
    - *Wii U GX2:* Unaligned GPU buffers (<256B), missing `GX2Invalidate`/`DCStoreRange`, unbound TMU slots (must bind neutral fallback tex/cubemap), `stack_size > 0` in shaders, wrong endian swap on `UINT_8_8_8_8` (`boneIndices` needs `GX2_ENDIAN_SWAP_NONE`), `GX2DrawDone()` without foreground guard, or `SDL_` symbols.
+   - *Wii U Shader Budget & VLIW5 Discipline:* Any `.gsh` exceeding `assets/shaders/shader_budgets.json` (bytes or `PS_GPR`), mixing unrelated material domains via runtime `if (mode == ...)` in hot-path shaders, or using constant-exponent `pow()` / `length()`+divide / per-light branching inside hot light loops.
    - *OpenGL 3.3 Core:* Shared VAOs across incompatible layouts, overwritten 16:9 viewport after FBO unbind, leaked `GL_TEXTURE*` / `GL_SCISSOR_TEST` state into `Render2DGL`, missing shutdown before WGL teardown, or leaked `<GL/gl.h>` / `<windows.h>` headers in `include/`.
 3. **Hot-path allocations or stalls:** Any heap allocation in `Update()`/`Render()`, ring-buffer CPU-GPU contention, frame times > 14.0 ms, or busy-waiting in background.
 4. **Concurrency & math bugs:** Missing `alignas(32)` on shared atomics, races in `JobSystem`/audio DMA, NaNs/div-by-zero, or LHS stalls.
