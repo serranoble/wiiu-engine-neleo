@@ -1,4 +1,5 @@
 #include "Core/JobSystem.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 
@@ -33,7 +34,16 @@ void JobSystem::Init() {
 #endif
 
     m_running.store(true, std::memory_order_release);
-    m_workerThread = std::thread(&JobSystem::WorkerLoop, this);
+#if defined(__WIIU__) || defined(__wiiu__)
+    // [OPT-466] 2 workers SMP dedicados en IBM Espresso: Worker 0 -> Core 2, Worker 1 -> Core 0 (Core 1 = GX2/Main)
+    m_workerCount = 2u;
+#else
+    const uint32_t hw = std::thread::hardware_concurrency();
+    m_workerCount = (hw > 1u) ? std::min<uint32_t>(hw - 1u, MAX_WORKERS) : 1u;
+#endif
+    for (uint32_t w = 0u; w < m_workerCount; ++w) {
+        m_workers[w] = std::thread(&JobSystem::WorkerLoop, this, w);
+    }
     m_initialized.store(true, std::memory_order_release);
 }
 
@@ -43,18 +53,24 @@ void JobSystem::Shutdown() {
     }
 
     m_running.store(false, std::memory_order_release);
-    WakeWorker();
+    WakeAllWorkers();
     SignalCounterDone();
 
-    if (m_workerThread.joinable()) {
-        m_workerThread.join();
+    for (uint32_t w = 0u; w < m_workerCount; ++w) {
+        if (m_workers[w].joinable()) {
+            m_workers[w].join();
+        }
     }
+    m_workerCount = 0u;
 }
 
-void JobSystem::WorkerLoop() {
+void JobSystem::WorkerLoop(uint32_t workerIdx) {
 #if defined(__WIIU__) || defined(__wiiu__)
-    // [OPT-106] Asignación estricta al Core 2 de la CPU Espresso (Core 0 = SO/Audio, Core 1 = Render)
-    OSSetThreadAffinity(OSGetCurrentThread(), 1 << 2);
+    // [OPT-106 / OPT-466] Worker 0 -> Core 2, Worker 1 -> Core 0 (Core 1 reservado para Render GX2)
+    const uint32_t coreMask = (workerIdx == 0u) ? (1u << 2u) : (1u << 0u);
+    OSSetThreadAffinity(OSGetCurrentThread(), coreMask);
+#else
+    (void)workerIdx;
 #endif
 
     while (m_running.load(std::memory_order_acquire)) {
@@ -197,7 +213,58 @@ void JobSystem::DispatchBatch(const JobDeclaration* jobs, size_t count, std::ato
         }
     }
 
-    WakeWorker();
+    WakeAllWorkers();
+}
+
+void JobSystem::ParallelFor(uint32_t totalCount, uint32_t grainSize, ParallelForFunc fn, void* userData) {
+    if (!fn || totalCount == 0u) {
+        return;
+    }
+    const uint32_t effGrain = (grainSize > 0u) ? grainSize : 1u;
+    if (!m_initialized.load(std::memory_order_acquire) || totalCount <= effGrain) {
+        fn(0u, totalCount, userData);
+        return;
+    }
+
+    uint32_t chunkSpan = effGrain;
+    uint32_t numChunks = (totalCount + chunkSpan - 1u) / chunkSpan;
+    if (numChunks > MAX_PARALLEL_CHUNKS) {
+        chunkSpan = (totalCount + MAX_PARALLEL_CHUNKS - 1u) / MAX_PARALLEL_CHUNKS;
+        numChunks = (totalCount + chunkSpan - 1u) / chunkSpan;
+    }
+
+    struct ParallelChunk {
+        ParallelForFunc fn{nullptr};
+        void* userData{nullptr};
+        uint32_t startIdx{0u};
+        uint32_t endIdx{0u};
+    };
+
+    ParallelChunk chunks[MAX_PARALLEL_CHUNKS]{};
+    JobDeclaration jobs[MAX_PARALLEL_CHUNKS]{};
+    auto execChunk = [](void* raw) {
+        const auto* c = static_cast<const ParallelChunk*>(raw);
+        if (c && c->fn && c->startIdx < c->endIdx) {
+            c->fn(c->startIdx, c->endIdx, c->userData);
+        }
+    };
+
+    for (uint32_t i = 0u; i < numChunks; ++i) {
+        const uint32_t s = i * chunkSpan;
+        const uint32_t e = std::min(s + chunkSpan, totalCount);
+        chunks[i] = {fn, userData, s, e};
+        jobs[i] = JobDeclaration{execChunk, &chunks[i], nullptr};
+    }
+
+    std::atomic<uint32_t> counter{0u};
+    if (numChunks > 1u) {
+        DispatchBatch(jobs, numChunks - 1u, &counter);
+    }
+    // Ejecutar el ultimo chunk inline en el hilo llamador mientras los workers procesan 0..numChunks-2
+    execChunk(&chunks[numChunks - 1u]);
+    if (numChunks > 1u) {
+        Wait(&counter);
+    }
 }
 
 void JobSystem::Wait(std::atomic<uint32_t>* counter) {
@@ -250,9 +317,20 @@ void JobSystem::WakeWorker() {
 #endif
 }
 
+void JobSystem::WakeAllWorkers() {
+#if defined(__WIIU__) || defined(__wiiu__)
+    OSSignalEventAll(&m_jobAvailableEvent);
+#else
+    {
+        std::lock_guard<std::mutex> lock(m_syncMutex);
+    }
+    m_jobAvailableCv.notify_all();
+#endif
+}
+
 void JobSystem::SignalCounterDone() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    OSSignalEvent(&m_jobDoneEvent);
+    OSSignalEventAll(&m_jobDoneEvent);
 #else
     {
         std::lock_guard<std::mutex> lock(m_syncMutex);

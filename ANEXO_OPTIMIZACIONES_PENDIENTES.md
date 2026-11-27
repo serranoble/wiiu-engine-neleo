@@ -5495,6 +5495,13 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **PROS:** Reducción automática de draw calls con 0 *popping* visual y orquestación limpia de pasadas multi-pass con perfilado integrado.
 - **CONTRAS:** Ninguno.
 
+### `OPT-466` — Oleada 4: `JobSystem` Multi-Core SMP (Core 2 + Core 0 en Wii U / hasta 4 workers en PC) + `ParallelFor` Zero-Alloc
+- **Estado:** `IMPLEMENTADO` (Hito 163 — Doble `APROBACIÓN FINAL`, 54/54 pruebas con `JOB_SYSTEM_PARALLEL_FOR`).
+- **Referencia:** Jason Gregory (*Game Engine Architecture*, Cap. 7.6 — *Multiprocessor Game Loops & Job Systems*); Cafe OS `OSSetThreadAffinity`.
+- **Solución:** Evolucionado `include/Core/JobSystem.hpp` y `src/Core/JobSystem.cpp` a pool fijo multi-worker (`std::array<std::thread, 4>`): 2 workers dedicados en IBM Espresso (Core 2 y Core 0, manteniendo Core 1 libre para GX2) y `clamp(hw - 1, 1, 4)` en Windows/ROG Ally, con `WakeAllWorkers()` (`OSSignalEventAll` / `notify_all`), `SignalCounterDone()` sin deadlocks en `Shutdown()`, y primitivo `ParallelFor(totalCount, grainSize, fn, userData)` 100% Zero-Alloc en stack (`MAX_PARALLEL_CHUNKS = 32`, ejecución cooperativa del último chunk).
+- **PROS:** Aprovecha los 3 núcleos reales de Wii U y CPUs multi-core en PC/ROG Ally sin asignaciones en heap ni riesgo de deadlocks.
+- **CONTRAS:** Ninguno.
+
 ---
 
 ## 📌 PROTOCOLO DE MANTENIMIENTO CONTINUO DEL ANEXO

@@ -1,5 +1,6 @@
 #include "Core/Diagnostics/CoreSelfTest.hpp"
 #include "Core/Diagnostics/EngineProfiler.hpp"
+#include "Core/JobSystem.hpp"
 #include "Core/Spatial/Frustum.hpp"
 #include "Core/Spatial/StacklessBVH.hpp"
 #include "Core/Math/PRNG.hpp"
@@ -188,6 +189,45 @@ void CoreSelfTest::RunAll(EngineSelfTestReport& outReport) {
         prof.ResetAll();
         outReport.Record("CORE", "ENGINE_PROFILER_ZONES", ok,
                          ok ? "CPU PROFILER ZERO-ALLOC OK" : "FALLO ENGINE PROFILER");
+    }
+
+    // 8. [OPT-466] JobSystem Multi-Core SMP + ParallelFor Zero-Alloc
+    {
+        auto& js = JobSystem::Instance();
+        const bool wasInit = js.IsInitialized();
+        if (!wasInit) {
+            js.Init();
+        }
+        const bool integrityOk = JobSystem::VerifyJobSystemIntegrity();
+        const bool workersOk = js.GetWorkerCount() >= 1u;
+
+        constexpr uint32_t kN = 1024u;
+        std::array<uint32_t, kN> data{};
+        js.ParallelFor(
+            kN,
+            64u,
+            [](uint32_t startIdx, uint32_t endIdx, void* userData) {
+                auto* arr = static_cast<uint32_t*>(userData);
+                for (uint32_t i = startIdx; i < endIdx; ++i) {
+                    arr[i] = i * 3u + 1u;
+                }
+            },
+            data.data());
+
+        bool parallelOk = true;
+        for (uint32_t i = 0u; i < kN; ++i) {
+            if (data[i] != (i * 3u + 1u)) {
+                parallelOk = false;
+                break;
+            }
+        }
+        if (!wasInit) {
+            js.Shutdown();
+        }
+
+        const bool ok = integrityOk && workersOk && parallelOk;
+        outReport.Record("CORE", "JOB_SYSTEM_PARALLEL_FOR", ok,
+                         ok ? "SMP MULTI-CORE PARALLEL_FOR OK" : "FALLO JOB SYSTEM PARALLEL_FOR");
     }
 }
 

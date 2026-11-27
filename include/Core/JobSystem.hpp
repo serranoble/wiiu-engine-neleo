@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <array>
 #include <atomic>
 #include <thread>
 
@@ -17,6 +18,7 @@
 namespace Neleo {
 
 using JobFunction = void (*)(void* userData);
+using ParallelForFunc = void (*)(uint32_t startIdx, uint32_t endIdx, void* userData);
 
 /**
  * @brief [OPT-106 / OPT-97] Descriptor inmutable de trabajo individual para el Job System.
@@ -55,6 +57,9 @@ public:
     // Encola un lote de trabajos de forma contigua
     void DispatchBatch(const JobDeclaration* jobs, size_t count, std::atomic<uint32_t>* counter = nullptr);
 
+    // [OPT-466] ParallelFor Zero-Alloc sobre los workers SMP (Core 0 + Core 2 en Wii U / hasta 4 en PC)
+    void ParallelFor(uint32_t totalCount, uint32_t grainSize, ParallelForFunc fn, void* userData = nullptr);
+
     // Espera cooperativa hasta que el contador llegue a cero (Core 1 ayuda a ejecutar tareas pendientes)
     void Wait(std::atomic<uint32_t>* counter);
 
@@ -62,6 +67,7 @@ public:
     [[nodiscard]] static bool VerifyJobSystemIntegrity();
 
     // Telemetría
+    [[nodiscard]] uint32_t GetWorkerCount() const noexcept { return m_workerCount; }
     [[nodiscard]] uint32_t GetCompletedJobsCount() const noexcept { return m_completedJobs.load(std::memory_order_relaxed); }
     [[nodiscard]] uint32_t GetTotalDispatchedCount() const noexcept { return m_totalDispatched.load(std::memory_order_relaxed); }
 
@@ -74,16 +80,19 @@ private:
     JobSystem(JobSystem&&) = delete;
     JobSystem& operator=(JobSystem&&) = delete;
 
-    void WorkerLoop();
+    void WorkerLoop(uint32_t workerIdx);
     bool PushJob(const JobDeclaration& job) noexcept;
     bool PopJob(JobDeclaration& outJob) noexcept;
     void SleepUntilJobAvailable();
     void WakeWorker();
+    void WakeAllWorkers();
     void SignalCounterDone();
     void WaitForJobDone();
 
     static constexpr size_t QUEUE_CAPACITY = 128;
     static constexpr size_t QUEUE_MASK = QUEUE_CAPACITY - 1;
+    static constexpr uint32_t MAX_WORKERS = 4u;
+    static constexpr uint32_t MAX_PARALLEL_CHUNKS = 32u;
 
     struct alignas(32) JobSlot {
         std::atomic<uint32_t> sequence{0};
@@ -96,7 +105,8 @@ private:
 
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_initialized{false};
-    std::thread m_workerThread;
+    std::array<std::thread, MAX_WORKERS> m_workers{};
+    uint32_t m_workerCount{0u};
 
     std::atomic<uint32_t> m_completedJobs{0};
     std::atomic<uint32_t> m_totalDispatched{0};
