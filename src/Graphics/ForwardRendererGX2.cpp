@@ -219,9 +219,12 @@ void ForwardRendererGX2::Shutdown() {
 
     if (m_depthPreVs)        { void* raw = static_cast<void*>(m_depthPreVs); MemoryManager::Instance().Free(raw); m_depthPreVs = nullptr; }
     if (m_depthPreVsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreVsProgram); m_depthPreVsProgram = nullptr; }
+    if (m_depthPrePs)        { void* raw = static_cast<void*>(m_depthPrePs); MemoryManager::Instance().Free(raw); m_depthPrePs = nullptr; }
+    if (m_depthPrePsProgram) { MemoryManager::Instance().FreeAligned(m_depthPrePsProgram); m_depthPrePsProgram = nullptr; }
     if (m_depthPreFsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreFsProgram); m_depthPreFsProgram = nullptr; }
     m_depthPreShaderLoaded = false;
     m_inDepthPrePass = false;
+    m_depthPrePassEnabled = false;
 
     freeShaderPtrs(m_pbrVs, m_pbrVsProgram, m_pbrPs, m_pbrPsProgram, m_pbrFsProgram);
     m_pbrDiffuseSlot = 0;
@@ -273,6 +276,7 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     m_vpMatrix = projMatrix * viewMatrix;
     m_activeFrustum.ExtractFromViewProj(m_vpMatrix);
     m_frustumCulledCount = 0u;
+    m_depthPrePassEnabled = false;
     m_drawCallsCount = 0;
     m_trianglesCount = 0;
     m_instancedDrawCalls = 0;
@@ -582,11 +586,48 @@ void ForwardRendererGX2::FlushRenderQueue() {
     NELEO_PROFILE_SCOPE(ProfileZone::QueueFlush);
     m_renderQueue.Sort();
     const uint32_t count = m_renderQueue.GetCount();
+
+    // [OPT-462] Depth Pre-Pass opcional sobre la cubeta Opaque (ya ordenada Front-to-Back al frente de la cola)
+    uint32_t prePassedOpaques = 0u;
+    if (m_depthPrePassEnabled && IsDepthPrePassShaderLoaded()) {
+        uint32_t opaqueCount = 0u;
+        while (opaqueCount < count) {
+            const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(opaqueCount);
+            const bool isCutout = (cmd.material.blendMode == BlendMode::AlphaCutout) ||
+                                  (cmd.shadingMode == 7u && cmd.material.materialParams[0] > 0.5f);
+            if (cmd.material.blendMode != BlendMode::Opaque || isCutout || !cmd.material.depthWrite || !cmd.material.depthTest) {
+                break;
+            }
+            ++opaqueCount;
+        }
+        if (opaqueCount >= 2u) {
+            BeginDepthPrePass();
+            for (uint32_t i = 0u; i < opaqueCount; ++i) {
+                const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
+                if (cmd.mesh != nullptr && cmd.mesh->GetVBO() && cmd.mesh->GetIBO()) {
+                    const bool use32 = (cmd.mesh->GetHeader().indexFormat == 1u);
+                    RenderDepthPrePassBuffers(*const_cast<GX2RBuffer*>(cmd.mesh->GetVBO()),
+                                              *const_cast<GX2RBuffer*>(cmd.mesh->GetIBO()),
+                                              cmd.mesh->GetIndexCount(),
+                                              cmd.mesh->GetHeader().vertexStride,
+                                              cmd.modelMatrix,
+                                              use32);
+                }
+            }
+            EndDepthPrePass();
+            prePassedOpaques = opaqueCount;
+        }
+    }
+
     MaterialPropertyBlock matBlock{};
     for (uint32_t i = 0u; i < count; ++i) {
         const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
         if (cmd.mesh != nullptr) {
             cmd.material.ToBlock(matBlock);
+            if (i < prePassedOpaques) {
+                // Z-Buffer ya poblado en el Pre-Pass: desactivar escritura Z en pase de color para Early-Z/HiZ
+                matBlock.depthWrite = false;
+            }
             RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
         }
     }
@@ -1026,26 +1067,34 @@ bool ForwardRendererGX2::InitDepthPrePassShader() {
 
     const uint32_t vsHdrSize  = GFDGetVertexShaderHeaderSize(0, shaderData.data());
     const uint32_t vsProgSize = GFDGetVertexShaderProgramSize(0, shaderData.data());
-    if (vsHdrSize == 0 || vsProgSize == 0) {
+    const uint32_t psHdrSize  = GFDGetPixelShaderHeaderSize(0, shaderData.data());
+    const uint32_t psProgSize = GFDGetPixelShaderProgramSize(0, shaderData.data());
+    if (vsHdrSize == 0 || vsProgSize == 0 || psHdrSize == 0 || psProgSize == 0) {
         return false;
     }
 
     auto cleanupDepthPartial = [this]() {
         if (m_depthPreVs)        { void* p = m_depthPreVs; MemoryManager::Instance().Free(p); m_depthPreVs = nullptr; }
         if (m_depthPreVsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreVsProgram); m_depthPreVsProgram = nullptr; }
+        if (m_depthPrePs)        { void* p = m_depthPrePs; MemoryManager::Instance().Free(p); m_depthPrePs = nullptr; }
+        if (m_depthPrePsProgram) { MemoryManager::Instance().FreeAligned(m_depthPrePsProgram); m_depthPrePsProgram = nullptr; }
         if (m_depthPreFsProgram) { MemoryManager::Instance().FreeAligned(m_depthPreFsProgram); m_depthPreFsProgram = nullptr; }
     };
 
     m_depthPreVs        = static_cast<GX2VertexShader*>(MemoryManager::Instance().Alloc(vsHdrSize, MemoryTag::ShaderProgram, "EarlyZ_VS_Hdr"));
     m_depthPreVsProgram = MemoryManager::Instance().AllocAligned(256, vsProgSize, MemoryTag::ShaderProgram, "EarlyZ_VS_Prog");
+    m_depthPrePs        = static_cast<GX2PixelShader*>(MemoryManager::Instance().Alloc(psHdrSize, MemoryTag::ShaderProgram, "EarlyZ_PS_Hdr"));
+    m_depthPrePsProgram = MemoryManager::Instance().AllocAligned(256, psProgSize, MemoryTag::ShaderProgram, "EarlyZ_PS_Prog");
 
-    if (!m_depthPreVs || !m_depthPreVsProgram ||
-        !GFDGetVertexShader(m_depthPreVs, m_depthPreVsProgram, 0, shaderData.data())) {
+    if (!m_depthPreVs || !m_depthPreVsProgram || !m_depthPrePs || !m_depthPrePsProgram ||
+        !GFDGetVertexShader(m_depthPreVs, m_depthPreVsProgram, 0, shaderData.data()) ||
+        !GFDGetPixelShader(m_depthPrePs, m_depthPrePsProgram, 0, shaderData.data())) {
         cleanupDepthPartial();
         return false;
     }
 
     GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_depthPreVsProgram, vsProgSize);
+    GX2Invalidate(GX2_INVALIDATE_MODE_CPU_SHADER, m_depthPrePsProgram, psProgSize);
 
     GX2AttribStream attr{};
     attr.location   = 0;
@@ -1652,9 +1701,9 @@ void ForwardRendererGX2::RenderSkinnedMeshInstanced(const StaticMesh& skinnedMes
 
 void ForwardRendererGX2::BeginDepthPrePass() {
 #if defined(__WIIU__) || defined(__wiiu__)
-    if (!m_depthPreShaderLoaded) return;
+    if (!m_depthPreShaderLoaded || !m_depthPrePs) return;
     m_inDepthPrePass = true;
-    // Modo Z-only a doble tasa de AMD Latte: Color Writes OFF + Null Pixel Shader + AlphaTest OFF
+    // Modo Z-only con Color Writes OFF + Dummy PS (evita crash 0xc0000005 de pixel shader nulo en Cemu 2.6)
     GX2SetShaderMode(GX2_SHADER_MODE_UNIFORM_REGISTER);
     GX2SetColorControl(GX2_LOGIC_OP_COPY, 0x00, FALSE, FALSE);
     GX2SetTargetChannelMasks(static_cast<GX2ChannelMask>(0), static_cast<GX2ChannelMask>(0),
@@ -1665,9 +1714,10 @@ void ForwardRendererGX2::BeginDepthPrePass() {
     GX2SetCullOnlyControl(GX2_FRONT_FACE_CCW, FALSE, FALSE);
     GX2SetDepthOnlyControl(TRUE, TRUE, GX2_COMPARE_FUNC_LEQUAL);
     m_boundShaderKind = BoundShaderKind::None;
+    m_boundPbrVariantIndex = 0xFFu;
     GX2SetFetchShader(&m_depthPreFs);
     GX2SetVertexShader(m_depthPreVs);
-    GX2SetPixelShader(nullptr);
+    GX2SetPixelShader(m_depthPrePs);
 #endif
 }
 

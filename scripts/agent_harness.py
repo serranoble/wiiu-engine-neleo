@@ -299,6 +299,8 @@ def check_gx2_invariants() -> list[str]:
         for sym in ("m_meshNoMipSampler", "BindMeshTextureAndSampler"):
             if sym not in ftext:
                 issues.append(f"src/Graphics/ForwardRendererGX2.cpp: missing single-mip sampler guard '{sym}'")
+        if "GX2SetPixelShader(nullptr)" in ftext:
+            issues.append("src/Graphics/ForwardRendererGX2.cpp: GX2SetPixelShader(nullptr) crashes Cemu 2.6 HLE (0xc0000005)")
 
     for scan_dir in (ROOT / "src" / "Scene", ROOT / "src" / "Graphics"):
         if scan_dir.exists():

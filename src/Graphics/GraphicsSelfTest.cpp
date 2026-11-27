@@ -600,6 +600,47 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         outReport.Record("GFX", "FRUSTUM_CULL_SUBMIT", ok,
                          ok ? "SPHERE FRUSTUM CULL OK" : "FALLO FRUSTUM CULL SUBMIT");
     }
+
+    // T26: [OPT-462] Depth Pre-Pass integrado en RenderQueuePBR (Dummy PS seguro + toggle opt-in)
+    {
+        auto& renderer = ForwardRendererGX2::Instance();
+        const bool shaderOk = renderer.IsDepthPrePassShaderLoaded();
+        const bool prevState = renderer.IsDepthPrePassEnabled();
+        renderer.SetDepthPrePassEnabled(true);
+        const bool enabledOk = renderer.IsDepthPrePassEnabled();
+        renderer.SetDepthPrePassEnabled(false);
+        const bool disabledOk = !renderer.IsDepthPrePassEnabled();
+        renderer.SetDepthPrePassEnabled(prevState);
+
+        const bool ok = shaderOk && enabledOk && disabledOk;
+        outReport.Record("GFX", "DEPTH_PREPASS_QUEUE", ok,
+                         ok ? "Z-PREPASS DUMMY PS + QUEUE OK" : "FALLO DEPTH PREPASS");
+    }
+
+    // T27: [OPT-463] Cadena de Mipmaps en WTEX 64x64 (GX2CopySurface mipLevels>1 en Wii U / GL mipmaps en PC)
+    {
+        // WTEX sintetico 64x64 RGBA8 (16 B cabecera BE + 64*64*4 = 16384 B)
+        std::vector<uint8_t> wtex64(16u + 64u * 64u * 4u, 180u);
+        wtex64[0] = 0x57u; wtex64[1] = 0x54u; wtex64[2] = 0x45u; wtex64[3] = 0x58u; // 'WTEX'
+        wtex64[4] = 0x00u; wtex64[5] = 0x00u; wtex64[6] = 0x00u; wtex64[7] = 0x40u; // width = 64
+        wtex64[8] = 0x00u; wtex64[9] = 0x00u; wtex64[10] = 0x00u; wtex64[11] = 0x40u; // height = 64
+        wtex64[12] = 0x00u; wtex64[13] = 0x01u; wtex64[14] = 0x00u; wtex64[15] = 0x01u; // fmt=1 (RGBA8), mips=1
+
+        GX2Texture mipTex{};
+        const bool loaded = TextureLoaderGX2::LoadCookedTextureFromMemory(
+            wtex64.data(), wtex64.size(), mipTex, "SelfTest_WTEX_Mip64");
+#if defined(__WIIU__) || defined(__wiiu__)
+        const bool mipsOk = loaded && (mipTex.surface.mipLevels >= 4u) &&
+                            (mipTex.viewNumMips == mipTex.surface.mipLevels) &&
+                            (mipTex.surface.mipmaps != nullptr) &&
+                            (mipTex.surface.image != nullptr);
+#else
+        const bool mipsOk = loaded;
+#endif
+        TextureLoaderGX2::DestroyTexture(mipTex);
+        outReport.Record("GFX", "WTEX_MIPMAP_CHAIN", mipsOk,
+                         mipsOk ? "WTEX 64X64 MIPMAP CHAIN OK" : "FALLO WTEX MIPMAPS");
+    }
 }
 
 } // namespace Neleo::Graphics

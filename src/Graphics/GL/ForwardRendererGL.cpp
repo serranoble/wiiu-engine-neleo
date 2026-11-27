@@ -1283,6 +1283,7 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     m_vpMatrix = projMatrix * viewMatrix;
     m_activeFrustum.ExtractFromViewProj(m_vpMatrix);
     m_frustumCulledCount = 0u;
+    m_depthPrePassEnabled = false;
     m_drawCallsCount = 0u;
     m_trianglesCount = 0u;
     m_instancedDrawCalls = 0u;
@@ -1328,11 +1329,46 @@ void ForwardRendererGX2::FlushRenderQueue() {
     NELEO_PROFILE_SCOPE(ProfileZone::QueueFlush);
     m_renderQueue.Sort();
     const uint32_t count = m_renderQueue.GetCount();
+
+    uint32_t prePassedOpaques = 0u;
+    if (m_depthPrePassEnabled && g_state.depthProgram != 0u) {
+        uint32_t opaqueCount = 0u;
+        while (opaqueCount < count) {
+            const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(opaqueCount);
+            const bool isCutout = (cmd.material.blendMode == BlendMode::AlphaCutout) ||
+                                  (cmd.shadingMode == 7u && cmd.material.materialParams[0] > 0.5f);
+            if (cmd.material.blendMode != BlendMode::Opaque || isCutout || !cmd.material.depthWrite || !cmd.material.depthTest) {
+                break;
+            }
+            ++opaqueCount;
+        }
+        if (opaqueCount >= 2u) {
+            BeginDepthPrePass();
+            for (uint32_t i = 0u; i < opaqueCount; ++i) {
+                const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
+                if (cmd.mesh != nullptr && cmd.mesh->GetVBO() && cmd.mesh->GetIBO()) {
+                    const bool use32 = (cmd.mesh->GetHeader().indexFormat == 1u);
+                    RenderDepthPrePassBuffers(*const_cast<GX2RBuffer*>(cmd.mesh->GetVBO()),
+                                              *const_cast<GX2RBuffer*>(cmd.mesh->GetIBO()),
+                                              cmd.mesh->GetIndexCount(),
+                                              cmd.mesh->GetHeader().vertexStride,
+                                              cmd.modelMatrix,
+                                              use32);
+                }
+            }
+            EndDepthPrePass();
+            prePassedOpaques = opaqueCount;
+        }
+    }
+
     MaterialPropertyBlock matBlock{};
     for (uint32_t i = 0u; i < count; ++i) {
         const RenderCommandPBR& cmd = m_renderQueue.GetSortedCommand(i);
         if (cmd.mesh != nullptr) {
             cmd.material.ToBlock(matBlock);
+            if (i < prePassedOpaques) {
+                matBlock.depthWrite = false;
+            }
             RenderStaticMeshPBR(*cmd.mesh, cmd.modelMatrix, matBlock, cmd.shadingMode);
         }
     }

@@ -328,12 +328,26 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
 
     GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, outTex.surface.image, outTex.surface.imageSize);
 
-    // [OPT-453] Tiling 2D hardware (GX2_TILE_MODE_DEFAULT) vía GX2CopySurface en Core 1 (hilo GX2)
+    // [OPT-453 / OPT-463] Tiling 2D hardware (GX2_TILE_MODE_DEFAULT) + cadena completa de Mipmaps vía GX2CopySurface en Core 1
+    uint32_t finalMipLevels = 1u;
     if (srcW >= 32u && srcH >= 32u && OSGetCoreId() == 1u &&
         ProcUIIsRunning() && ProcUIInForeground() && !ProcUIInShutdown() &&
         Window::HasForeground() && !Window::IsExitingProcUI()) {
+        const bool isPow2 = ((srcW & (srcW - 1u)) == 0u) && ((srcH & (srcH - 1u)) == 0u);
+        uint32_t targetMips = 1u;
+        if (isPow2 && srcW >= 64u && srcH >= 64u) {
+            uint32_t mw = srcW;
+            uint32_t mh = srcH;
+            while (mw > 4u && mh > 4u && targetMips < 10u) {
+                mw >>= 1u;
+                mh >>= 1u;
+                ++targetMips;
+            }
+        }
+
         GX2Surface tiledSurf = outTex.surface;
         tiledSurf.tileMode = GX2_TILE_MODE_DEFAULT;
+        tiledSurf.mipLevels = targetMips;
         tiledSurf.image = nullptr;
         tiledSurf.mipmaps = nullptr;
         tiledSurf.mipmapSize = 0u;
@@ -342,21 +356,142 @@ bool LoadCookedTextureFromMemory(const uint8_t* data,
         const uint32_t tiledAlign = (tiledSurf.alignment > 256u) ? tiledSurf.alignment : 256u;
         tiledSurf.image = MemoryManager::Instance().AllocAligned(
             tiledAlign, tiledSurf.imageSize, MemoryTag::Texture, SafeLabel(debugLabel, "CookedTexTiled"));
-        if (tiledSurf.image) {
+        bool mipAllocOk = true;
+        if (tiledSurf.image && targetMips > 1u && tiledSurf.mipmapSize > 0u) {
+            tiledSurf.mipmaps = MemoryManager::Instance().AllocAligned(
+                tiledAlign, tiledSurf.mipmapSize, MemoryTag::Texture, SafeLabel(debugLabel, "CookedTexMips"));
+            if (!tiledSurf.mipmaps) {
+                mipAllocOk = false;
+            }
+        }
+
+        if (tiledSurf.image && mipAllocOk) {
             // Purgar líneas L1D/L2 sucias previas de Espresso antes de la escritura DMA de Latte
             GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tiledSurf.image, tiledSurf.imageSize);
+            if (tiledSurf.mipmaps && tiledSurf.mipmapSize > 0u) {
+                GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, tiledSurf.mipmaps, tiledSurf.mipmapSize);
+            }
+
+            // Nivel 0 (full-res)
             GX2CopySurface(&outTex.surface, 0u, 0u, &tiledSurf, 0u, 0u);
             GX2DrawDone();
-            GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tiledSurf.image, tiledSurf.imageSize);
-            MemoryManager::Instance().FreeAligned(outTex.surface.image);
-            outTex.surface = tiledSurf;
+
+            bool allMipsOk = true;
+            if (targetMips > 1u && tiledSurf.mipmaps && tiledSurf.mipmapSize > 0u) {
+                // Extraer nivel 0 lineal sin padding de pitch para downsampling box-filter 2x2
+                std::vector<uint8_t> prevBuf(static_cast<size_t>(srcW) * static_cast<size_t>(srcH) * 4u);
+                const auto* srcBase = static_cast<const uint8_t*>(outTex.surface.image);
+                const uint32_t srcPitchBytes = outTex.surface.pitch * 4u;
+                for (uint32_t y = 0u; y < srcH; ++y) {
+                    std::memcpy(prevBuf.data() + static_cast<size_t>(y) * static_cast<size_t>(srcW) * 4u,
+                                srcBase + static_cast<size_t>(y) * static_cast<size_t>(srcPitchBytes),
+                                static_cast<size_t>(srcW) * 4u);
+                }
+
+                // Buffer staging lineal reutilizable del tamaño de mip 1 (alberga cualquier mip 1..N)
+                GX2Surface mip1Proto = outTex.surface;
+                mip1Proto.width = srcW >> 1u;
+                mip1Proto.height = srcH >> 1u;
+                mip1Proto.mipLevels = 1u;
+                mip1Proto.tileMode = GX2_TILE_MODE_LINEAR_ALIGNED;
+                mip1Proto.image = nullptr;
+                mip1Proto.mipmaps = nullptr;
+                mip1Proto.mipmapSize = 0u;
+                GX2CalcSurfaceSizeAndAlignment(&mip1Proto);
+                const uint32_t stageAlign = (mip1Proto.alignment > 256u) ? mip1Proto.alignment : 256u;
+                const uint32_t stageSize = mip1Proto.imageSize;
+                void* stageBuf = MemoryManager::Instance().AllocAligned(
+                    stageAlign, stageSize, MemoryTag::Texture, "CookedMipStage");
+
+                if (!stageBuf) {
+                    allMipsOk = false;
+                } else {
+                    uint32_t prevW = srcW;
+                    uint32_t prevH = srcH;
+                    std::vector<uint8_t> currBuf;
+                    for (uint32_t m = 1u; m < targetMips; ++m) {
+                        const uint32_t curW = (prevW > 1u) ? (prevW >> 1u) : 1u;
+                        const uint32_t curH = (prevH > 1u) ? (prevH >> 1u) : 1u;
+                        currBuf.resize(static_cast<size_t>(curW) * static_cast<size_t>(curH) * 4u);
+
+                        for (uint32_t y = 0u; y < curH; ++y) {
+                            const uint32_t sy0 = y * 2u;
+                            const uint32_t sy1 = (sy0 + 1u < prevH) ? (sy0 + 1u) : sy0;
+                            for (uint32_t x = 0u; x < curW; ++x) {
+                                const uint32_t sx0 = x * 2u;
+                                const uint32_t sx1 = (sx0 + 1u < prevW) ? (sx0 + 1u) : sx0;
+                                const uint8_t* p00 = &prevBuf[(static_cast<size_t>(sy0) * prevW + sx0) * 4u];
+                                const uint8_t* p10 = &prevBuf[(static_cast<size_t>(sy0) * prevW + sx1) * 4u];
+                                const uint8_t* p01 = &prevBuf[(static_cast<size_t>(sy1) * prevW + sx0) * 4u];
+                                const uint8_t* p11 = &prevBuf[(static_cast<size_t>(sy1) * prevW + sx1) * 4u];
+                                uint8_t* dst = &currBuf[(static_cast<size_t>(y) * curW + x) * 4u];
+                                for (uint32_t c = 0u; c < 4u; ++c) {
+                                    dst[c] = static_cast<uint8_t>(
+                                        (static_cast<uint32_t>(p00[c]) + static_cast<uint32_t>(p10[c]) +
+                                         static_cast<uint32_t>(p01[c]) + static_cast<uint32_t>(p11[c]) + 2u) >> 2u);
+                                }
+                            }
+                        }
+
+                        GX2Surface mipLinSurf = outTex.surface;
+                        mipLinSurf.width = curW;
+                        mipLinSurf.height = curH;
+                        mipLinSurf.mipLevels = 1u;
+                        mipLinSurf.tileMode = GX2_TILE_MODE_LINEAR_ALIGNED;
+                        mipLinSurf.image = nullptr;
+                        mipLinSurf.mipmaps = nullptr;
+                        mipLinSurf.mipmapSize = 0u;
+                        GX2CalcSurfaceSizeAndAlignment(&mipLinSurf);
+
+                        if (mipLinSurf.imageSize > stageSize) {
+                            allMipsOk = false;
+                            break;
+                        }
+                        mipLinSurf.image = stageBuf;
+                        const uint32_t dstPitchBytes = mipLinSurf.pitch * 4u;
+                        auto* dstBase = static_cast<uint8_t*>(mipLinSurf.image);
+                        for (uint32_t y = 0u; y < curH; ++y) {
+                            std::memcpy(dstBase + static_cast<size_t>(y) * static_cast<size_t>(dstPitchBytes),
+                                        currBuf.data() + static_cast<size_t>(y) * static_cast<size_t>(curW) * 4u,
+                                        static_cast<size_t>(curW) * 4u);
+                        }
+
+                        GX2Invalidate(GX2_INVALIDATE_MODE_CPU_TEXTURE, mipLinSurf.image, mipLinSurf.imageSize);
+                        GX2CopySurface(&mipLinSurf, 0u, 0u, &tiledSurf, m, 0u);
+                        GX2DrawDone();
+
+                        prevBuf.swap(currBuf);
+                        prevW = curW;
+                        prevH = curH;
+                    }
+                    MemoryManager::Instance().FreeAligned(stageBuf);
+                }
+            }
+
+            if (allMipsOk) {
+                GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tiledSurf.image, tiledSurf.imageSize);
+                if (tiledSurf.mipmaps && tiledSurf.mipmapSize > 0u) {
+                    GX2Invalidate(GX2_INVALIDATE_MODE_TEXTURE, tiledSurf.mipmaps, tiledSurf.mipmapSize);
+                }
+                MemoryManager::Instance().FreeAligned(outTex.surface.image);
+                outTex.surface = tiledSurf;
+                finalMipLevels = targetMips;
+            } else {
+                if (tiledSurf.mipmaps) MemoryManager::Instance().FreeAligned(tiledSurf.mipmaps);
+                MemoryManager::Instance().FreeAligned(tiledSurf.image);
+            }
+        } else {
+            if (tiledSurf.mipmaps) MemoryManager::Instance().FreeAligned(tiledSurf.mipmaps);
+            if (tiledSurf.image)   MemoryManager::Instance().FreeAligned(tiledSurf.image);
         }
     }
 
-    outTex.surface.mipmaps = nullptr;
-    outTex.surface.mipmapSize = 0u;
+    if (finalMipLevels <= 1u) {
+        outTex.surface.mipmaps = nullptr;
+        outTex.surface.mipmapSize = 0u;
+    }
     outTex.viewFirstMip = 0u;
-    outTex.viewNumMips = 1u;
+    outTex.viewNumMips = finalMipLevels;
     outTex.viewFirstSlice = 0u;
     outTex.viewNumSlices = 1u;
     outTex.compMap = 0x00010203u;

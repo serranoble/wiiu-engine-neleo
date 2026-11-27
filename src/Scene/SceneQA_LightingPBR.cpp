@@ -169,6 +169,7 @@ void SceneQA_LightingPBR::OnQARender3D(const Matrix4x4& /*viewMatrix*/, const Ma
     floorMat.ubo.materialParams[3] = 0.25f;
     floorMat.ubo.pbrParams[0] = 0.65f; // roughness
     floorMat.ubo.pbrParams[1] = 0.05f; // dielectrico
+    renderer.SetDepthPrePassEnabled(true);
     renderer.SubmitStaticMeshPBR(m_floorPlane, Matrix4x4::Translation(0.0f, 0.0f, -4.0f), floorMat, m_shadingMode);
 
     // 3. Dos cubos laterales de prueba de Normal / Bump Mapping TBN bajo luces rasantes

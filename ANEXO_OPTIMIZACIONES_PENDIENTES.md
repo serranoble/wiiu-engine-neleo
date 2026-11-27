@@ -5477,6 +5477,15 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **PROS:** Ahorro automático de CPU/GPU en todas las escenas que usan `SubmitStaticMeshPBR` y visibilidad exacta en vivo de tiempos CPU 3D/2D y mallas descartadas (`CUL`).
 - **CONTRAS:** Ninguno.
 
+### `OPT-462` & `OPT-463` — Oleada 2: Depth Pre-Pass Integrado en `RenderQueuePBR` + Cadena Completa de Mipmaps GX2
+- **Estado:** `IMPLEMENTADO` (Hito 161 — Doble `APROBACIÓN FINAL`, 51/51 pruebas con `T26: DEPTH_PREPASS_QUEUE` y `T27: WTEX_MIPMAP_CHAIN`).
+- **Referencia:** Tomas Akenine-Möller (*RTR4*, Cap. 6.2.2 y 19.4); Jason Gregory (*GEA*, Cap. 11.2); AMD R700 TMU.
+- **Solución:**
+  1. `OPT-462`: `InitDepthPrePassShader()` carga `m_depthPrePs` (dummy PS de `shadow_depth_gx2.gsh`), eliminando `GX2SetPixelShader(nullptr)` en `BeginDepthPrePass()` (blindado en `agent_harness.py`). `FlushRenderQueue()` (GX2 y GL) ejecuta Z-Prepass opt-in sobre la cubeta `Opaque` (`opaqueCount >= 2u`) y desactiva `depthWrite` en la pasada de color para máximo Early-Z/HiZ. Activado en G2 y G5.
+  2. `OPT-463`: `TextureLoaderGX2::LoadCookedTextureFromMemory()` genera hasta 10 niveles de mipmap (box-filter 2×2 sobre buffer staging lineal reutilizable) y sube cada nivel a `GX2_TILE_MODE_DEFAULT` vía `GX2CopySurface`, activando automáticamente `m_meshSampler` (trilineal + aniso 4×).
+- **PROS:** Elimina *overdraw* en escenas densas al acercar la cámara y mejora calidad/caché TMU en texturas `2048×2048`.
+- **CONTRAS:** Ninguno.
+
 ---
 
 ## 📌 PROTOCOLO DE MANTENIMIENTO CONTINUO DEL ANEXO

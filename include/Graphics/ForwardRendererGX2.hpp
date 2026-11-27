@@ -179,6 +179,18 @@ public:
     [[nodiscard]] bool IsFrustumCullingEnabled() const noexcept { return m_frustumCullingEnabled; }
     [[nodiscard]] uint32_t GetFrustumCulledCount() const noexcept { return m_frustumCulledCount; }
 
+    // [OPT-462] Control de Z-Prepass automatico sobre la cubeta Opaque en FlushRenderQueue()
+    // Se resetea a false en BeginFrame() para ser opt-in limpio por escena/pase.
+    void SetDepthPrePassEnabled(bool enabled) noexcept { m_depthPrePassEnabled = enabled; }
+    [[nodiscard]] bool IsDepthPrePassEnabled() const noexcept { return m_depthPrePassEnabled; }
+    [[nodiscard]] bool IsDepthPrePassShaderLoaded() const noexcept {
+#if defined(__WIIU__) || defined(__wiiu__)
+        return m_depthPreShaderLoaded && (m_depthPrePs != nullptr);
+#else
+        return m_initialized;
+#endif
+    }
+
     // [Suite G3] Configura estado de Shadow Mapping direccional para RenderStaticMeshPBR (se resetea a OFF en BeginFrame)
     // shadowMode: 0=OFF, 1=Hard (1-tap), 2=PCF 3x3, 3=PCF 5x5, 4=Debug Shadow Factor
     void SetDirectionalShadowState(const Matrix4x4& lightVP,
@@ -322,10 +334,11 @@ private:
     uint32_t m_instancedDrawCalls{0};
     uint32_t m_instancedCount{0};
 
-    // Cola de renderizado Zero-Alloc compartida Wii U / PC [OPT-459] + Frustum Culling [OPT-460]
+    // Cola de renderizado Zero-Alloc compartida Wii U / PC [OPT-459] + Frustum Culling [OPT-460] + Z-Prepass [OPT-462]
     RenderQueuePBR m_renderQueue{};
     ViewFrustum m_activeFrustum{};
     bool m_frustumCullingEnabled{true};
+    bool m_depthPrePassEnabled{false};
     uint32_t m_frustumCulledCount{0u};
 
 #if defined(__WIIU__) || defined(__wiiu__)
@@ -388,9 +401,11 @@ private:
     bool m_instanceBufferCreated{false};
     bool m_instShaderLoaded{false};
 
-    // 5. [OPT-26 / OPT-161] Pipeline Hardware Early-Z Depth Pre-Pass (Null Pixel Shader)
+    // 5. [OPT-26 / OPT-161 / OPT-462] Pipeline Hardware Early-Z Depth Pre-Pass (Dummy PS seguro para Cemu + Latte)
     GX2VertexShader* m_depthPreVs{nullptr};
     void* m_depthPreVsProgram{nullptr};
+    GX2PixelShader* m_depthPrePs{nullptr};
+    void* m_depthPrePsProgram{nullptr};
     GX2FetchShader m_depthPreFs{};
     void* m_depthPreFsProgram{nullptr};
     bool m_depthPreShaderLoaded{false};

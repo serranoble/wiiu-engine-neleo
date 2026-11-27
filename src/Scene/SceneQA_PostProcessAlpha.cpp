@@ -179,6 +179,7 @@ void SceneQA_PostProcessAlpha::OnQARender3D(const Matrix4x4& viewMatrix, const M
     bool hdrPassActive = false;
     if (m_postFX.IsReady() && m_postFX.BeginHDRScenePass(0.025f, 0.040f, 0.070f, 1.0f)) {
         renderer.BeginFrame(cam, viewMatrix, projMatrix);
+        renderer.SetDepthPrePassEnabled(true);
         hdrPassActive = true;
     }
 
