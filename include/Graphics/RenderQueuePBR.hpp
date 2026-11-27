@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Spatial/Frustum.hpp"
 #include "Graphics/Math3D.hpp"
 #include "Graphics/MaterialSystem.hpp"
 #include "Graphics/Mesh/StaticMesh.hpp"
@@ -104,6 +105,38 @@ static_assert(sizeof(SortEntryPBR) == 16u, "SortEntryPBR debe medir 16 bytes");
     }
     const float norm = std::clamp(dist / maxDist, 0.0f, 1.0f);
     return static_cast<uint16_t>(norm * 65535.0f + 0.5f);
+}
+
+/**
+ * @brief [OPT-460] Test analitico de visibilidad de StaticMesh contra ViewFrustum (Zero-Alloc).
+ * Transforma la Bounding Sphere local al espacio mundo con la escala maxima de las 3 columnas.
+ * Es conservador (retorna true) si la malla carece de bounding radius valido.
+ */
+[[nodiscard]] inline bool IsMeshVisibleInFrustum(const StaticMesh& mesh,
+                                                 const Matrix4x4& modelMatrix,
+                                                 const ViewFrustum& frustum) noexcept {
+    const float localRad = mesh.GetBoundingRadius();
+    if (localRad <= 0.0001f || !std::isfinite(localRad)) {
+        return true;
+    }
+
+    const Point3D localCenter = mesh.GetBoundingCenter();
+    const Point3D worldCenter{
+        modelMatrix.m[0] * localCenter.x + modelMatrix.m[4] * localCenter.y +
+            modelMatrix.m[8] * localCenter.z + modelMatrix.m[12],
+        modelMatrix.m[1] * localCenter.x + modelMatrix.m[5] * localCenter.y +
+            modelMatrix.m[9] * localCenter.z + modelMatrix.m[13],
+        modelMatrix.m[2] * localCenter.x + modelMatrix.m[6] * localCenter.y +
+            modelMatrix.m[10] * localCenter.z + modelMatrix.m[14]
+    };
+
+    const float sxSq = modelMatrix.m[0] * modelMatrix.m[0] + modelMatrix.m[1] * modelMatrix.m[1] + modelMatrix.m[2] * modelMatrix.m[2];
+    const float sySq = modelMatrix.m[4] * modelMatrix.m[4] + modelMatrix.m[5] * modelMatrix.m[5] + modelMatrix.m[6] * modelMatrix.m[6];
+    const float szSq = modelMatrix.m[8] * modelMatrix.m[8] + modelMatrix.m[9] * modelMatrix.m[9] + modelMatrix.m[10] * modelMatrix.m[10];
+    const float maxScale = std::sqrt(std::max({sxSq, sySq, szSq, 0.0001f}));
+    const float worldRad = localRad * maxScale;
+
+    return frustum.TestSphere(worldCenter, worldRad);
 }
 
 /**

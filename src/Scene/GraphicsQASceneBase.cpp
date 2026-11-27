@@ -7,6 +7,7 @@
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
 #include "Core/ResourceMonitor.hpp"
+#include "Core/Diagnostics/EngineProfiler.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -118,6 +119,8 @@ void GraphicsQASceneBase::UpdateCamera(float dt) noexcept {
 }
 
 void GraphicsQASceneBase::Update(float dt) {
+    EngineProfiler::Instance().BeginFrame();
+    NELEO_PROFILE_SCOPE(ProfileZone::FrameUpdate);
     const float clampedDt = std::clamp(dt, 0.0001f, 0.1f);
     m_elapsedTime += clampedDt;
     m_smoothedDt = m_smoothedDt * 0.90f + clampedDt * 0.10f;
@@ -147,19 +150,25 @@ void GraphicsQASceneBase::Render() {
     const Matrix4x4 view = Matrix4x4::LookAt(m_camPos, target, Point3D{0.0f, 1.0f, 0.0f});
     const Matrix4x4 proj = Matrix4x4::Perspective(kFovYRad, kAspect169, 0.15f, 300.0f);
 
-    ForwardRendererGX2::Instance().BeginFrame(m_camPos, view, proj);
-    OnQARender3D(view, proj);
-    ForwardRendererGX2::Instance().EndFrame();
-
-    Render2D::Begin();
-    if (m_hudVisible) {
-        RenderBaseHUD();
-        OnQARenderHUD();
-    } else {
-        Render2D::DrawBox(18, 16, 360, 32, ColorRGBA{8, 16, 28, 185}, ColorRGBA::Cyan());
-        Render2D::DrawPixelString("(+) MOSTRAR HUD QA   (B) MENU", 30, 25, 2, ColorRGBA::Yellow());
+    {
+        NELEO_PROFILE_SCOPE(ProfileZone::Render3D);
+        ForwardRendererGX2::Instance().BeginFrame(m_camPos, view, proj);
+        OnQARender3D(view, proj);
+        ForwardRendererGX2::Instance().EndFrame();
     }
-    Render2D::End();
+
+    {
+        NELEO_PROFILE_SCOPE(ProfileZone::Render2D);
+        Render2D::Begin();
+        if (m_hudVisible) {
+            RenderBaseHUD();
+            OnQARenderHUD();
+        } else {
+            Render2D::DrawBox(18, 16, 360, 32, ColorRGBA{8, 16, 28, 185}, ColorRGBA::Cyan());
+            Render2D::DrawPixelString("(+) MOSTRAR HUD QA   (B) MENU", 30, 25, 2, ColorRGBA::Yellow());
+        }
+        Render2D::End();
+    }
 }
 
 void GraphicsQASceneBase::RenderBaseHUD() const noexcept {
@@ -173,13 +182,16 @@ void GraphicsQASceneBase::RenderBaseHUD() const noexcept {
     const auto& metrics = ResourceMonitor::Instance().GetMetrics();
     const float fps = (m_smoothedDt > 0.0001f) ? (1.0f / m_smoothedDt) : 60.0f;
     const float frameMs = m_smoothedDt * 1000.0f;
-    const uint32_t draws = ForwardRendererGX2::Instance().GetDrawCallsCount();
-    const uint32_t tris  = ForwardRendererGX2::Instance().GetTrianglesCount();
+    const uint32_t draws  = ForwardRendererGX2::Instance().GetDrawCallsCount();
+    const uint32_t tris   = ForwardRendererGX2::Instance().GetTrianglesCount();
+    const uint32_t culled = ForwardRendererGX2::Instance().GetFrustumCulledCount();
+    const float cpu3dMs   = EngineProfiler::Instance().GetSmoothedUs(ProfileZone::Render3D) * 0.001f;
+    const float cpu2dMs   = EngineProfiler::Instance().GetSmoothedUs(ProfileZone::Render2D) * 0.001f;
 
     char statsBuf[160];
     std::snprintf(statsBuf, sizeof(statsBuf),
-                  "FPS:%4.1f (%4.1fMS) | DRAWS:%3u | TRIS:%5u | MEM1:%4.1f%% | MEM2:%4.1f%%",
-                  fps, frameMs, draws, tris, metrics.mem1Percent, metrics.mem2Percent);
+                  "FPS:%4.1f (%4.1fMS) | DRAWS:%3u (CUL:%2u) | TRIS:%5u | 3D:%4.1f 2D:%3.1f | M1:%4.1f%% M2:%3.1f%%",
+                  fps, frameMs, draws, culled, tris, cpu3dMs, cpu2dMs, metrics.mem1Percent, metrics.mem2Percent);
     Render2D::DrawPixelString(statsBuf, 32, 52, 2, ColorRGBA{140, 255, 175, 255});
 
     // Barra inferior de controles

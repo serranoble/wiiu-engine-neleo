@@ -5468,6 +5468,15 @@ ales y curvas de respuesta anal�tica apilables din�micamente (`PushContext`,
 - **PROS:** Maximiza Early-Z/HiZ en AMD Latte y OpenGL 3.3, automatiza Back-to-Front para transparencias a nivel de motor y mantiene 0 alocaciones en heap.
 - **CONTRAS:** Ninguno.
 
+### `OPT-460` & `OPT-461` — Oleada 1: Frustum Culling Automático en `SubmitStaticMeshPBR` + `EngineProfiler` CPU por Zonas Zero-Alloc
+- **Estado:** `IMPLEMENTADO` (Hito 160 — Doble `APROBACIÓN FINAL`, 49/49 pruebas con `T25: FRUSTUM_CULL_SUBMIT` y `ENGINE_PROFILER_ZONES`).
+- **Referencia:** Jason Gregory (*Game Engine Architecture*, Cap. 9.8 y 11.2.7); Tomas Akenine-Möller (*RTR4*, Cap. 19.1).
+- **Solución:**
+  1. `OPT-460`: `IsMeshVisibleInFrustum()` en `RenderQueuePBR.hpp` (esfera envolvente escalada contra `ViewFrustum` extraído de `m_vpMatrix` en `BeginFrame()`). `SubmitStaticMeshPBR()` descarta mallas fuera del frustum antes de encolar/ordenar/light-cull en GX2 y GL.
+  2. `OPT-461`: `include/Core/Diagnostics/EngineProfiler.hpp` (6 zonas fijas en `std::array`, Zero-Alloc O(1), `PlatformClock` + RAII `NELEO_PROFILE_SCOPE`, EMA en microsegundos), instrumentando `FrameUpdate`, `Render3D`, `QueueFlush` y `Render2D`, visible en la barra superior de `GraphicsQASceneBase`.
+- **PROS:** Ahorro automático de CPU/GPU en todas las escenas que usan `SubmitStaticMeshPBR` y visibilidad exacta en vivo de tiempos CPU 3D/2D y mallas descartadas (`CUL`).
+- **CONTRAS:** Ninguno.
+
 ---
 
 ## 📌 PROTOCOLO DE MANTENIMIENTO CONTINUO DEL ANEXO

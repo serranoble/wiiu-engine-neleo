@@ -174,6 +174,11 @@ public:
     // o manualmente antes de cambiar de Render Target en escenas multi-pass como G5 HDR).
     void FlushRenderQueue();
 
+    // [OPT-460] Control y telemetria de Frustum Culling automatico en SubmitStaticMeshPBR
+    void SetFrustumCullingEnabled(bool enabled) noexcept { m_frustumCullingEnabled = enabled; }
+    [[nodiscard]] bool IsFrustumCullingEnabled() const noexcept { return m_frustumCullingEnabled; }
+    [[nodiscard]] uint32_t GetFrustumCulledCount() const noexcept { return m_frustumCulledCount; }
+
     // [Suite G3] Configura estado de Shadow Mapping direccional para RenderStaticMeshPBR (se resetea a OFF en BeginFrame)
     // shadowMode: 0=OFF, 1=Hard (1-tap), 2=PCF 3x3, 3=PCF 5x5, 4=Debug Shadow Factor
     void SetDirectionalShadowState(const Matrix4x4& lightVP,
@@ -317,8 +322,11 @@ private:
     uint32_t m_instancedDrawCalls{0};
     uint32_t m_instancedCount{0};
 
-    // Cola de renderizado Zero-Alloc compartida Wii U / PC [OPT-459]
+    // Cola de renderizado Zero-Alloc compartida Wii U / PC [OPT-459] + Frustum Culling [OPT-460]
     RenderQueuePBR m_renderQueue{};
+    ViewFrustum m_activeFrustum{};
+    bool m_frustumCullingEnabled{true};
+    uint32_t m_frustumCulledCount{0u};
 
 #if defined(__WIIU__) || defined(__wiiu__)
     // 1. Pipeline Skydome

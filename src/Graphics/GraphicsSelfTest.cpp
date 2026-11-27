@@ -579,6 +579,27 @@ void GraphicsSelfTest::RunAll(Diagnostics::EngineSelfTestReport& outReport) {
         outReport.Record("GFX", "RENDER_QUEUE_SORT", ok,
                          ok ? "F2B OPAQUE + B2F TRANSPARENT OK" : "FALLO RENDER QUEUE SORT");
     }
+
+    // T25: [OPT-460] Frustum Culling automatico por Bounding Sphere en SubmitStaticMeshPBR
+    {
+        StaticMesh sphere;
+        const bool meshOk = ProceduralMeshBuilder::CreateUVSphere(sphere, 1.0f, 8u, 6u);
+
+        const Matrix4x4 view = Matrix4x4::LookAt(Point3D{0.0f, 0.0f, 10.0f}, Point3D{0.0f, 0.0f, 0.0f}, Point3D{0.0f, 1.0f, 0.0f});
+        const Matrix4x4 proj = Matrix4x4::Perspective(1.0471975f, 16.0f / 9.0f, 0.5f, 100.0f);
+        ViewFrustum frustum;
+        frustum.ExtractFromViewProj(proj * view);
+
+        const bool visFront   = IsMeshVisibleInFrustum(sphere, Matrix4x4::Translation(0.0f, 0.0f, 0.0f), frustum);
+        const bool culBehind  = !IsMeshVisibleInFrustum(sphere, Matrix4x4::Translation(0.0f, 0.0f, 25.0f), frustum);
+        const bool culSide    = !IsMeshVisibleInFrustum(sphere, Matrix4x4::Translation(80.0f, 0.0f, 0.0f), frustum);
+        const bool visScaled  = IsMeshVisibleInFrustum(sphere, Matrix4x4::Translation(0.0f, 0.0f, -85.0f) * Matrix4x4::Scale(2.0f, 2.0f, 2.0f), frustum);
+
+        sphere.Destroy();
+        const bool ok = meshOk && visFront && culBehind && culSide && visScaled;
+        outReport.Record("GFX", "FRUSTUM_CULL_SUBMIT", ok,
+                         ok ? "SPHERE FRUSTUM CULL OK" : "FALLO FRUSTUM CULL SUBMIT");
+    }
 }
 
 } // namespace Neleo::Graphics

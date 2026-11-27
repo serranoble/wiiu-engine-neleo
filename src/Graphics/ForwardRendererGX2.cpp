@@ -1,4 +1,5 @@
 #include "Graphics/ForwardRendererGX2.hpp"
+#include "Core/Diagnostics/EngineProfiler.hpp"
 #include "Graphics/Mesh/MeshBinaryFormat.hpp"
 #include "Core/MemoryManager.hpp"
 #include "Core/AssetManager.hpp"
@@ -270,6 +271,8 @@ void ForwardRendererGX2::BeginFrame(const Point3D& camPos, const Matrix4x4& view
     m_renderQueue.Clear();
     m_projMatrix = projMatrix;
     m_vpMatrix = projMatrix * viewMatrix;
+    m_activeFrustum.ExtractFromViewProj(m_vpMatrix);
+    m_frustumCulledCount = 0u;
     m_drawCallsCount = 0;
     m_trianglesCount = 0;
     m_instancedDrawCalls = 0;
@@ -561,6 +564,10 @@ void ForwardRendererGX2::SubmitStaticMeshPBR(const StaticMesh& mesh,
     if (!m_initialized || !mesh.IsLoaded()) {
         return;
     }
+    if (m_frustumCullingEnabled && !IsMeshVisibleInFrustum(mesh, modelMatrix, m_activeFrustum)) {
+        ++m_frustumCulledCount;
+        return;
+    }
     if (!m_renderQueue.Submit(mesh, modelMatrix, material, shadingMode, m_camPos)) {
         // Fallback seguro si la cola alcanza MAX_COMMANDS: vaciar y encolar sin perder draws
         FlushRenderQueue();
@@ -572,6 +579,7 @@ void ForwardRendererGX2::FlushRenderQueue() {
     if (m_renderQueue.GetCount() == 0u) {
         return;
     }
+    NELEO_PROFILE_SCOPE(ProfileZone::QueueFlush);
     m_renderQueue.Sort();
     const uint32_t count = m_renderQueue.GetCount();
     MaterialPropertyBlock matBlock{};

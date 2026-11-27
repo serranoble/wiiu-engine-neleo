@@ -1,4 +1,5 @@
 #include "Core/Diagnostics/CoreSelfTest.hpp"
+#include "Core/Diagnostics/EngineProfiler.hpp"
 #include "Core/Spatial/Frustum.hpp"
 #include "Core/Spatial/StacklessBVH.hpp"
 #include "Core/Math/PRNG.hpp"
@@ -161,6 +162,32 @@ void CoreSelfTest::RunAll(EngineSelfTestReport& outReport) {
         const bool ok = nodesValid && (coveredPrims == 12u);
         outReport.Record("CORE", "STACKLESS_BVH_BUILDER", ok,
                          ok ? "BVH 12 PRIMS PRE-ORDER OK" : "FALLO STACKLESS BVH");
+    }
+
+    // 7. [OPT-461] EngineProfiler CPU por zona Zero-Alloc (RAII + BeginFrame + EMA)
+    {
+        auto& prof = EngineProfiler::Instance();
+        prof.ResetAll();
+        {
+            NELEO_PROFILE_SCOPE(ProfileZone::Render3D);
+            volatile uint32_t acc = 0u;
+            for (uint32_t i = 0u; i < 1024u; ++i) {
+                acc += i;
+            }
+            (void)acc;
+        }
+        prof.AddZoneTicks(ProfileZone::QueueFlush, 100u);
+        const uint64_t ticksBeforeFlush = prof.GetCurrentTicks(ProfileZone::QueueFlush);
+        prof.BeginFrame();
+        const uint64_t ticksAfterFlush = prof.GetCurrentTicks(ProfileZone::QueueFlush);
+        const bool ok = (ticksBeforeFlush == 100u) &&
+                        (ticksAfterFlush == 0u) &&
+                        (prof.GetFrameIndex() == 1u) &&
+                        (prof.GetLastUs(ProfileZone::Render3D) >= 0.0f) &&
+                        (prof.GetSmoothedUs(ProfileZone::QueueFlush) >= 0.0f);
+        prof.ResetAll();
+        outReport.Record("CORE", "ENGINE_PROFILER_ZONES", ok,
+                         ok ? "CPU PROFILER ZERO-ALLOC OK" : "FALLO ENGINE PROFILER");
     }
 }
 
