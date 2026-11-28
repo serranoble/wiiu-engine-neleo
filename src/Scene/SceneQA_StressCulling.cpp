@@ -1,4 +1,5 @@
 #include "Scene/SceneQA_StressCulling.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/DebugDraw3D.hpp"
 #include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
@@ -292,19 +293,20 @@ void SceneQA_StressCulling::OnQARenderHUD() {
     char line1[128];
     char line2[128];
     char line3[128];
-    std::snprintf(line1, sizeof(line1), "INSTANCIAS: %u VISIBLES / %u TOTAL | CULLED: %u (%.1f%%) | HW DRAWS: %u",
+    std::snprintf(line1, sizeof(line1), NELEO_LOC_CSTR("qa.g6.line1"),
                   m_visibleCount, total, m_culledCount, static_cast<double>(cullPct), m_instDrawCalls);
-    std::snprintf(line2, sizeof(line2), "LOD DINAM.: %s (LOD0=%u VERDE | LOD1=%u AMAR | LOD2=%u ROJO)",
-                  m_lodEnabled ? "ACTIVO" : "APAGADO", m_lodCounts[0], m_lodCounts[1], m_lodCounts[2]);
-    std::snprintf(line3, sizeof(line3), "CULLING: %s | DEBUG FRUSTUM: %s | BLOQUES ORBITALES: %u (PBR)",
+    std::snprintf(line2, sizeof(line2), NELEO_LOC_CSTR("qa.g6.line2"),
+                  m_lodEnabled ? NELEO_LOC_CSTR("common.active") : NELEO_LOC_CSTR("common.off"),
+                  m_lodCounts[0], m_lodCounts[1], m_lodCounts[2]);
+    std::snprintf(line3, sizeof(line3), NELEO_LOC_CSTR("qa.g6.line3"),
                   m_cullingEnabled ? "ON" : "OFF",
-                  m_freezeFrustum ? "CONGELADO (DEBUG)" : "EN VIVO",
+                  m_freezeFrustum ? NELEO_LOC_CSTR("qa.g6.frozen") : NELEO_LOC_CSTR("qa.g6.live"),
                   ORBIT_RECT_COUNT);
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());
     Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA{150, 255, 175, 255});
-    Render2D::DrawPixelString("CONSEJO: PULSA (X) PARA CONGELAR EL FRUSTUM Y MUEVETE CON L-STICK PARA VER EL CULLING 3D",
+    Render2D::DrawPixelString(NELEO_LOC("qa.g6.tip"),
                               30, 184, 2, ColorRGBA::Yellow());
 }
 

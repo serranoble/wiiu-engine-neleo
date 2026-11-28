@@ -2,6 +2,7 @@
 #include "Core/ApplicationLifecycle.hpp"
 #include "Core/Config/EngineConfig.hpp"
 #include "Core/Config/CVarRegistry.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Storage/StorageManager.hpp"
 #include "Core/Storage/VirtualFileSystem.hpp"
 #include "Scene/SceneManager.hpp"
@@ -195,12 +196,19 @@ bool Engine::Init(std::unique_ptr<IScene> initialScene) {
     // [Hito 125 - OPT-396 - Jason Gregory Cap. 5.2] Capa de Abstracción de Almacenamiento (SAL) + VFS + CVars + ALSM
     StorageManager::Initialize();
     VirtualFileSystem::Instance().Initialize();
+    LocalizationManager::Instance().Initialize(LocalizationManager::DEFAULT_FALLBACK_LANG);
     CVarRegistry::Instance().RegisterDefaultEngineCVars();
     ApplicationLifecycle::Instance().Initialize();
 
     // [Hito 124 - Jason Gregory Cap. 5.3] Suscripción pasiva de subsistemas a EngineConfig (DIP desacoplado)
     if (s_engineConfigObserverId == 0) {
         s_engineConfigObserverId = EngineConfig::Instance().RegisterChangeCallback([](const EngineConfig& cfg, void* userData) {
+            // 0. Sincronizar idioma activo del motor (comparación case-insensitive)
+            auto& locMgr = LocalizationManager::Instance();
+            if (locMgr.IsInitialized() && !locMgr.IsCurrentLanguage(cfg.general.language)) {
+                (void)locMgr.SetLanguage(cfg.general.language);
+            }
+
             // 1. Sincronizar Audio (Maestro, BGM y SFX)
             auto& audioMgr = AudioManager::Instance();
             audioMgr.SetMasterVolume(cfg.audio.masterVolume);
@@ -377,6 +385,7 @@ void Engine::Shutdown() {
 #endif
     AudioManager::Instance().Shutdown();
     NetPlatform::Shutdown();
+    LocalizationManager::Instance().Shutdown();
     VirtualFileSystem::Instance().Shutdown();
     StorageManager::Shutdown();       // Drenar guardados asíncronos ANTES de detener Core 2
     JobSystem::Instance().Shutdown();

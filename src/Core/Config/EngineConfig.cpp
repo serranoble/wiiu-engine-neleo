@@ -1,4 +1,5 @@
 #include "Core/Config/EngineConfig.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Storage/StorageManager.hpp"
 #include <cstdio>
 #include <cstring>
@@ -12,13 +13,13 @@ namespace Neleo {
 
 const char* GraphicsConfig::GetFilterName() const noexcept {
     switch (textureFilter) {
-        case TextureFilterMode::Point:    return "PUNTO (NEAREST)";
-        case TextureFilterMode::Bilinear: return "BILINEAL";
-        case TextureFilterMode::Aniso2x:  return "ANISOTROPICO 2X";
-        case TextureFilterMode::Aniso4x:  return "ANISOTROPICO 4X";
-        case TextureFilterMode::Aniso8x:  return "ANISOTROPICO 8X";
-        case TextureFilterMode::Aniso16x: return "ANISOTROPICO 16X";
-        default:                          return "ANISOTROPICO 4X";
+        case TextureFilterMode::Point:    return NELEO_LOC_CSTR("cfg.filter.point");
+        case TextureFilterMode::Bilinear: return NELEO_LOC_CSTR("cfg.filter.bilinear");
+        case TextureFilterMode::Aniso2x:  return NELEO_LOC_CSTR("cfg.filter.aniso2x");
+        case TextureFilterMode::Aniso4x:  return NELEO_LOC_CSTR("cfg.filter.aniso4x");
+        case TextureFilterMode::Aniso8x:  return NELEO_LOC_CSTR("cfg.filter.aniso8x");
+        case TextureFilterMode::Aniso16x: return NELEO_LOC_CSTR("cfg.filter.aniso16x");
+        default:                          return NELEO_LOC_CSTR("cfg.filter.aniso4x");
     }
 }
 
@@ -45,6 +46,8 @@ EngineConfig::EngineConfig() noexcept {
 }
 
 void EngineConfig::ResetToDefaults() noexcept {
+    general = GeneralConfig{};
+
     graphics.resolution = ResolutionMode::Res720p;
     graphics.textureFilter = TextureFilterMode::Aniso4x;
     graphics.vsyncEnabled = true;
@@ -126,7 +129,12 @@ bool EngineConfig::LoadFromFile(const char* filepath) {
         TrimWhitespace(key);
         TrimWhitespace(val);
 
-        if (std::strcmp(currentSection, "Graphics") == 0) {
+        if (std::strcmp(currentSection, "General") == 0) {
+            if (std::strcmp(key, "language") == 0 && val[0] != '\0') {
+                std::strncpy(general.language, val, sizeof(general.language) - 1);
+                general.language[sizeof(general.language) - 1] = '\0';
+            }
+        } else if (std::strcmp(currentSection, "Graphics") == 0) {
             if (std::strcmp(key, "resolution") == 0) {
                 int v = std::atoi(val);
                 graphics.resolution = static_cast<ResolutionMode>(std::clamp(v, 0, 3));
@@ -187,6 +195,8 @@ size_t EngineConfig::FormatIni(char* outBuf, size_t capacity) const noexcept {
         "; =============================================================================\n"
         "; Global Engine Configuration (StorageManager SAL)\n"
         "; =============================================================================\n\n"
+        "[General]\n"
+        "language=%s\n\n"
         "[Graphics]\n"
         "resolution=%d\n"
         "texture_filter=%d\n"
@@ -206,6 +216,7 @@ size_t EngineConfig::FormatIni(char* outBuf, size_t capacity) const noexcept {
         "server_ip=%s\n"
         "tcp_port=%u\n"
         "udp_port=%u\n",
+        general.language,
         static_cast<int>(graphics.resolution),
         static_cast<int>(graphics.textureFilter),
         graphics.vsyncEnabled ? 1 : 0,

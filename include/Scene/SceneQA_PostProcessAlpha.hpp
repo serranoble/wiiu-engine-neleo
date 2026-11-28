@@ -37,10 +37,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G5"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "TRANSPARENCIA, ALPHA-CUTOUT, HDR (RGBA16F), TONE MAPPING ACES, BLOOM Y NIEBLA";
+        return "qa.g5.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:TONEMAP  DPAD ARR/ABJ:NIEBLA  X:BLOOM  A:GAMMA sRGB  L/R:EXPOSICION";
+        return "qa.g5.controls";
     }
 
 private:

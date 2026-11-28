@@ -1,4 +1,5 @@
 #include "Scene/SceneQA_EnvironmentWater.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Window.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
@@ -271,19 +272,17 @@ void SceneQA_EnvironmentWater::OnQARenderHUD() {
 
     char line1[128];
     char line2[128];
-    char line3[128];
-    std::snprintf(line1, sizeof(line1), "SKYBOX  : %s | IBL PBR: %s",
-                  m_useProceduralSky ? "ATLAS PROCEDURAL (768x512)" : "SKYBOX_DAY.WCUBE (ATLAS)",
-                  m_iblEnabled ? "ACTIVO" : "APAGADO");
-    std::snprintf(line2, sizeof(line2), "VIDRIO  : IOR = %s | OLAS AGUA: %s",
+    std::snprintf(line1, sizeof(line1), NELEO_LOC_CSTR("qa.g4.line1"),
+                  m_useProceduralSky ? NELEO_LOC_CSTR("qa.g4.sky_proc") : "SKYBOX_DAY.WCUBE (ATLAS)",
+                  m_iblEnabled ? NELEO_LOC_CSTR("common.active") : NELEO_LOC_CSTR("common.off"));
+    std::snprintf(line2, sizeof(line2), NELEO_LOC_CSTR("qa.g4.line2"),
                   GetCurrentIORLabel(),
-                  m_wavesPaused ? "PAUSA" : "ANIMADAS");
-    std::snprintf(line3, sizeof(line3), "IZQ->DER: CROMO | VIDRIO (SNELL) | PBR+IBL (R=0.15 / 0.45 / 0.80)");
+                  m_wavesPaused ? NELEO_LOC_CSTR("common.paused") : NELEO_LOC_CSTR("qa.g4.animated"));
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());
-    Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA{150, 255, 175, 255});
-    Render2D::DrawPixelString("CONSEJO: ALTERNA IBL (DPAD IZQ/DER) Y SKYBOX (X) PARA VER REFLEJOS",
+    Render2D::DrawPixelString(NELEO_LOC("qa.g4.line3"), 30, 156, 2, ColorRGBA{150, 255, 175, 255});
+    Render2D::DrawPixelString(NELEO_LOC("qa.g4.tip"),
                               30, 184, 2, ColorRGBA::Yellow());
 }
 

@@ -36,12 +36,12 @@ protected:
     void OnQARender3D(const Matrix4x4& viewMatrix, const Matrix4x4& projMatrix) override;
     void OnQARenderHUD() override;
 
-    [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "COOKER ESTATICO"; }
+    [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "model.house.code"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "VALIDACION DE MODELO ESTATICO COCINADO (DUTCH HOUSE .WMESH + .WTEX)";
+        return "model.house.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:LUZ  A:GIRO  X:PROPS  -:TEXTURAS ON/OFF  L/R-STICK:CAM  B:MENU";
+        return "model.house.controls";
     }
 
 private:

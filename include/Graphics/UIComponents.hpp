@@ -67,6 +67,7 @@ public:
     explicit UIBackButton(std::function<void()> onBack);
 
     void SetOnBack(std::function<void()> onBack) { m_onBack = std::move(onBack); }
+    void RefreshLabel() noexcept;
 
     /**
      * @brief Updates button and triggers menu transition when tapped.

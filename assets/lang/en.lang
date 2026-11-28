@@ -1,0 +1,300 @@
+# Neleo 3D Engine - English (en)
+# ASCII compatible with Render2D 5x7 bitmap font
+
+# Graphics Configuration (EngineConfig)
+cfg.filter.point=POINT (NEAREST)
+cfg.filter.bilinear=BILINEAR
+cfg.filter.aniso2x=ANISOTROPIC 2X
+cfg.filter.aniso4x=ANISOTROPIC 4X
+cfg.filter.aniso8x=ANISOTROPIC 8X
+cfg.filter.aniso16x=ANISOTROPIC 16X
+
+# Main Menu (SceneMenu)
+menu.subtitle1=C++20 3D ENGINE & GRAPHICS FRAMEWORK
+menu.subtitle2=100% NATIVE PIPELINE GX2 + SNDCORE2 + ENGINE_NET
+menu.item.qa.label=GRAPHICS LAB (QA)
+menu.item.qa.desc=SUITES G1-G8: MIPMAPS, PBR, SHADOWS, HDR & RAY TRACING
+menu.item.house.label=STATIC MODEL: HOUSE (COOKER)
+menu.item.house.desc=DUTCH HOUSE (.WMESH 48B + .WTEX + PROPS + ALPHA)
+menu.item.bird.label=ANIMATED MODEL: BIRD (COOKER)
+menu.item.bird.desc=BIRD ORANGE (.WMESH 80B + .WSKEL + .WANIM + SKINNING)
+menu.item.options.label=ENGINE OPTIONS
+menu.item.options.desc=GX2 FILTERING, VSYNC, AUDIO, HAPTICS & LANGUAGE
+menu.item.net.label=NETWORK TEST (UDP / TCP)
+menu.item.net.desc=WII U KEYBOARD (NN::SWKBD), TCP PING, UDP & RADAR
+menu.footer.status=STATUS: 8 STATIC LIBRARIES (100% NATIVE - 0 SDL)
+menu.footer.controls=D-PAD UP/DOWN + (A) OR TOUCH TO SELECT
+menu.footer.summary=COOKER: HOUSE + BIRD | QA: G1-G8 | NET TEST
+
+# Engine Options (SceneOptions)
+options.title=ENGINE CONFIGURATION - GLOBAL SETTINGS
+options.hint=D-PAD UP/DOWN: NAVIGATE | (A) / TOUCH: CHANGE | (L)/(R): TABS | (+): SAVE
+options.tab.graphics=1. GRAPHICS
+options.tab.audio=2. AUDIO
+options.tab.controls=3. CONTROLS & HW
+options.btn.save=[SAVE SETTINGS (+)]
+options.btn.defaults=[FACTORY DEFAULTS (X)]
+options.gfx.resolution=SCANBUFFER RESOLUTION: [720P NATIVE (1280x720)]
+options.gfx.vsync=VSYNC SYNCHRONIZATION: [%s]
+options.gfx.vsync_on=LOCKED 60 FPS (ENABLED)
+options.gfx.vsync_off=UNCAPPED (DISABLED)
+options.gfx.filter=TEXTURE FILTERING: [%s]
+options.gfx.osd=OSD TELEMETRY (MINUS BTN): [%s]
+options.gfx.osd_on=ENABLED (VISIBLE)
+options.gfx.osd_off=DISABLED (HIDDEN)
+options.gfx.silicon=GRAPHICS SILICON: [GPU AMD LATTE R700 @ 550 MHz]
+options.audio.master=MASTER VOLUME: [%d%%]
+options.audio.bgm=BACKGROUND MUSIC (BGM): [%s]
+options.audio.bgm_on=ENABLED (PLAYING)
+options.audio.bgm_off=DISABLED (MUTED)
+options.audio.bgm_vol=BGM MUSIC VOLUME: [%d%%]
+options.audio.sfx=SOUND EFFECTS (SFX): [%s]
+options.audio.sfx_on=ENABLED
+options.audio.sfx_off=DISABLED
+options.audio.test_sfx=[TEST UI SFX]
+options.ctrl.rumble=HAPTIC RUMBLE: [%s]
+options.ctrl.rumble_on=ENABLED
+options.ctrl.rumble_off=DISABLED
+options.ctrl.intensity=RUMBLE INTENSITY: [%s]
+options.ctrl.intensity_low=SOFT (30%)
+options.ctrl.intensity_med=MEDIUM (70%)
+options.ctrl.intensity_high=STRONG (100%)
+options.ctrl.deadzone=ANALOG DEADZONE: [%s]
+options.ctrl.dz_low=PRECISE (10%)
+options.ctrl.dz_med=STANDARD (18%)
+options.ctrl.dz_high=WIDE (25%)
+options.ctrl.test_rumble=[TEST HAPTIC PULSE (200 MS)]
+options.ctrl.language=LANGUAGE / IDIOMA: [%s]
+options.status.saving=SAVING SETTINGS TO DISK...
+options.status.busy=SAVE QUEUE BUSY, PLEASE RETRY
+options.status.defaults=SETTINGS RESTORED TO FACTORY DEFAULTS
+options.status.saved=SETTINGS SAVED TO DISK SUCCESSFULLY
+options.status.save_error=ERROR SAVING CONFIGURATION TO DISK
+
+# Loading Screen (SceneLoading)
+loading.init=INITIALIZING C++20 WII U 3D GRAPHICS ENGINE...
+loading.init_audio=INITIALIZING GRAPHICS ENGINE & ESPRESSO AUDIO...
+loading.subtitle=3D GRAPHICS ENGINE & REAL-TIME COMPUTING
+loading.streaming=PROGRESSIVE STREAMING: %.2f MB / %.2f MB (%zu KB READ)
+loading.footer=POWERED BY LIBWUT, GX2 & SNDCORE2 FOR NINTENDO WII U
+
+# Asset Error Screen (SceneAssetError)
+asset_err.btn_accept=[ ACCEPT & RETURN TO MENU ]
+asset_err.banner=[!] ERROR: MISSING RESOURCES
+asset_err.scene_label=COULD NOT START SCENE:
+asset_err.list_header=THE FOLLOWING FILES WERE NOT FOUND IN THE SYSTEM:
+asset_err.item=[-] REQUIRED ASSET: %s
+asset_err.more=... AND %zu ADDITIONAL FILES
+asset_err.solution1=SOLUTION: VERIFY THE FILES ARE IN 'content/' OR 'assets/'
+asset_err.solution2=NEXT TO THE ENGINE BINARY (.WUHB / .RPX) AND REBUILD.
+
+# HUD Overlay (HUDOverlay)
+hud.title=PLAYER 1 & TOUCH | FPS: %d %s
+hud.vsync=(60 FPS VSYNC)
+hud.uncapped=(UNCAPPED)
+hud.presses=PRESSES: %d
+hud.last_input=LAST INPUT: %s
+hud.touch_hint=TOUCH AND DRAG THE WHITE SQUARE ON SCREEN
+
+# Graphics QA Modal (GraphicsQAModal)
+qa.title=GRAPHICS QUALITY LAB (CGP + RTR4)
+qa.subtitle=SELECT A VALIDATION SUITE (D-PAD + A OR TOUCH)
+qa.btn_close=CLOSE (B)
+qa.badge.active=ACTIVE
+qa.badge.planned=PLANNED
+qa.notice.planned=SUITE IN PLANNING (DOCS/GRAPHICS_QUALITY_PLAN_AUDIT.MD)
+qa.selftest.pass=ENGINE SELF-TEST: %u/%u PASS (X:RETEST) | SUITES: %u/%u
+qa.selftest.fail=SELF-TEST FAIL %u/%u: %s (%s)
+qa.suite.g1=PIPELINE, TRANSFORMS, MIPMAPS & GX2 FILTERING
+qa.suite.g2=LIGHTING, COOK-TORRANCE PBR & NORMAL/PARALLAX
+qa.suite.g3=REAL-TIME SHADOWS (SHADOW MAP, PCF & BIAS)
+qa.suite.g4=ENVIRONMENT, SKYBOX, IBL & REALISTIC WATER (FRESNEL)
+qa.suite.g5=TRANSPARENCY, HDR, ACES TONE MAPPING & BLOOM
+qa.suite.g6=MASSIVE INSTANCING, FRUSTUM CULLING, LOD & SKIN
+qa.suite.g7=HEIGHTMAP TERRAIN, 3D NOISE, PARTICLES & TOON
+qa.suite.g8=GPU RAY TRACING (BVH) & LATTE RENDER SCALE
+
+# Network Test Modal (NetTestModal)
+net.title=NETWORK TEST (UDP 7778 + TCP 7777) & WII U KEYBOARD
+net.hint=L: EDIT IP | R: CEMU 127.0.0.1 | A: CONNECT | X: TCP PING | Y: UDP CMD | B: CLOSE
+net.btn.edit_ip=IP: [%s] - EDIT KEYBOARD (L)
+net.btn.cemu=[CEMU 127.0.0.1 (R)]
+net.btn.connect=[CONNECT (A)]
+net.btn.disconnect=[DISCONNECT (A)]
+net.btn.tcp_ping=[TCP PING (X)]
+net.btn.udp_cmd=[UDP CMD (Y)]
+net.btn.close=[CLOSE (B)]
+net.kb.prompt=ENTER SERVER IP (E.G. 192.168.1.50)
+net.fb.ip_saved=IP UPDATED AND SAVED
+net.fb.ip_invalid=INVALID IP: USE FORMAT A.B.C.D (E.G. 192.168.1.50)
+net.fb.kb_cancelled=KEYBOARD EDIT CANCELLED
+net.fb.loopback=TARGET SET TO 127.0.0.1 (LOCAL CEMU)
+net.fb.disconnected=SESSION DISCONNECTED
+net.fb.ip_invalid_conn=INVALID IP: EDIT IP BEFORE CONNECTING
+net.fb.connecting=CONNECTING UDP 7778 + TCP 7777...
+net.fb.socket_err=ERROR OPENING NETWORK SOCKETS
+net.fb.tcp_not_conn=TCP NOT CONNECTED: PRESS CONNECT FIRST
+net.fb.tcp_sent=TCP MESSAGE SENT - WAITING FOR ECHO
+net.fb.tcp_err=ERROR SENDING TCP MESSAGE
+net.fb.udp_closed=UDP CLOSED: PRESS CONNECT FIRST
+net.fb.udp_sent=WUN1 BINARY PACKET SENT OVER UDP
+net.fb.udp_err=ERROR SENDING UDP PACKET
+net.fb.udp_active=UDP CONNECTION ACTIVE WITH SERVER
+net.fb.timeout=TIMEOUT: SERVER NOT RESPONDING
+net.telemetry.title=LIVE TELEMETRY (WUN1 BIG-ENDIAN PROTOCOL)
+net.state.disconnected=DISCONNECTED
+net.state.connecting=CONNECTING...
+net.state.connected=CONNECTED
+net.state.timeout=TIMEOUT
+net.udp_state=UDP STATE (%u): %s
+net.tcp_state=TCP STATE (%u): %s
+net.last_tcp=LAST TCP MESSAGE RECEIVED:
+net.entity_pos=ENTITY #1001: X=%.2f Y=%.2f Z=%.2f (T=%u)
+net.entity_wait=ENTITY #1001: WAITING FOR UDP SNAPSHOTS...
+net.radar.title=UDP RADAR (RED:20HZ / CYAN:60FPS)
+
+# Common Components and Global Framework
+ui.back=< BACK
+common.active=ACTIVE
+common.paused=PAUSED
+common.off=OFF
+common.visible=VISIBLE
+common.hidden=HIDDEN
+common.none=NONE
+net.no_tcp_msg=(no TCP messages)
+
+# Scene Transition and Audit (SceneManager)
+trans.title=SCENE TRANSITION & RESOURCE AUDIT
+trans.subtitle=DETERMINISTIC LIFECYCLE AND MEMORY RECLAMATION SYSTEM
+trans.phase.unknown=UNKNOWN PHASE
+trans.phase.1=PHASE 1/4: LATTE GPU PIPELINE DRAIN (GX2DrawDone / GX2Flush)
+trans.phase.2=PHASE 2/4: FREEING MEMORY AND UNLOADING PREVIOUS SCENE
+trans.phase.3=PHASE 3/4: LOADING ASSETS AND INITIALIZING NEW SCENE
+trans.phase.4=PHASE 4/4: SYNCING PRESENTATION AND FINAL TRANSITION (100%)
+trans.unloading=UNLOADING:
+trans.none=None
+trans.preparing=PREPARING:
+trans.next=Next
+trans.audit.title=CAFE OS SILICON MEMORY MANAGEMENT AUDIT
+trans.audit.mem=ACTIVE ENGINE MEMORY : %zu KB (%.2f MB) | BLOCKS: %zu | PEAK: %zu KB
+trans.audit.reclaimed=RESOURCES FREED ON UNLOAD: %zu KB RECLAIMED TO HEAP
+trans.audit.purged=RESOURCES FREED ON UNLOAD: FULL DETERMINISTIC PURGE (0 LEAKS)
+trans.audit.dangling=ANTI-DANGLING GUARANTEE: ACTIVE (POINTERS NULLED ON FREE)
+trans.audit.drain=LATTE GPU DRAIN BARRIER: SYNCHRONIZED (GX2DrawDone BEFORE VRAM REUSE)
+trans.audit.arenas=EPHEMERAL ARENAS: FRAME (128KB) & SCENE (2MB) RESET IN O(1)
+trans.audit.stream=CORE 2 ASYNC STREAMING (256KB BURST): %.2f MB / %.2f MB (%u FILES)
+trans.audit.cache=LATTE CACHE STATUS: FLUSH & INVALIDATE COMPLETE WITHOUT CORRUPTION
+
+# Pause Modal (SceneManager)
+pause.title=|| PAUSED
+pause.scene=CURRENT SCENE: [%s]
+pause.system=SYSTEM
+pause.subtitle=SIMULATION AND AUDIO PAUSED
+pause.btn.resume=> RESUME (BTN + / A)
+pause.btn.options=* SETTINGS (BTN - / X)
+pause.btn.menu=< RETURN TO MENU (BTN B)
+pause.hint1=TAP A BUTTON OR PRESS + ON THE GAMEPAD
+pause.hint2=TO RESUME THE GAME AT ANY TIME
+
+# OSD Monitor (ResourceMonitor)
+osd.title=RESOURCE TELEMETRY [-]
+osd.footer=FPS: %4.1f | [-] HIDE
+
+# Virtual Keyboard (SoftwareKeyboard)
+swkbd.title=VIRTUAL KEYBOARD
+swkbd.hint=KEYBOARD / MOUSE / TOUCH / PAD: [DPAD] MOVE  [A] PRESS  [X] DELETE  [+/ENTER] OK  [B/ESC] CANCEL
+
+# Audio Loading (AudioManager)
+audio.load.init=INITIALIZING AUDIO HARDWARE...
+audio.load.click=LOADING UI CLICK SOUND EFFECT (CLICK.WAV)...
+audio.load.stream=STARTING PING-PONG BGM STREAMING (<= 256 KB RAM)...
+audio.load.bgm=LOADING SOUNDTRACK (MUSIC.WAV) INTO RAM...
+audio.load.done=LOAD COMPLETE! STARTING MAIN MENU...
+
+# QA Base and Cooker Models
+qabase.show_hud=(+) SHOW QA HUD   (B) MENU
+qabase.cam_controls=L-STICK:MOVE  R-STICK:LOOK  ZL/ZR:HEIGHT  Y:RESET CAM  +:HUD  B:MENU
+model.house.code=STATIC COOKER
+model.house.title=COOKED STATIC MODEL VALIDATION (DUTCH HOUSE .WMESH + .WTEX)
+model.house.controls=DPAD L/R:LIGHT  A:ROTATE  X:PROPS  -:TEXTURES ON/OFF  L/R-STICK:CAM  B:MENU
+model.house.line1=.WMESH FILES: HOUSE=%s (%uB) | PROPS=%s | ALPHA=%s
+model.house.line2=.WTEX FILES : HOUSE=%s | PROPS=%s | ALPHA=%s | GEOMETRY: %u VERTS / %u TRIS
+model.house.line3=LIGHT: %s | SPIN: %s | PROPS: %s | TEXTURES (-): %s
+model.house.vcolor=VCOLOR ONLY
+model.bird.code=SKINNING COOKER
+model.bird.title=COOKED ANIMATED MODEL VALIDATION (BIRD ORANGE .WMESH/.WSKEL/.WANIM/.WTEX)
+model.bird.controls=DPAD L/R:CLIP  UP/DN:SPIN  A:PAUSE  X:CLAY  -:WTEX ON/OFF  B:MENU
+model.bird.line1=COOKER FILES: WMESH=%s (%uB) | WSKEL=%s (%u BONES) | WANIM=%s | WTEX=%s
+model.bird.line2=CLIP [%u/%u]: %s (T=%.2f/%.2fs) | GEOMETRY: %u VERTS / %u TRIS
+model.bird.line3=ANIM: %s | MODE: %s | WTEX (-): %s | SPIN: %s
+model.bird.clay=CLAY MODE
+model.bird.vcolor=VCOLOR + EYES
+
+# QA Suites G1 - G8
+qa.g1.title=PIPELINE, TRANSFORMS (MVP/QUAT), MIPMAPS & GX2 FILTERING
+qa.g1.controls=DPAD L/R:FILTER  DPAD UP/DN:UV WRAP  X:MIP COLOR-CODE  A:PAUSE ORBIT
+qa.g1.line1=GX2 FILTER : %s
+qa.g1.line2=UV WRAP    : %s (3X UV CUBES)
+qa.g1.line3=TEXTURE    : %s | ORBIT: %s
+qa.g1.mips_legend=M0:WHITE M1:CYAN M2:GREEN M3:YEL M4:ORG M5+:RED
+qa.g1.tip=TIP: PRESS (X) TO INSPECT MIPMAP LEVEL TRANSITIONS
+
+qa.g2.title=COOK-TORRANCE PBR (5x5), MULTI-LIGHT (DIR+4PT+SPOT) & TBN NORMAL/BUMP
+qa.g2.controls=DPAD L/R:SHADING MODE  DPAD UP/DN:ALBEDO  X:BUMP SCALE  A:PAUSE LIGHTS
+qa.g2.bump_med=MEDIUM (2.5)
+qa.g2.bump_high=HIGH (5.0)
+qa.g2.orbit=ORBITING
+qa.g2.line1=SHADING : %s
+qa.g2.line2=ALBEDO  : %s | TBN BUMP: %s | LIGHTS: %s
+qa.g2.line3=5x5 MATRIX: X=ROUGHNESS (0.08->0.94) | Y=METALLIC (0.0->1.0)
+qa.g2.tip=ACTIVE LIGHTS: 1 DIRECTIONAL + 4 POINT + 1 SPOT LIGHT
+
+qa.g3.title=2-PASS GX2 SHADOWS (HARD / PCF 3x3 / PCF 5x5, BIAS & ACNE/PANNING)
+qa.g3.controls=DPAD L/R:PCF MODE  DPAD UP/DN:BIAS (ACNE/OPT/PAN)  X:FRONT-CULL  A:PAUSE SUN
+qa.g3.rotating=ROTATING
+qa.g3.line1=SHADOWS : %s
+qa.g3.line2=BIAS    : %s
+qa.g3.line3=SHADOW MAP: %ux%u D32F | FRONT-CULL: %s | SUN: %s
+qa.g3.tip=TIP: TEST ZERO BIAS (ACNE) AND HIGH BIAS (PETER PANNING)
+
+qa.g4.title=CUBEMAP SKYBOX, PBR IBL, REFRACTIVE GLASS (IOR) & REALISTIC WATER
+qa.g4.controls=DPAD L/R:IBL ON/OFF  DPAD UP/DN:GLASS IOR  X:SKYBOX (WCUBE/PROC)  A:PAUSE WAVES
+qa.g4.sky_proc=PROCEDURAL ATLAS (768x512)
+qa.g4.animated=ANIMATED
+qa.g4.line1=SKYBOX  : %s | PBR IBL: %s
+qa.g4.line2=GLASS   : IOR = %s | WATER WAVES: %s
+qa.g4.line3=L->R: CHROME | GLASS (SNELL) | PBR+IBL (R=0.15 / 0.45 / 0.80)
+qa.g4.tip=TIP: TOGGLE IBL (DPAD L/R) AND SKYBOX (X) TO COMPARE REFLECTIONS
+
+qa.g5.title=TRANSPARENCY, ALPHA-CUTOUT, HDR (RGBA16F), ACES TONEMAPPING, BLOOM & FOG
+qa.g5.controls=DPAD L/R:TONEMAP  DPAD UP/DN:FOG  X:BLOOM  A:sRGB GAMMA  L/R:EXPOSURE
+qa.g5.linear=OFF (LINEAR)
+qa.g5.line1=TONEMAP : %s | EXPOSURE: %.2fX | sRGB GAMMA: %s
+qa.g5.line2=BLOOM   : %s (320x192 KAWASE 2D 5-TAP) | FOG: %s
+qa.g5.line3=SCENE   : 3 HDR ORBS 5.8X | 4 ALPHA-CUTOUT LATTICES | 3 BACK-TO-FRONT GLASS
+qa.g5.tip=TIP: COMPARE ACES VS OFF(CLAMP) AND ORBIT BEHIND GLASS FOR ALPHA SORTING
+
+qa.g6.title=MASSIVE INSTANCING, FRUSTUM CULLING (DEBUG CAM) & DYNAMIC LOD
+qa.g6.controls=DPAD L/R:INSTANCES (256/512/1000)  DPAD UP/DN:LOD  A:CULLING  X:DEBUG FRUSTUM
+qa.g6.frozen=FROZEN (DEBUG)
+qa.g6.live=LIVE
+qa.g6.line1=INSTANCES: %u VISIBLE / %u TOTAL | CULLED: %u (%.1f%%) | HW DRAWS: %u
+qa.g6.line2=DYN. LOD : %s (LOD0=%u GREEN | LOD1=%u YEL | LOD2=%u RED)
+qa.g6.line3=CULLING: %s | DEBUG FRUSTUM: %s | ORBITAL BLOCKS: %u (PBR)
+qa.g6.tip=TIP: PRESS (X) TO FREEZE FRUSTUM AND MOVE WITH L-STICK TO INSPECT 3D CULLING
+
+qa.g7.title=HEIGHTMAP TERRAIN SPLATTING, 3D NOISE (MARBLE/WOOD), PARTICLES & TOON NPR
+qa.g7.controls=DPAD L/R:STYLE (REAL/TOON)  DPAD UP/DN:3D NOISE  X:PARTICLES  A:PAUSE SUN
+qa.g7.orbiting=ORBITING
+qa.g7.line1=STYLE   : %s | 3D NOISE: %s
+qa.g7.line2=TERRAIN : 48x48 HEIGHTMAP (4 BIOMES) | PARTICLES: %s (%u/%u ACTIVE)
+qa.g7.line3=SUN     : %s | LEFT=3D MARBLE | CENTER=CAMPFIRE+TOON | RIGHT=3D WOOD
+qa.g7.tip=TIP: TOGGLE REALISTIC VS TOON+OUTLINE (DPAD L/R) TO INSPECT BANDS & OUTLINES
+
+qa.g8.title=GPU RAY TRACING (STACKLESS BVH), PENUMBRA SHADOWS, HEATMAP & RENDER SCALE
+qa.g8.controls=DPAD L/R:RENDER SCALE (360P..720P)  DPAD UP/DN:SHADOWS  X:BVH/BRUTE  A:HEATMAP  L/R:PAUSE
+qa.g8.brute=BRUTE FORCE
+qa.g8.line1=RENDER SCALE: %s (%ux%u = %.0f%% PX) | ACCEL: %s (%u NODES)
+qa.g8.line2=RT SHADOWS  : %s | BVH COST HEATMAP: %s
+qa.g8.line3=GPU SCENE   : 12 REFLECTIVE SPHERES | ANIMATION: %s | HW BILINEAR UPSCALER
+qa.g8.tip=TIP: ENABLE HEATMAP (A) AND TOGGLE BVH VS BRUTE-FORCE (X) TO SEE TEST SAVINGS

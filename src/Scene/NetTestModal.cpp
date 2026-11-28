@@ -1,6 +1,7 @@
 #include "Scene/NetTestModal.hpp"
 #include "Scene/SceneManager.hpp"
 #include "Core/Config/EngineConfig.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Input/InputManager.hpp"
 #include "Input/SoftwareKeyboard.hpp"
 #include "Audio/AudioManager.hpp"
@@ -13,14 +14,16 @@ namespace Neleo {
 
 NetTestModal::NetTestModal()
     : m_btnEditIp(125, 132, 620, 44, "", 2),
-      m_btnUseCemu(760, 132, 395, 44, "[CEMU 127.0.0.1 (R)]", 2),
-      m_btnConnect(125, 190, 320, 46, "[CONECTAR (A)]", 2),
-      m_btnTcpPing(460, 190, 240, 46, "[PING TCP (X)]", 2),
-      m_btnUdpCmd(715, 190, 240, 46, "[CMD UDP (Y)]", 2),
-      m_btnClose(970, 190, 185, 46, "[CERRAR (B)]", 2) {
+      m_btnUseCemu(760, 132, 395, 44, NELEO_LOC("net.btn.cemu"), 2),
+      m_btnConnect(125, 190, 320, 46, NELEO_LOC("net.btn.connect"), 2),
+      m_btnTcpPing(460, 190, 240, 46, NELEO_LOC("net.btn.tcp_ping"), 2),
+      m_btnUdpCmd(715, 190, 240, 46, NELEO_LOC("net.btn.udp_cmd"), 2),
+      m_btnClose(970, 190, 185, 46, NELEO_LOC("net.btn.close"), 2) {
     const auto& netCfg = EngineConfig::Instance().GetNetwork();
     std::strncpy(m_serverIp, netCfg.serverIp, sizeof(m_serverIp) - 1);
     m_serverIp[sizeof(m_serverIp) - 1] = '\0';
+    std::strncpy(m_lastTcpMessage, NELEO_LOC_CSTR("net.no_tcp_msg"), sizeof(m_lastTcpMessage) - 1);
+    m_lastTcpMessage[sizeof(m_lastTcpMessage) - 1] = '\0';
     m_tcpPort = netCfg.tcpPort;
     m_udpPort = netCfg.udpPort;
 
@@ -111,12 +114,12 @@ void NetTestModal::HandleTcpMessage(const uint8_t* payload, size_t payloadSize) 
 
 void NetTestModal::RefreshButtonLabels() {
     char buf[96];
-    std::snprintf(buf, sizeof(buf), "IP: [%s] - EDITAR TECLADO (L)", m_serverIp);
+    std::snprintf(buf, sizeof(buf), NELEO_LOC_CSTR("net.btn.edit_ip"), m_serverIp);
     m_btnEditIp.SetLabel(buf);
 
     const bool active = (m_session.GetState() == NetSessionState::Connected ||
                          m_session.GetState() == NetSessionState::Connecting);
-    m_btnConnect.SetLabel(active ? "[DESCONECTAR (A)]" : "[CONECTAR (A)]");
+    m_btnConnect.SetLabel(active ? NELEO_LOC("net.btn.disconnect") : NELEO_LOC("net.btn.connect"));
 }
 
 void NetTestModal::SetFeedback(const char* msg, ColorRGBA color, float durationSec) noexcept {
@@ -128,7 +131,7 @@ void NetTestModal::SetFeedback(const char* msg, ColorRGBA color, float durationS
 void NetTestModal::OpenIpKeyboard() {
     AudioManager::Instance().PlayClick();
     char inputBuf[48]{};
-    if (SoftwareKeyboard::Show("INGRESA IP DEL SERVIDOR (EJ. 192.168.1.50)",
+    if (SoftwareKeyboard::Show(NELEO_LOC_CSTR("net.kb.prompt"),
                                m_serverIp, inputBuf, sizeof(inputBuf),
                                KeyboardInputMode::IPv4, 15)) {
         NetAddress testAddr{};
@@ -142,12 +145,12 @@ void NetTestModal::OpenIpKeyboard() {
             (void)cfg.SaveToFile();
 
             RefreshButtonLabels();
-            SetFeedback("IP ACTUALIZADA Y GUARDADA", ColorRGBA::Green());
+            SetFeedback(NELEO_LOC_CSTR("net.fb.ip_saved"), ColorRGBA::Green());
         } else {
-            SetFeedback("IP INVALIDA: USA FORMATO A.B.C.D (EJ. 192.168.1.50)", ColorRGBA::Red(), 3.5f);
+            SetFeedback(NELEO_LOC_CSTR("net.fb.ip_invalid"), ColorRGBA::Red(), 3.5f);
         }
     } else {
-        SetFeedback("EDICION DE TECLADO CANCELADA", ColorRGBA::Yellow(), 1.8f);
+        SetFeedback(NELEO_LOC_CSTR("net.fb.kb_cancelled"), ColorRGBA::Yellow(), 1.8f);
     }
 }
 
@@ -156,7 +159,7 @@ void NetTestModal::SetLoopbackIp() {
     std::strncpy(m_serverIp, "127.0.0.1", sizeof(m_serverIp) - 1);
     m_serverIp[sizeof(m_serverIp) - 1] = '\0';
     RefreshButtonLabels();
-    SetFeedback("DESTINO FIJADO A 127.0.0.1 (CEMU LOCAL)", ColorRGBA::Cyan());
+    SetFeedback(NELEO_LOC_CSTR("net.fb.loopback"), ColorRGBA::Cyan());
 }
 
 void NetTestModal::ToggleConnection() {
@@ -169,7 +172,7 @@ void NetTestModal::ToggleConnection() {
         m_hasServerTimeSync = false;
         m_interpolator.Reset();
         RefreshButtonLabels();
-        SetFeedback("SESION DESCONECTADA", ColorRGBA::Yellow());
+        SetFeedback(NELEO_LOC_CSTR("net.fb.disconnected"), ColorRGBA::Yellow());
         return;
     }
 
@@ -177,7 +180,7 @@ void NetTestModal::ToggleConnection() {
     NetAddress tcpAddr{};
     if (!NetAddress::ParseIPv4(m_serverIp, m_udpPort, udpAddr) || !udpAddr.IsValid() ||
         !NetAddress::ParseIPv4(m_serverIp, m_tcpPort, tcpAddr) || !tcpAddr.IsValid()) {
-        SetFeedback("IP INVALIDA: EDITA LA IP ANTES DE CONECTAR", ColorRGBA::Red(), 3.0f);
+        SetFeedback(NELEO_LOC_CSTR("net.fb.ip_invalid_conn"), ColorRGBA::Red(), 3.0f);
         return;
     }
 
@@ -185,21 +188,21 @@ void NetTestModal::ToggleConnection() {
     m_hasRemoteSnapshot = false;
     m_hasServerTimeSync = false;
     m_snapshotsRx = 0;
-    std::strncpy(m_lastTcpMessage, "(conectando TCP...)", sizeof(m_lastTcpMessage) - 1);
+    std::strncpy(m_lastTcpMessage, NELEO_LOC_CSTR("net.state.connecting"), sizeof(m_lastTcpMessage) - 1);
     m_lastTcpMessage[sizeof(m_lastTcpMessage) - 1] = '\0';
 
     if (m_session.Connect(udpAddr, tcpAddr, 0u)) {
         RefreshButtonLabels();
-        SetFeedback("CONECTANDO UDP 7778 + TCP 7777...", ColorRGBA::Cyan());
+        SetFeedback(NELEO_LOC_CSTR("net.fb.connecting"), ColorRGBA::Cyan());
     } else {
-        SetFeedback("ERROR AL ABRIR SOCKETS DE RED", ColorRGBA::Red(), 3.0f);
+        SetFeedback(NELEO_LOC_CSTR("net.fb.socket_err"), ColorRGBA::Red(), 3.0f);
     }
 }
 
 void NetTestModal::SendTcpPing() {
     AudioManager::Instance().PlayClick();
     if (!m_session.IsTcpConnected()) {
-        SetFeedback("TCP NO CONECTADO: PULSA CONECTAR PRIMERO", ColorRGBA::Red());
+        SetFeedback(NELEO_LOC_CSTR("net.fb.tcp_not_conn"), ColorRGBA::Red());
         return;
     }
     char msg[48];
@@ -207,9 +210,9 @@ void NetTestModal::SendTcpPing() {
     if (n > 0) {
         const size_t len = std::min<size_t>(static_cast<size_t>(n), sizeof(msg) - 1u);
         if (m_session.SendTcpText(std::string_view(msg, len)) == NetResult::Ok) {
-            SetFeedback("MENSAJE TCP ENVIADO - ESPERANDO ECHO", ColorRGBA::Green(), 1.5f);
+            SetFeedback(NELEO_LOC_CSTR("net.fb.tcp_sent"), ColorRGBA::Green(), 1.5f);
         } else {
-            SetFeedback("ERROR AL ENVIAR MENSAJE TCP", ColorRGBA::Red());
+            SetFeedback(NELEO_LOC_CSTR("net.fb.tcp_err"), ColorRGBA::Red());
         }
     }
 }
@@ -217,7 +220,7 @@ void NetTestModal::SendTcpPing() {
 void NetTestModal::SendUdpCommand() {
     AudioManager::Instance().PlayClick();
     if (!m_session.IsUdpOpen()) {
-        SetFeedback("UDP CERRADO: PULSA CONECTAR PRIMERO", ColorRGBA::Red());
+        SetFeedback(NELEO_LOC_CSTR("net.fb.udp_closed"), ColorRGBA::Red());
         return;
     }
     uint8_t payload[12]{};
@@ -226,9 +229,9 @@ void NetTestModal::SendUdpCommand() {
     (void)writer.WriteFloat(static_cast<float>(m_localClockSec));
     if (m_session.SendUdpPacket(NetMessageType::InputCommand, writer.GetData(), writer.GetBytesWritten(),
                                 static_cast<uint16_t>(m_udpCmdCounter & 0xFFFFu)) == NetResult::Ok) {
-        SetFeedback("PAQUETE BINARIO WUN1 ENVIADO POR UDP", ColorRGBA::Orange(), 1.5f);
+        SetFeedback(NELEO_LOC_CSTR("net.fb.udp_sent"), ColorRGBA::Orange(), 1.5f);
     } else {
-        SetFeedback("ERROR AL ENVIAR PAQUETE UDP", ColorRGBA::Red());
+        SetFeedback(NELEO_LOC_CSTR("net.fb.udp_err"), ColorRGBA::Red());
     }
 }
 
@@ -243,9 +246,9 @@ void NetTestModal::Update(float dt) {
     if (m_session.GetState() != prevState) {
         RefreshButtonLabels();
         if (m_session.GetState() == NetSessionState::Connected) {
-            SetFeedback("CONEXION UDP ACTIVA CON SERVIDOR", ColorRGBA::Green());
+            SetFeedback(NELEO_LOC_CSTR("net.fb.udp_active"), ColorRGBA::Green());
         } else if (m_session.GetState() == NetSessionState::TimedOut) {
-            SetFeedback("TIMEOUT: SERVIDOR NO RESPONDE", ColorRGBA::Red(), 3.5f);
+            SetFeedback(NELEO_LOC_CSTR("net.fb.timeout"), ColorRGBA::Red(), 3.5f);
         }
     }
 
@@ -320,8 +323,8 @@ void NetTestModal::Render() {
     Render2D::DrawBox(90, 52, 1100, 616, ColorRGBA{10, 18, 32, 245}, ColorRGBA::Cyan());
 
     // 2. Encabezado
-    Render2D::DrawPixelString("PRUEBA DE RED (UDP 7778 + TCP 7777) & TECLADO WII U", 125, 74, 2, ColorRGBA::Yellow());
-    Render2D::DrawPixelString("L: TECLADO IP | R: CEMU 127.0.0.1 | A: CONECTAR | X: PING TCP | Y: CMD UDP | B: CERRAR",
+    Render2D::DrawPixelString(NELEO_LOC("net.title"), 125, 74, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString(NELEO_LOC("net.hint"),
                               125, 102, 1, ColorRGBA{165, 205, 245, 255});
 
     // 3. Controles interactivos
@@ -334,25 +337,25 @@ void NetTestModal::Render() {
 
     // 4. Panel Izquierdo: Telemetría UDP + TCP (0 heap allocs)
     Render2D::DrawBox(125, 252, 645, 342, ColorRGBA{8, 14, 24, 235}, ColorRGBA{60, 130, 190, 255});
-    Render2D::DrawPixelString("TELEMETRIA EN VIVO (PROTOCOLO WUN1 BIG-ENDIAN)", 142, 266, 2, ColorRGBA::Cyan());
+    Render2D::DrawPixelString(NELEO_LOC("net.telemetry.title"), 142, 266, 2, ColorRGBA::Cyan());
 
-    const char* udpStateStr = "DESCONECTADO";
+    const char* udpStateStr = NELEO_LOC_CSTR("net.state.disconnected");
     ColorRGBA udpStateCol = ColorRGBA{180, 180, 190, 255};
     switch (m_session.GetState()) {
-        case NetSessionState::Connecting: udpStateStr = "CONECTANDO..."; udpStateCol = ColorRGBA::Yellow(); break;
-        case NetSessionState::Connected:  udpStateStr = "CONECTADO";     udpStateCol = ColorRGBA::Green();  break;
-        case NetSessionState::TimedOut:   udpStateStr = "TIMEOUT";       udpStateCol = ColorRGBA::Red();    break;
+        case NetSessionState::Connecting: udpStateStr = NELEO_LOC_CSTR("net.state.connecting"); udpStateCol = ColorRGBA::Yellow(); break;
+        case NetSessionState::Connected:  udpStateStr = NELEO_LOC_CSTR("net.state.connected");  udpStateCol = ColorRGBA::Green();  break;
+        case NetSessionState::TimedOut:   udpStateStr = NELEO_LOC_CSTR("net.state.timeout");    udpStateCol = ColorRGBA::Red();    break;
         default: break;
     }
 
     const auto& st = m_session.GetStats();
     char line[96];
 
-    std::snprintf(line, sizeof(line), "ESTADO UDP (%u): %s", static_cast<unsigned>(m_udpPort), udpStateStr);
+    std::snprintf(line, sizeof(line), NELEO_LOC_CSTR("net.udp_state"), static_cast<unsigned>(m_udpPort), udpStateStr);
     Render2D::DrawPixelString(line, 142, 298, 2, udpStateCol);
 
-    std::snprintf(line, sizeof(line), "ESTADO TCP (%u): %s", static_cast<unsigned>(m_tcpPort),
-                  m_session.IsTcpConnected() ? "CONECTADO" : "DESCONECTADO");
+    std::snprintf(line, sizeof(line), NELEO_LOC_CSTR("net.tcp_state"), static_cast<unsigned>(m_tcpPort),
+                  m_session.IsTcpConnected() ? NELEO_LOC_CSTR("net.state.connected") : NELEO_LOC_CSTR("net.state.disconnected"));
     Render2D::DrawPixelString(line, 142, 326, 2, m_session.IsTcpConnected() ? ColorRGBA::Green() : ColorRGBA{180, 180, 190, 255});
 
     std::snprintf(line, sizeof(line), "RTT: %.1f ms | SRTT: %.1f ms | JITTER: %.1f ms",
@@ -369,17 +372,17 @@ void NetTestModal::Render() {
                   m_snapshotsRx);
     Render2D::DrawPixelString(line, 142, 416, 2, ColorRGBA{170, 210, 240, 255});
 
-    Render2D::DrawPixelString("ULTIMO MENSAJE TCP RECIBIDO:", 142, 456, 2, ColorRGBA{180, 160, 255, 255});
+    Render2D::DrawPixelString(NELEO_LOC("net.last_tcp"), 142, 456, 2, ColorRGBA{180, 160, 255, 255});
     Render2D::DrawBox(142, 482, 610, 36, ColorRGBA{14, 18, 34, 240}, ColorRGBA{120, 100, 200, 255});
     Render2D::DrawPixelString(m_lastTcpMessage, 152, 492, 2, ColorRGBA::White());
 
     if (m_hasRemoteSnapshot) {
-        std::snprintf(line, sizeof(line), "ENTIDAD #1001: X=%.2f Y=%.2f Z=%.2f (T=%u)",
+        std::snprintf(line, sizeof(line), NELEO_LOC_CSTR("net.entity_pos"),
                       m_lastRawSnapshot.position.x, m_lastRawSnapshot.position.y, m_lastRawSnapshot.position.z,
                       static_cast<unsigned>(m_lastRawSnapshot.tick));
         Render2D::DrawPixelString(line, 142, 536, 2, ColorRGBA{130, 255, 190, 255});
     } else {
-        Render2D::DrawPixelString("ENTIDAD #1001: ESPERANDO SNAPSHOTS UDP...", 142, 536, 2, ColorRGBA{140, 160, 185, 255});
+        Render2D::DrawPixelString(NELEO_LOC("net.entity_wait"), 142, 536, 2, ColorRGBA{140, 160, 185, 255});
     }
 
     Render2D::DrawPixelString("SERVER PC: python tools/net_test_server.py", 142, 566, 1, ColorRGBA{145, 185, 220, 255});
@@ -390,7 +393,7 @@ void NetTestModal::Render() {
     constexpr int radarW = 365;
     constexpr int radarH = 342;
     Render2D::DrawBox(radarX, radarY, radarW, radarH, ColorRGBA{8, 16, 24, 240}, ColorRGBA::Green());
-    Render2D::DrawPixelString("RADAR UDP (ROJO:20HZ / CIAN:60FPS)", radarX + 16, radarY + 12, 1, ColorRGBA::Green());
+    Render2D::DrawPixelString(NELEO_LOC("net.radar.title"), radarX + 16, radarY + 12, 1, ColorRGBA::Green());
 
     const int cx = radarX + radarW / 2;
     const int cy = radarY + radarH / 2 + 10;

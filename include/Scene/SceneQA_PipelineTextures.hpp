@@ -35,10 +35,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G1"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "PIPELINE, TRANSFORMACIONES (MVP/QUAT), MIPMAPS Y FILTRADO GX2";
+        return "qa.g1.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:FILTRO  DPAD ARR/ABJ:UV WRAP  X:MIP COLOR-CODE  A:PAUSA ORBITA";
+        return "qa.g1.controls";
     }
 
 private:

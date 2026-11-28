@@ -1,4 +1,5 @@
 #include "Audio/AudioManager.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Audio/AudioEngine3D.hpp"
 #include "Core/AssetManager.hpp"
 #include "Core/JobSystem.hpp"
@@ -516,7 +517,7 @@ void AudioManager::AudioMixThreadWorker() {
 void AudioManager::BackgroundLoadWorker() {
 #if defined(_WIN32) && !defined(__WIIU__) && !defined(__wiiu__)
     if (!m_audioOpened.load(std::memory_order_acquire)) {
-        SetCurrentAssetLabel("INICIALIZANDO HARDWARE DE AUDIO...");
+        SetCurrentAssetLabel(NELEO_LOC_CSTR("audio.load.init"));
         m_actualFreq = 48000;
         m_actualChannels = 2;
         m_actualFormat = 0x8010u; // PCM S16
@@ -541,7 +542,7 @@ void AudioManager::BackgroundLoadWorker() {
 
     // 1. Cargar CLICK.WAV progresivamente
     std::vector<int16_t> loadedClick;
-    if (LoadWAVProgressive("click.wav", loadedClick, 1, "CARGANDO EFECTO SONORO TACTIL (CLICK.WAV)...")) {
+    if (LoadWAVProgressive("click.wav", loadedClick, 1, NELEO_LOC_CSTR("audio.load.click"))) {
         LockAudioDevice();
         m_clickSamples.swap(loadedClick);
         UnlockAudioDevice();
@@ -551,7 +552,7 @@ void AudioManager::BackgroundLoadWorker() {
     const bool useStreaming = CVarRegistry::Instance().GetBool("audio.bgm_streaming", true);
     bool bgmReady = false;
     if (useStreaming) {
-        SetCurrentAssetLabel("INICIANDO STREAMING BGM PING-PONG (<= 256 KB RAM)...");
+        SetCurrentAssetLabel(NELEO_LOC_CSTR("audio.load.stream"));
         if (OpenBGMStream("music.wav")) {
             m_bytesLoaded.fetch_add(safeMusicBytes, std::memory_order_relaxed);
             bgmReady = true;
@@ -560,7 +561,7 @@ void AudioManager::BackgroundLoadWorker() {
 
     if (!bgmReady) {
         std::vector<int16_t> loadedBGM;
-        if (!LoadWAVProgressive("music.wav", loadedBGM, 2, "CARGANDO BANDA SONORA (MUSIC.WAV) EN MEMORIA RAM...")) {
+        if (!LoadWAVProgressive("music.wav", loadedBGM, 2, NELEO_LOC_CSTR("audio.load.bgm"))) {
             std::vector<int16_t> fallbackBGM;
             GenerateFallbackBGMSamples(fallbackBGM);
             LockAudioDevice();
@@ -580,7 +581,7 @@ void AudioManager::BackgroundLoadWorker() {
     // Garantizar que bytesLoaded iguale el total planeado al 100%
     m_bytesLoaded.store(m_totalBytesToLoad.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
-    SetCurrentAssetLabel("¡CARGA COMPLETA! INICIANDO MENU PRINCIPAL...");
+    SetCurrentAssetLabel(NELEO_LOC_CSTR("audio.load.done"));
     m_isLoading = false;
     m_isFinished.store(true, std::memory_order_release);
 }

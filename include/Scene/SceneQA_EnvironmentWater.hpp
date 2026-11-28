@@ -36,10 +36,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G4"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "SKYBOX CUBEMAP, IBL PBR, VIDRIO REFRACTIVO (IOR) Y AGUA REALISTA";
+        return "qa.g4.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:IBL ON/OFF  DPAD ARR/ABJ:IOR VIDRIO  X:SKYBOX (WCUBE/PROC)  A:PAUSA OLAS";
+        return "qa.g4.controls";
     }
 
 private:

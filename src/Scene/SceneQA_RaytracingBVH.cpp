@@ -1,4 +1,5 @@
 #include "Scene/SceneQA_RaytracingBVH.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Window.hpp"
 #include "Graphics/RaytracingBVHShaderBinary.hpp"
 #include "Graphics/Render2D.hpp"
@@ -234,18 +235,18 @@ void SceneQA_RaytracingBVH::OnQARenderHUD() {
     char line1[128];
     char line2[128];
     char line3[128];
-    std::snprintf(line1, sizeof(line1), "RENDER SCALE: %s (%ux%u = %.0f%% PX) | ACELERACION: %s (%u NODOS)",
+    std::snprintf(line1, sizeof(line1), NELEO_LOC_CSTR("qa.g8.line1"),
                   preset.shortLabel, preset.width, preset.height, static_cast<double>(pixelPct),
-                  m_bvhEnabled ? "BVH STACKLESS" : "FUERZA BRUTA", m_bvhResult.nodeCount);
-    std::snprintf(line2, sizeof(line2), "SOMBRAS RT  : %s | HEATMAP COSTO BVH: %s",
-                  GetShadowModeLabel(), m_heatmapEnabled ? "ACTIVO" : "APAGADO");
-    std::snprintf(line3, sizeof(line3), "ESCENA GPU  : 12 ESFERAS REFLECTIVAS | ANIMACION: %s | UPSCALER BILINEAL HW",
-                  m_animPaused ? "PAUSA" : "ACTIVA");
+                  m_bvhEnabled ? "BVH STACKLESS" : NELEO_LOC_CSTR("qa.g8.brute"), m_bvhResult.nodeCount);
+    std::snprintf(line2, sizeof(line2), NELEO_LOC_CSTR("qa.g8.line2"),
+                  GetShadowModeLabel(), m_heatmapEnabled ? NELEO_LOC_CSTR("common.active") : NELEO_LOC_CSTR("common.off"));
+    std::snprintf(line3, sizeof(line3), NELEO_LOC_CSTR("qa.g8.line3"),
+                  m_animPaused ? NELEO_LOC_CSTR("common.paused") : NELEO_LOC_CSTR("common.active"));
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());
     Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA{150, 255, 175, 255});
-    Render2D::DrawPixelString("CONSEJO: ACTIVA HEATMAP (A) Y ALTERNA BVH VS BRUTE-FORCE (X) PARA VER EL AHORRO DE TESTS",
+    Render2D::DrawPixelString(NELEO_LOC("qa.g8.tip"),
                               30, 184, 2, ColorRGBA::Yellow());
 }
 

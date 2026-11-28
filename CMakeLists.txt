@@ -60,6 +60,7 @@ add_library(engine_core STATIC
     src/Core/Storage/VirtualFileSystem.cpp
     src/Core/Config/EngineConfig.cpp
     src/Core/Config/CVarRegistry.cpp
+    src/Core/Localization/LocalizationManager.cpp
     src/Core/MemoryManager.cpp
     src/Core/Diagnostics/CoreSelfTest.cpp
     ${ENGINE_CORE_PLATFORM_SOURCES}

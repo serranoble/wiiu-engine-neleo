@@ -36,10 +36,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G7"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "TERRENO HEIGHTMAP SPLATTING, RUIDO 3D (MARMOL/MADERA), PARTICULAS Y TOON NPR";
+        return "qa.g7.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:ESTILO (REAL/TOON)  DPAD ARR/ABJ:RUIDO 3D  X:PARTICULAS  A:PAUSA SOL";
+        return "qa.g7.controls";
     }
 
 private:

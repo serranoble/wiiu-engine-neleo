@@ -2,6 +2,7 @@
 #include "Scene/SceneManager.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Audio/AudioManager.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/StackString.hpp"
 #include <cmath>
 #include <algorithm>
@@ -9,7 +10,7 @@
 namespace Neleo {
 
 SceneLoading::SceneLoading() {
-    m_statusText.Format("INICIALIZANDO MOTOR GRAFICO 3D WII U C++20...");
+    m_statusText.Format("%s", NELEO_LOC_CSTR("loading.init"));
 }
 
 void SceneLoading::OnEnter() {
@@ -17,7 +18,7 @@ void SceneLoading::OnEnter() {
     m_targetProgress = 0.0f;
     m_pulseAnim = 0.0f;
     m_finishTimer = 0.0f;
-    m_statusText.Format("INICIALIZANDO MOTOR GRAFICO Y AUDIO ESPRESSO...");
+    m_statusText.Format("%s", NELEO_LOC_CSTR("loading.init_audio"));
 
     // Iniciar la carga asíncrona continua de assets
     AudioManager::Instance().StartAsyncInit();
@@ -66,7 +67,7 @@ void SceneLoading::Render() {
 
     // 2. Título Principal
     Render2D::DrawPixelString("WIIU Demos by Neleo", 412, 175, 4, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("MOTOR GRAFICO 3D & COMPUTACION EN TIEMPO REAL", 370, 225, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString(NELEO_LOC("loading.subtitle"), 370, 225, 2, ColorRGBA::Yellow());
 
     // 3. Contenedor de la Barra de Carga
     constexpr int barX = 200;
@@ -99,12 +100,12 @@ void SceneLoading::Render() {
     float totalMB  = static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
 
     StackString<128> statsStr;
-    statsStr.Format("STREAMING PROGRESIVO: %.2f MB / %.2f MB (%zu KB LEIDOS)",
+    statsStr.Format(NELEO_LOC_CSTR("loading.streaming"),
                     loadedMB, totalMB, loadedBytes / 1024);
     Render2D::DrawPixelString(statsStr.string_view(), 200, 465, 2, ColorRGBA::Yellow());
 
     // 6. Pie de Página Informativo
-    Render2D::DrawPixelString("DESARROLLADO CON LIBWUT, GX2 Y SNDCORE2 PARA NINTENDO WII U", 230, 660, 2, ColorRGBA{150, 170, 200, 255});
+    Render2D::DrawPixelString(NELEO_LOC("loading.footer"), 230, 660, 2, ColorRGBA{150, 170, 200, 255});
 
     Render2D::End();
 }

@@ -7,6 +7,7 @@
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
 #include "Core/ResourceMonitor.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Diagnostics/EngineProfiler.hpp"
 #include <algorithm>
 #include <cmath>
@@ -165,7 +166,7 @@ void GraphicsQASceneBase::Render() {
             OnQARenderHUD();
         } else {
             Render2D::DrawBox(18, 16, 360, 32, ColorRGBA{8, 16, 28, 185}, ColorRGBA::Cyan());
-            Render2D::DrawPixelString("(+) MOSTRAR HUD QA   (B) MENU", 30, 25, 2, ColorRGBA::Yellow());
+            Render2D::DrawPixelString(NELEO_LOC("qabase.show_hud"), 30, 25, 2, ColorRGBA::Yellow());
         }
         Render2D::End();
     }
@@ -175,8 +176,10 @@ void GraphicsQASceneBase::RenderBaseHUD() const noexcept {
     // Barra superior de telemetría (Zero-Alloc: buffers en stack + snprintf)
     Render2D::DrawBox(18, 14, 1244, 68, ColorRGBA{8, 16, 28, 210}, ColorRGBA::Cyan());
 
+    const auto& loc = LocalizationManager::Instance();
     char headerBuf[128];
-    std::snprintf(headerBuf, sizeof(headerBuf), "[%s] %s", GetSuiteCode(), GetSuiteTitle());
+    std::snprintf(headerBuf, sizeof(headerBuf), "[%s] %s",
+                  loc.GetCStr(GetSuiteCode()), loc.GetCStr(GetSuiteTitle()));
     Render2D::DrawPixelString(headerBuf, 32, 24, 2, ColorRGBA::Cyan());
 
     const auto& metrics = ResourceMonitor::Instance().GetMetrics();
@@ -196,8 +199,8 @@ void GraphicsQASceneBase::RenderBaseHUD() const noexcept {
 
     // Barra inferior de controles
     Render2D::DrawBox(18, 654, 1244, 52, ColorRGBA{8, 16, 28, 205}, ColorRGBA{80, 150, 210, 255});
-    Render2D::DrawPixelString(GetControlsHint(), 32, 663, 2, ColorRGBA::Yellow());
-    Render2D::DrawPixelString("L-STICK:MOVER  R-STICK:ROTAR  ZL/ZR:ALTURA  Y:RESET CAM  +:HUD  B:MENU",
+    Render2D::DrawPixelString(loc.Get(GetControlsHint()), 32, 663, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString(NELEO_LOC("qabase.cam_controls"),
                               32, 685, 2, ColorRGBA{185, 215, 245, 255});
 }
 

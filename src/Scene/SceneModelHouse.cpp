@@ -1,4 +1,5 @@
 #include "Scene/SceneModelHouse.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/AssetManager.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/Render2D.hpp"
@@ -241,23 +242,23 @@ void SceneModelHouse::OnQARenderHUD() {
     char line2[128];
     char line3[128];
     std::snprintf(line1, sizeof(line1),
-                  "ARCHIVOS .WMESH: CASA=%s (%uB) | PROPS=%s | ALPHA=%s",
+                  NELEO_LOC_CSTR("model.house.line1"),
                   m_houseMeshLoaded ? "OK" : "ERR",
                   m_houseMeshLoaded ? m_houseMesh.GetHeader().vertexStride : 0u,
                   m_propsMeshLoaded ? "OK" : "ERR",
                   m_alphaMeshLoaded ? "OK" : "ERR");
     std::snprintf(line2, sizeof(line2),
-                  "TEXTURAS .WTEX : CASA=%s | PROPS=%s | ALPHA=%s | GEOMETRIA: %u VERTS / %u TRIS",
+                  NELEO_LOC_CSTR("model.house.line2"),
                   m_houseTexLoaded ? "OK" : "ERR",
                   m_propsTexLoaded ? "OK" : "ERR",
                   m_alphaTexLoaded ? "OK" : "ERR",
                   totalVerts, totalTris);
     std::snprintf(line3, sizeof(line3),
-                  "LUZ: %s | GIRO: %s | PROPS: %s | TEXTURAS (-): %s",
+                  NELEO_LOC_CSTR("model.house.line3"),
                   kLightPresets[m_lightPreset].name,
-                  m_autoRotate ? "ACTIVO" : "PAUSA",
-                  m_showProps ? "VISIBLES" : "OCULTOS",
-                  m_useTextures ? "RGBA8 WTEX" : "SOLO VCOLOR");
+                  m_autoRotate ? NELEO_LOC_CSTR("common.active") : NELEO_LOC_CSTR("common.paused"),
+                  m_showProps ? NELEO_LOC_CSTR("common.visible") : NELEO_LOC_CSTR("common.hidden"),
+                  m_useTextures ? "RGBA8 WTEX" : NELEO_LOC_CSTR("model.house.vcolor"));
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());

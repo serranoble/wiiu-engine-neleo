@@ -41,10 +41,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G6"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "INSTANCING MASIVO, FRUSTUM CULLING (DEBUG CAM) Y LOD DINAMICO";
+        return "qa.g6.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:INSTANCIAS (256/512/1000)  DPAD ARR/ABJ:LOD  A:CULLING  X:DEBUG FRUSTUM";
+        return "qa.g6.controls";
     }
 
 private:

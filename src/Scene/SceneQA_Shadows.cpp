@@ -1,4 +1,5 @@
 #include "Scene/SceneQA_Shadows.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Window.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/ShadowMapRendererGX2.hpp"
@@ -249,18 +250,18 @@ void SceneQA_Shadows::OnQARenderHUD() {
     char line1[128];
     char line2[128];
     char line3[128];
-    std::snprintf(line1, sizeof(line1), "SOMBRAS : %s", GetShadowModeName());
-    std::snprintf(line2, sizeof(line2), "BIAS    : %s", GetBiasPresetName());
-    std::snprintf(line3, sizeof(line3), "SHADOW MAP: %ux%u D32F | FRONT-CULL: %s | SOL: %s",
+    std::snprintf(line1, sizeof(line1), NELEO_LOC_CSTR("qa.g3.line1"), GetShadowModeName());
+    std::snprintf(line2, sizeof(line2), NELEO_LOC_CSTR("qa.g3.line2"), GetBiasPresetName());
+    std::snprintf(line3, sizeof(line3), NELEO_LOC_CSTR("qa.g3.line3"),
                   ShadowMapRendererGX2::Instance().GetResolution(),
                   ShadowMapRendererGX2::Instance().GetResolution(),
                   m_cullFrontFaces ? "ON" : "OFF",
-                  m_sunPaused ? "PAUSA" : "ROTANDO");
+                  m_sunPaused ? NELEO_LOC_CSTR("common.paused") : NELEO_LOC_CSTR("qa.g3.rotating"));
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());
     Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA{150, 255, 175, 255});
-    Render2D::DrawPixelString("CONSEJO: PRUEBA CERO BIAS (ACNE) Y EXCESIVO (PETER PANNING)",
+    Render2D::DrawPixelString(NELEO_LOC("qa.g3.tip"),
                               30, 184, 2, ColorRGBA::Yellow());
 }
 

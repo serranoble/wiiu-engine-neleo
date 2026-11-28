@@ -35,10 +35,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G2"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "PBR COOK-TORRANCE (5x5), MULTI-LUZ (DIR+4PT+SPOT) Y NORMAL/BUMP TBN";
+        return "qa.g2.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:MODO SHADING  DPAD ARR/ABJ:ALBEDO  X:BUMP SCALE  A:PAUSA LUCES";
+        return "qa.g2.controls";
     }
 
 private:

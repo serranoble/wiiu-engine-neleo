@@ -2,6 +2,7 @@
 #include "Scene/SceneAssetError.hpp"
 #include "Core/AssetManager.hpp"
 #include "Core/MemoryManager.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/JobSystem.hpp"
 #include "Core/StackString.hpp"
 #include "Graphics/Render2D.hpp"
@@ -294,27 +295,27 @@ void SceneManager::RenderTransitionScreen() {
     }
 
     // 2. Título Superior
-    Render2D::DrawPixelString("TRANSICION DE ESCENA & AUDITORIA DE RECURSOS", 220, 105, 3, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("SISTEMA DETERMINISTA DE CICLO DE VIDA Y RECLAMACION DE MEMORIA", 240, 145, 2, ColorRGBA{160, 210, 255, 255});
+    Render2D::DrawPixelString(NELEO_LOC("trans.title"), 220, 105, 3, ColorRGBA::Cyan());
+    Render2D::DrawPixelString(NELEO_LOC("trans.subtitle"), 240, 145, 2, ColorRGBA{160, 210, 255, 255});
 
     // 3. Indicador de Fase Activa (Pill interactiva)
-    const char* phaseText = "FASE DESCONOCIDA";
+    const char* phaseText = NELEO_LOC_CSTR("trans.phase.unknown");
     ColorRGBA phaseColor = ColorRGBA::White();
     switch (m_transitionPhase) {
         case TransitionPhase::DrainingGPU:
-            phaseText = "FASE 1/4: DRENADO DE PIPELINE GPU LATTE (GX2DrawDone / GX2Flush)";
+            phaseText = NELEO_LOC_CSTR("trans.phase.1");
             phaseColor = ColorRGBA::Yellow();
             break;
         case TransitionPhase::UnloadingScene:
-            phaseText = "FASE 2/4: LIBERANDO MEMORIA Y DESCARGANDO ESCENA PREVIA";
+            phaseText = NELEO_LOC_CSTR("trans.phase.2");
             phaseColor = ColorRGBA{255, 140, 40, 255}; // Naranja Neón
             break;
         case TransitionPhase::LoadingScene:
-            phaseText = "FASE 3/4: CARGANDO ASSETS E INICIALIZANDO NUEVA ESCENA";
+            phaseText = NELEO_LOC_CSTR("trans.phase.3");
             phaseColor = ColorRGBA{0, 240, 255, 255}; // Cian Neón
             break;
         case TransitionPhase::Finalizing:
-            phaseText = "FASE 4/4: SINCRONIZANDO PRESENTACION Y TRANSICION FINAL (100%)";
+            phaseText = NELEO_LOC_CSTR("trans.phase.4");
             phaseColor = ColorRGBA{80, 250, 120, 255}; // Verde Esmeralda
             break;
         default:
@@ -327,15 +328,15 @@ void SceneManager::RenderTransitionScreen() {
     // 4. Tarjetas de Información de Escenas (Origen -> Destino)
     // Tarjeta Saliente
     Render2D::DrawBox(200, 242, 425, 68, ColorRGBA{10, 20, 35, 220}, ColorRGBA{180, 70, 70, 255});
-    Render2D::DrawPixelString("DESCARGANDO:", 215, 255, 2, ColorRGBA{255, 120, 120, 255});
-    std::string_view outShort = m_outgoingSceneName.empty() ? std::string_view("Ninguna") : std::string_view(m_outgoingSceneName);
+    Render2D::DrawPixelString(NELEO_LOC("trans.unloading"), 215, 255, 2, ColorRGBA{255, 120, 120, 255});
+    std::string_view outShort = m_outgoingSceneName.empty() ? NELEO_LOC("trans.none") : std::string_view(m_outgoingSceneName);
     if (outShort.size() > 24) outShort = outShort.substr(0, 24);
     Render2D::DrawPixelString(outShort, 215, 281, 2, ColorRGBA::White());
 
     // Tarjeta Entrante
     Render2D::DrawBox(655, 242, 425, 68, ColorRGBA{10, 20, 35, 220}, ColorRGBA{50, 180, 120, 255});
-    Render2D::DrawPixelString("PREPARANDO:", 670, 255, 2, ColorRGBA{100, 255, 160, 255});
-    std::string_view inShort = m_incomingSceneName.empty() ? std::string_view("Siguiente") : std::string_view(m_incomingSceneName);
+    Render2D::DrawPixelString(NELEO_LOC("trans.preparing"), 670, 255, 2, ColorRGBA{100, 255, 160, 255});
+    std::string_view inShort = m_incomingSceneName.empty() ? NELEO_LOC("trans.next") : std::string_view(m_incomingSceneName);
     if (inShort.size() > 24) inShort = inShort.substr(0, 24);
     Render2D::DrawPixelString(inShort, 670, 281, 2, ColorRGBA::White());
 
@@ -360,7 +361,7 @@ void SceneManager::RenderTransitionScreen() {
 
     // 6. Panel de Telemetría de Memoria y Auditoría
     Render2D::DrawBox(200, 395, 880, 275, ColorRGBA{8, 16, 28, 240}, ColorRGBA{70, 130, 200, 255});
-    Render2D::DrawPixelString("AUDITORIA DE GESTION DE MEMORIA EN SILICIO CAFE OS", 225, 412, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString(NELEO_LOC("trans.audit.title"), 225, 412, 2, ColorRGBA::Yellow());
 
     auto& mem = MemoryManager::Instance();
     size_t activeAllocs = mem.GetActiveAllocationCount();
@@ -368,40 +369,32 @@ void SceneManager::RenderTransitionScreen() {
     size_t peakBytes    = mem.GetPeakAllocatedBytes();
 
     StackString<160> line1;
-    line1.Format("MEMORIA ACTIVA MOTOR : %zu KB (%.2f MB) | BLOQUES: %zu | PICO: %zu KB",
+    line1.Format(NELEO_LOC_CSTR("trans.audit.mem"),
                  totalBytes / 1024, static_cast<float>(totalBytes) / (1024.0f * 1024.0f), activeAllocs, peakBytes / 1024);
     Render2D::DrawPixelString(line1.string_view(), 225, 448, 2, ColorRGBA::White());
 
     StackString<160> line2;
     if (m_reclaimedBytes > 0) {
-        line2.Format("RECURSOS LIBERADOS EN DESCARGA: %zu KB RECLAMADOS AL HEAP", m_reclaimedBytes / 1024);
+        line2.Format(NELEO_LOC_CSTR("trans.audit.reclaimed"), m_reclaimedBytes / 1024);
     } else {
-        line2.Format("RECURSOS LIBERADOS EN DESCARGA: PURGA DETERMINISTA COMPLETA (0 FUGAS)");
+        line2.Format("%s", NELEO_LOC_CSTR("trans.audit.purged"));
     }
     Render2D::DrawPixelString(line2.string_view(), 225, 484, 2, ColorRGBA{100, 255, 140, 255});
 
-    StackString<160> line3;
-    line3.Format("GARANTIA ANTI-DANGLING: ACTIVA (PUNTEROS ANULADOS A nullptr EN LIBERACION)");
-    Render2D::DrawPixelString(line3.string_view(), 225, 520, 2, ColorRGBA{0, 220, 255, 255});
-
-    StackString<160> line4;
-    line4.Format("LATTE GPU DRAIN BARRIER: SINCRONIZADA (GX2DrawDone ANTES DE REASIGNAR VRAM)");
-    Render2D::DrawPixelString(line4.string_view(), 225, 556, 2, ColorRGBA{255, 200, 100, 255});
-
-    StackString<160> line5;
-    line5.Format("ARENAS EFIMERAS: FRAME (128KB) & SCENE (2MB) REINICIALIZADAS EN O(1)");
-    Render2D::DrawPixelString(line5.string_view(), 225, 592, 2, ColorRGBA{200, 160, 255, 255});
+    Render2D::DrawPixelString(NELEO_LOC("trans.audit.dangling"), 225, 520, 2, ColorRGBA{0, 220, 255, 255});
+    Render2D::DrawPixelString(NELEO_LOC("trans.audit.drain"), 225, 556, 2, ColorRGBA{255, 200, 100, 255});
+    Render2D::DrawPixelString(NELEO_LOC("trans.audit.arenas"), 225, 592, 2, ColorRGBA{200, 160, 255, 255});
 
     StackString<160> line6;
     uint32_t asyncLoaded = AssetManager::GetAsyncBytesLoaded();
     uint32_t asyncTotal  = AssetManager::GetAsyncTotalBytes();
     if (asyncTotal > 0) {
-        line6.Format("STREAMING ASINCRONO CORE 2 (256KB BURST): %.2f MB / %.2f MB (%u ARCHIVOS)",
+        line6.Format(NELEO_LOC_CSTR("trans.audit.stream"),
                      static_cast<float>(asyncLoaded) / (1024.0f * 1024.0f),
                      static_cast<float>(asyncTotal) / (1024.0f * 1024.0f),
                      AssetManager::GetAsyncFilesLoaded());
     } else {
-        line6.Format("ESTADO DE CACHE LATTE: FLUSH & INVALIDATE COMPLETADO SIN CORRUPCION");
+        line6.Format("%s", NELEO_LOC_CSTR("trans.audit.cache"));
     }
     Render2D::DrawPixelString(line6.string_view(), 225, 628, 2, ColorRGBA{120, 220, 255, 255});
 
@@ -577,7 +570,8 @@ void SceneManager::RenderPauseModal() {
     ColorRGBA modalBorder{ 0, borderPulse, 255, 255 };
 
     StackString<96> sceneText;
-    sceneText.Format("ESCENA ACTUAL: [%s]", m_pausedSceneName.empty() ? "SISTEMA" : m_pausedSceneName.c_str());
+    sceneText.Format(NELEO_LOC_CSTR("pause.scene"),
+                     m_pausedSceneName.empty() ? NELEO_LOC_CSTR("pause.system") : m_pausedSceneName.c_str());
 
     auto drawModalBtn = [](int x, int y, int w, int h, std::string_view label,
                            bool hovered, ColorRGBA normalFill, ColorRGBA hoverFill,
@@ -601,31 +595,31 @@ void SceneManager::RenderPauseModal() {
 
     // 3. Cabecera del modal
     Render2D::DrawBox(modalX, modalY, modalW, 60, ColorRGBA{18, 28, 48, 255}, modalBorder);
-    Render2D::DrawPixelString("|| PAUSA", modalX + 235, modalY + 18, 3, ColorRGBA::Cyan());
+    Render2D::DrawPixelString(NELEO_LOC("pause.title"), modalX + 235, modalY + 18, 3, ColorRGBA::Cyan());
 
     // 4. Subtítulos informativos (Escala Canónica 2)
     Render2D::DrawPixelString(sceneText.string_view(), modalX + 40, modalY + 80, 2, ColorRGBA{180, 220, 255, 255});
-    Render2D::DrawPixelString("SIMULACION Y AUDIO DETENIDOS", modalX + 40, modalY + 110, 2, ColorRGBA{255, 215, 0, 255});
+    Render2D::DrawPixelString(NELEO_LOC("pause.subtitle"), modalX + 40, modalY + 110, 2, ColorRGBA{255, 215, 0, 255});
 
     // 5. Botones interactivos
-    drawModalBtn(btnX, btn1Y, btnW, btnH, "> REANUDAR (BOTON + / A)",
+    drawModalBtn(btnX, btn1Y, btnW, btnH, NELEO_LOC("pause.btn.resume"),
                  m_resumeHovered,
                  ColorRGBA{20, 36, 60, 240}, ColorRGBA{35, 75, 130, 255},
                  ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow());
 
-    drawModalBtn(btnX, btn2Y, btnW, btnH, "* CONFIGURACION (BOTON - / X)",
+    drawModalBtn(btnX, btn2Y, btnW, btnH, NELEO_LOC("pause.btn.options"),
                  m_optionsHovered,
                  ColorRGBA{20, 36, 60, 240}, ColorRGBA{25, 90, 130, 255},
                  ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow());
 
-    drawModalBtn(btnX, btn3Y, btnW, btnH, "< VOLVER AL MENU (BOTON B)",
+    drawModalBtn(btnX, btn3Y, btnW, btnH, NELEO_LOC("pause.btn.menu"),
                  m_menuHovered,
                  ColorRGBA{20, 36, 60, 240}, ColorRGBA{130, 35, 35, 255},
                  ColorRGBA{0, 210, 255, 255}, ColorRGBA::Yellow());
 
     // 6. Indicaciones ergonómicas
-    Render2D::DrawPixelString("TOCA UN BOTON O PRESIONA + EN EL GAMEPAD", modalX + 86, modalY + 332, 2, ColorRGBA{130, 155, 185, 255});
-    Render2D::DrawPixelString("PARA VOLVER AL JUEGO EN CUALQUIER MOMENTO", modalX + 74, modalY + 358, 2, ColorRGBA{130, 155, 185, 255});
+    Render2D::DrawPixelString(NELEO_LOC("pause.hint1"), modalX + 86, modalY + 332, 2, ColorRGBA{130, 155, 185, 255});
+    Render2D::DrawPixelString(NELEO_LOC("pause.hint2"), modalX + 74, modalY + 358, 2, ColorRGBA{130, 155, 185, 255});
 
     // Línea decorativa inferior
     Render2D::DrawLine(modalX + 10, modalY + modalH - 12, modalX + modalW - 10, modalY + modalH - 12, ColorRGBA::Cyan(), 2.0f);

@@ -1,4 +1,5 @@
 #include "Scene/SceneQA_PostProcessAlpha.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Window.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/RenderGraph.hpp"
@@ -323,18 +324,17 @@ void SceneQA_PostProcessAlpha::OnQARenderHUD() {
 
     char line1[128];
     char line2[128];
-    char line3[128];
-    std::snprintf(line1, sizeof(line1), "TONEMAP : %s | EXPOSICION: %.2fX | GAMMA sRGB: %s",
+    std::snprintf(line1, sizeof(line1), NELEO_LOC_CSTR("qa.g5.line1"),
                   GetToneMapLabel(), static_cast<double>(m_settings.exposure),
-                  m_settings.gammaEnabled ? "ON" : "OFF (LINEAL)");
-    std::snprintf(line2, sizeof(line2), "BLOOM   : %s (320x192 KAWASE 2D 5-TAP) | NIEBLA: %s",
-                  m_settings.bloomEnabled ? "ACTIVO" : "APAGADO", GetFogLabel());
-    std::snprintf(line3, sizeof(line3), "ESCENA  : 3 ORBES HDR 5.8X | 4 CELOSIAS ALPHA-CUTOUT | 3 VITRALES BACK-TO-FRONT");
+                  m_settings.gammaEnabled ? "ON" : NELEO_LOC_CSTR("qa.g5.linear"));
+    std::snprintf(line2, sizeof(line2), NELEO_LOC_CSTR("qa.g5.line2"),
+                  m_settings.bloomEnabled ? NELEO_LOC_CSTR("common.active") : NELEO_LOC_CSTR("common.off"),
+                  GetFogLabel());
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());
-    Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA{150, 255, 175, 255});
-    Render2D::DrawPixelString("CONSEJO: COMPARA ACES VS OFF(CLAMP) Y GIRA DETRAS DE LOS VITRALES PARA VER SORTING",
+    Render2D::DrawPixelString(NELEO_LOC("qa.g5.line3"), 30, 156, 2, ColorRGBA{150, 255, 175, 255});
+    Render2D::DrawPixelString(NELEO_LOC("qa.g5.tip"),
                               30, 184, 2, ColorRGBA::Yellow());
 }
 

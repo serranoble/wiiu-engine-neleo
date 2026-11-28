@@ -35,10 +35,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G3"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "SOMBRAS 2-PASS GX2 (HARD / PCF 3x3 / PCF 5x5, BIAS Y ACNE/PANNING)";
+        return "qa.g3.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:MODO PCF  DPAD ARR/ABJ:BIAS (ACNE/OPT/PAN)  X:FRONT-CULL  A:PAUSA SOL";
+        return "qa.g3.controls";
     }
 
 private:

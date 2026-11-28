@@ -1,4 +1,5 @@
 #include "Core/ResourceMonitor.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/MemoryManager.hpp"
 #include "Core/StackString.hpp"
 #include "Audio/AudioEngine3D.hpp"
@@ -166,12 +167,12 @@ void ResourceMonitor::Render() {
     rows[7].percent = m_metrics.rhiBypassPercent; rows[7].color = getBypassColor(m_metrics.rhiBypassPercent);
 
     StackString<64> footerStr;
-    footerStr.Format("FPS: %4.1f | [-] OCULTAR", static_cast<double>(m_metrics.fps));
+    footerStr.Format(NELEO_LOC_CSTR("osd.footer"), static_cast<double>(m_metrics.fps));
 
     Render2D::Begin();
     Render2D::DrawBox(panelX, panelY, panelW, panelH, ColorRGBA{8, 14, 26, 238}, borderColor);
     Render2D::DrawBox(panelX, panelY, panelW, 32, ColorRGBA{15, 30, 52, 250}, borderColor);
-    Render2D::DrawPixelString("TELEMETRIA RECURSOS [-]", panelX + 35, panelY + 9, 2, ColorRGBA{255, 220, 40, 255});
+    Render2D::DrawPixelString(NELEO_LOC("osd.title"), panelX + 35, panelY + 9, 2, ColorRGBA{255, 220, 40, 255});
 
     int rowY = panelY + 38;
     for (const auto& r : rows) {

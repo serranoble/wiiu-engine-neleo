@@ -9,6 +9,7 @@
 #include "Scene/SceneQA_RaytracingBVH.hpp"
 #include "Scene/SceneManager.hpp"
 #include "Core/Diagnostics/EngineSelfTestSuite.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Input/InputManager.hpp"
 #include "Audio/AudioManager.hpp"
 #include "Graphics/Render2D.hpp"
@@ -31,16 +32,16 @@ constexpr int kRowGap = 6;
 } // namespace
 
 GraphicsQAModal::GraphicsQAModal()
-    : m_closeButton(975, 608, 165, 40, "CERRAR (B)", 2) {
+    : m_closeButton(975, 608, 165, 40, NELEO_LOC("qa.btn_close"), 2) {
     m_suites = {{
-        {"G1", "PIPELINE, TRANSFORMACIONES, MIPMAPS Y FILTRADO GX2", "CGP 4-6 / RTR4 2,4,6", true},
-        {"G2", "ILUMINACION, PBR COOK-TORRANCE Y NORMAL/PARALLAX",  "CGP 7,10 / RTR4 5,9",  true},
-        {"G3", "SOMBRAS EN TIEMPO REAL (SHADOW MAP, PCF Y BIAS)",   "CGP 8 / RTR4 7",       true},
-        {"G4", "ENTORNO, SKYBOX, IBL Y AGUA REALISTA (FRESNEL)",    "CGP 9,15 / RTR4 10,13",true},
-        {"G5", "TRANSPARENCIA, HDR, TONE MAPPING ACES Y BLOOM",     "CGP 14 / RTR4 5,8,12", true},
-        {"G6", "INSTANCING MASIVO, FRUSTUM CULLING, LOD Y SKIN",    "CGP 4.9 / RTR4 18-19", true},
-        {"G7", "TERRENO HEIGHTMAP, RUIDO 3D, PARTICULAS Y TOON",    "CGP 12,14 / RTR4 15",  true},
-        {"G8", "RAY TRACING EN GPU (BVH) Y RENDER SCALE LATTE",     "CGP 16 / RTR4 11,22",  true}
+        {"G1", "qa.suite.g1", "CGP 4-6 / RTR4 2,4,6", true},
+        {"G2", "qa.suite.g2", "CGP 7,10 / RTR4 5,9",  true},
+        {"G3", "qa.suite.g3", "CGP 8 / RTR4 7",       true},
+        {"G4", "qa.suite.g4", "CGP 9,15 / RTR4 10,13",true},
+        {"G5", "qa.suite.g5", "CGP 14 / RTR4 5,8,12", true},
+        {"G6", "qa.suite.g6", "CGP 4.9 / RTR4 18-19", true},
+        {"G7", "qa.suite.g7", "CGP 12,14 / RTR4 15",  true},
+        {"G8", "qa.suite.g8", "CGP 16 / RTR4 11,22",  true}
     }};
 
     m_closeButton.SetColors(
@@ -174,8 +175,8 @@ void GraphicsQAModal::Render() {
 
     // Marco principal del modal
     Render2D::DrawBox(kModalX, kModalY, kModalW, kModalH, ColorRGBA{12, 22, 38, 245}, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("LABORATORIO DE CALIDAD GRAFICA (CGP + RTR4)", 265, 74, 3, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("SELECCIONA UNA SUITE DE VALIDACION (D-PAD + A O TACTIL)", 280, 112, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString(NELEO_LOC("qa.title"), 265, 74, 3, ColorRGBA::Cyan());
+    Render2D::DrawPixelString(NELEO_LOC("qa.subtitle"), 280, 112, 2, ColorRGBA::Yellow());
 
     for (size_t i = 0; i < SUITE_COUNT; ++i) {
         const auto& suite = m_suites[i];
@@ -192,11 +193,12 @@ void GraphicsQAModal::Render() {
         Render2D::DrawBox(kListX, ry, kRowW, kRowH, fill, border);
 
         char rowBuf[128];
-        std::snprintf(rowBuf, sizeof(rowBuf), "[%s] %s", suite.code, suite.title);
+        std::snprintf(rowBuf, sizeof(rowBuf), "[%s] %s",
+                      suite.code, LocalizationManager::Instance().GetCStr(suite.title));
         const ColorRGBA textCol = suite.implemented ? ColorRGBA::White() : ColorRGBA{155, 165, 185, 255};
         Render2D::DrawPixelString(rowBuf, kListX + 14, ry + 8, 2, textCol);
 
-        const char* badge = suite.implemented ? "ACTIVA" : "PLANIFICADA";
+        const char* badge = suite.implemented ? NELEO_LOC_CSTR("qa.badge.active") : NELEO_LOC_CSTR("qa.badge.planned");
         const ColorRGBA badgeCol = suite.implemented ? ColorRGBA{110, 255, 150, 255} : ColorRGBA{215, 175, 95, 255};
         Render2D::DrawPixelString(badge, kListX + 835, ry + 8, 2, badgeCol);
 
@@ -204,7 +206,7 @@ void GraphicsQAModal::Render() {
     }
 
     if (m_noticeTimer > 0.0f) {
-        Render2D::DrawPixelString("SUITE EN PLANIFICACION (DOCS/GRAPHICS_QUALITY_PLAN_AUDIT.MD)",
+        Render2D::DrawPixelString(NELEO_LOC("qa.notice.planned"),
                                   140, 620, 2, ColorRGBA::Yellow());
     } else {
         uint32_t activeSuites = 0u;
@@ -214,14 +216,14 @@ void GraphicsQAModal::Render() {
         char selfTestBuf[128];
         if (m_selfTestReport.AllPassed()) {
             std::snprintf(selfTestBuf, sizeof(selfTestBuf),
-                          "SELF-TEST MOTOR: %u/%u PASS (X:RETEST) | SUITES: %u/%u",
+                          NELEO_LOC_CSTR("qa.selftest.pass"),
                           m_selfTestReport.passedCount, m_selfTestReport.totalCount,
                           activeSuites, static_cast<unsigned>(SUITE_COUNT));
             Render2D::DrawPixelString(selfTestBuf, 140, 620, 2, ColorRGBA{115, 255, 160, 255});
         } else {
             const auto* fail = m_selfTestReport.GetFirstFailure();
             std::snprintf(selfTestBuf, sizeof(selfTestBuf),
-                          "SELF-TEST FAIL %u/%u: %s (%s)",
+                          NELEO_LOC_CSTR("qa.selftest.fail"),
                           m_selfTestReport.passedCount, m_selfTestReport.totalCount,
                           fail ? fail->name : "UNKNOWN",
                           fail ? fail->detail : "");

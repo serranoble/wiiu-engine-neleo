@@ -28,6 +28,7 @@
 #include "Core/ArenaVector.hpp"
 #include "Core/Config/EngineConfig.hpp"
 #include "Core/Config/CVarRegistry.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Storage/StorageManager.hpp"
 #include "Core/Storage/CryptoHMAC.hpp"
 #include "Core/Storage/VirtualFileSystem.hpp"

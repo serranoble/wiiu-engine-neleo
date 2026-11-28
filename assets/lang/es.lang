@@ -1,0 +1,300 @@
+# Neleo 3D Engine - Espanol (es)
+# ASCII compatible con fuente bitmap 5x7 de Render2D
+
+# Configuracion de Graficos (EngineConfig)
+cfg.filter.point=PUNTO (NEAREST)
+cfg.filter.bilinear=BILINEAL
+cfg.filter.aniso2x=ANISOTROPICO 2X
+cfg.filter.aniso4x=ANISOTROPICO 4X
+cfg.filter.aniso8x=ANISOTROPICO 8X
+cfg.filter.aniso16x=ANISOTROPICO 16X
+
+# Menu Principal (SceneMenu)
+menu.subtitle1=FRAMEWORK Y MOTOR GRAFICO C++20
+menu.subtitle2=PIPELINE 100% NATIVO GX2 + SNDCORE2 + ENGINE_NET
+menu.item.qa.label=LABORATORIO GRAFICO (QA)
+menu.item.qa.desc=SUITES G1-G8: MIPMAPS, PBR, SOMBRAS, HDR Y RAY TRACING
+menu.item.house.label=MODELO ESTATICO: CASA (COOKER)
+menu.item.house.desc=DUTCH HOUSE (.WMESH 48B + .WTEX + PROPS + ALPHA)
+menu.item.bird.label=MODELO ANIMADO: PAJARO (COOKER)
+menu.item.bird.desc=BIRD ORANGE (.WMESH 80B + .WSKEL + .WANIM + SKINNING)
+menu.item.options.label=OPCIONES DEL MOTOR
+menu.item.options.desc=FILTRADO GX2, VSYNC, AUDIO, HAPTICOS E IDIOMA
+menu.item.net.label=PRUEBA DE RED (UDP / TCP)
+menu.item.net.desc=TECLADO WII U (NN::SWKBD), PING TCP, UDP Y RADAR
+menu.footer.status=ESTADO: 8 LIBRERIAS ESTATICAS (100% NATIVO - 0 SDL)
+menu.footer.controls=D-PAD ARRIBA/ABAJO + (A) O TACTIL PARA SELECCIONAR
+menu.footer.summary=COOKER: CASA + PAJARO | QA: G1-G8 | NET TEST
+
+# Opciones del Motor (SceneOptions)
+options.title=CONFIGURACION DEL MOTOR - AJUSTES GLOBALES
+options.hint=D-PAD ARRIBA/ABAJO: NAVEGAR | (A) / TACTIL: CAMBIAR | (L)/(R): PESTANAS | (+): GUARDAR
+options.tab.graphics=1. GRAFICOS
+options.tab.audio=2. AUDIO
+options.tab.controls=3. CONTROL & HW
+options.btn.save=[GUARDAR AJUSTES (+)]
+options.btn.defaults=[DEFECTOS FABRICA (X)]
+options.gfx.resolution=RESOLUCION SCANBUFFER: [720P NATIVO (1280x720)]
+options.gfx.vsync=SINCRONIZACION VSYNC: [%s]
+options.gfx.vsync_on=60 FPS FIJOS (ACTIVADO)
+options.gfx.vsync_off=SIN LIMITE (DESACTIVADO)
+options.gfx.filter=FILTRADO DE TEXTURAS: [%s]
+options.gfx.osd=TELEMETRIA OSD (BOTON -): [%s]
+options.gfx.osd_on=ACTIVADA (VISIBLE)
+options.gfx.osd_off=DESACTIVADA (OCULTA)
+options.gfx.silicon=SILICIO GRAFICO: [GPU AMD LATTE R700 @ 550 MHz]
+options.audio.master=VOLUMEN MAESTRO GENERAL: [%d%%]
+options.audio.bgm=MUSICA DE FONDO (BGM): [%s]
+options.audio.bgm_on=ACTIVADA (REPRODUCIENDO)
+options.audio.bgm_off=DESACTIVADA (SILENCIO)
+options.audio.bgm_vol=VOLUMEN MUSICA BGM: [%d%%]
+options.audio.sfx=EFECTOS DE SONIDO (SFX): [%s]
+options.audio.sfx_on=ACTIVADOS
+options.audio.sfx_off=DESACTIVADOS
+options.audio.test_sfx=[PROBAR SFX DE INTERFAZ]
+options.ctrl.rumble=VIBRACION HAPTICA: [%s]
+options.ctrl.rumble_on=ACTIVADA
+options.ctrl.rumble_off=DESACTIVADA
+options.ctrl.intensity=INTENSIDAD DE VIBRACION: [%s]
+options.ctrl.intensity_low=SUAVE (30%)
+options.ctrl.intensity_med=MEDIA (70%)
+options.ctrl.intensity_high=FUERTE (100%)
+options.ctrl.deadzone=ZONA MUERTA ANALOGICA: [%s]
+options.ctrl.dz_low=PRECISA (10%)
+options.ctrl.dz_med=ESTANDAR (18%)
+options.ctrl.dz_high=AMPLIA (25%)
+options.ctrl.test_rumble=[PROBAR PULSO HAPTICO (200 MS)]
+options.ctrl.language=IDIOMA / LANGUAGE: [%s]
+options.status.saving=GUARDANDO AJUSTES EN DISCO...
+options.status.busy=COLA DE GUARDADO OCUPADA, REINTENTA
+options.status.defaults=AJUSTES RESTABLECIDOS A VALORES DE FABRICA
+options.status.saved=AJUSTES GUARDADOS CORRECTAMENTE EN DISCO
+options.status.save_error=ERROR AL GUARDAR CONFIGURACION EN DISCO
+
+# Pantalla de Carga (SceneLoading)
+loading.init=INICIALIZANDO MOTOR GRAFICO 3D WII U C++20...
+loading.init_audio=INICIALIZANDO MOTOR GRAFICO Y AUDIO ESPRESSO...
+loading.subtitle=MOTOR GRAFICO 3D & COMPUTACION EN TIEMPO REAL
+loading.streaming=STREAMING PROGRESIVO: %.2f MB / %.2f MB (%zu KB LEIDOS)
+loading.footer=DESARROLLADO CON LIBWUT, GX2 Y SNDCORE2 PARA NINTENDO WII U
+
+# Error de Assets (SceneAssetError)
+asset_err.btn_accept=[ ACEPTAR Y VOLVER AL MENU ]
+asset_err.banner=[!] ERROR: RECURSOS NO ENCONTRADOS
+asset_err.scene_label=NO SE PUDO INICIAR LA ESCENA:
+asset_err.list_header=LOS SIGUIENTES ARCHIVOS NO FUERON ENCONTRADOS EN EL SISTEMA:
+asset_err.item=[-] ASSET REQUERIDO: %s
+asset_err.more=... Y %zu ARCHIVOS ADICIONALES
+asset_err.solution1=SOLUCION: VERIFICA QUE LOS ARCHIVOS ESTEN EN 'content/' O 'assets/'
+asset_err.solution2=JUNTO AL BINARIO DEL MOTOR (.WUHB / .RPX) Y RECOMPILA EL PROYECTO.
+
+# HUD Overlay (HUDOverlay)
+hud.title=CONTROL 1 & TACTIL | FPS: %d %s
+hud.vsync=(60 FPS VSYNC)
+hud.uncapped=(SIN LIMITE)
+hud.presses=PULSACIONES: %d
+hud.last_input=ULTIMA ENTRADA: %s
+hud.touch_hint=TOCA Y ARRASTRA EL CUADRADO BLANCO EN PANTALLA
+
+# Modal Laboratorio Grafico (GraphicsQAModal)
+qa.title=LABORATORIO DE CALIDAD GRAFICA (CGP + RTR4)
+qa.subtitle=SELECCIONA UNA SUITE DE VALIDACION (D-PAD + A O TACTIL)
+qa.btn_close=CERRAR (B)
+qa.badge.active=ACTIVA
+qa.badge.planned=PLANIFICADA
+qa.notice.planned=SUITE EN PLANIFICACION (DOCS/GRAPHICS_QUALITY_PLAN_AUDIT.MD)
+qa.selftest.pass=SELF-TEST MOTOR: %u/%u PASS (X:RETEST) | SUITES: %u/%u
+qa.selftest.fail=SELF-TEST FAIL %u/%u: %s (%s)
+qa.suite.g1=PIPELINE, TRANSFORMACIONES, MIPMAPS Y FILTRADO GX2
+qa.suite.g2=ILUMINACION, PBR COOK-TORRANCE Y NORMAL/PARALLAX
+qa.suite.g3=SOMBRAS EN TIEMPO REAL (SHADOW MAP, PCF Y BIAS)
+qa.suite.g4=ENTORNO, SKYBOX, IBL Y AGUA REALISTA (FRESNEL)
+qa.suite.g5=TRANSPARENCIA, HDR, TONE MAPPING ACES Y BLOOM
+qa.suite.g6=INSTANCING MASIVO, FRUSTUM CULLING, LOD Y SKIN
+qa.suite.g7=TERRENO HEIGHTMAP, RUIDO 3D, PARTICULAS Y TOON
+qa.suite.g8=RAY TRACING EN GPU (BVH) Y RENDER SCALE LATTE
+
+# Modal Prueba de Red (NetTestModal)
+net.title=PRUEBA DE RED (UDP 7778 + TCP 7777) & TECLADO WII U
+net.hint=L: TECLADO IP | R: CEMU 127.0.0.1 | A: CONECTAR | X: PING TCP | Y: CMD UDP | B: CERRAR
+net.btn.edit_ip=IP: [%s] - EDITAR TECLADO (L)
+net.btn.cemu=[CEMU 127.0.0.1 (R)]
+net.btn.connect=[CONECTAR (A)]
+net.btn.disconnect=[DESCONECTAR (A)]
+net.btn.tcp_ping=[PING TCP (X)]
+net.btn.udp_cmd=[CMD UDP (Y)]
+net.btn.close=[CERRAR (B)]
+net.kb.prompt=INGRESA IP DEL SERVIDOR (EJ. 192.168.1.50)
+net.fb.ip_saved=IP ACTUALIZADA Y GUARDADA
+net.fb.ip_invalid=IP INVALIDA: USA FORMATO A.B.C.D (EJ. 192.168.1.50)
+net.fb.kb_cancelled=EDICION DE TECLADO CANCELADA
+net.fb.loopback=DESTINO FIJADO A 127.0.0.1 (CEMU LOCAL)
+net.fb.disconnected=SESION DESCONECTADA
+net.fb.ip_invalid_conn=IP INVALIDA: EDITA LA IP ANTES DE CONECTAR
+net.fb.connecting=CONECTANDO UDP 7778 + TCP 7777...
+net.fb.socket_err=ERROR AL ABRIR SOCKETS DE RED
+net.fb.tcp_not_conn=TCP NO CONECTADO: PULSA CONECTAR PRIMERO
+net.fb.tcp_sent=MENSAJE TCP ENVIADO - ESPERANDO ECHO
+net.fb.tcp_err=ERROR AL ENVIAR MENSAJE TCP
+net.fb.udp_closed=UDP CERRADO: PULSA CONECTAR PRIMERO
+net.fb.udp_sent=PAQUETE BINARIO WUN1 ENVIADO POR UDP
+net.fb.udp_err=ERROR AL ENVIAR PAQUETE UDP
+net.fb.udp_active=CONEXION UDP ACTIVA CON SERVIDOR
+net.fb.timeout=TIMEOUT: SERVIDOR NO RESPONDE
+net.telemetry.title=TELEMETRIA EN VIVO (PROTOCOLO WUN1 BIG-ENDIAN)
+net.state.disconnected=DESCONECTADO
+net.state.connecting=CONECTANDO...
+net.state.connected=CONECTADO
+net.state.timeout=TIMEOUT
+net.udp_state=ESTADO UDP (%u): %s
+net.tcp_state=ESTADO TCP (%u): %s
+net.last_tcp=ULTIMO MENSAJE TCP RECIBIDO:
+net.entity_pos=ENTIDAD #1001: X=%.2f Y=%.2f Z=%.2f (T=%u)
+net.entity_wait=ENTIDAD #1001: ESPERANDO SNAPSHOTS UDP...
+net.radar.title=RADAR UDP (ROJO:20HZ / CIAN:60FPS)
+
+# Componentes Comunes y Framework Global
+ui.back=< VOLVER
+common.active=ACTIVO
+common.paused=PAUSA
+common.off=APAGADO
+common.visible=VISIBLES
+common.hidden=OCULTOS
+common.none=NINGUNO
+net.no_tcp_msg=(sin mensajes TCP)
+
+# Transicion de Escena y Auditoria (SceneManager)
+trans.title=TRANSICION DE ESCENA & AUDITORIA DE RECURSOS
+trans.subtitle=SISTEMA DETERMINISTA DE CICLO DE VIDA Y RECLAMACION DE MEMORIA
+trans.phase.unknown=FASE DESCONOCIDA
+trans.phase.1=FASE 1/4: DRENADO DE PIPELINE GPU LATTE (GX2DrawDone / GX2Flush)
+trans.phase.2=FASE 2/4: LIBERANDO MEMORIA Y DESCARGANDO ESCENA PREVIA
+trans.phase.3=FASE 3/4: CARGANDO ASSETS E INICIALIZANDO NUEVA ESCENA
+trans.phase.4=FASE 4/4: SINCRONIZANDO PRESENTACION Y TRANSICION FINAL (100%)
+trans.unloading=DESCARGANDO:
+trans.none=Ninguna
+trans.preparing=PREPARANDO:
+trans.next=Siguiente
+trans.audit.title=AUDITORIA DE GESTION DE MEMORIA EN SILICIO CAFE OS
+trans.audit.mem=MEMORIA ACTIVA MOTOR : %zu KB (%.2f MB) | BLOQUES: %zu | PICO: %zu KB
+trans.audit.reclaimed=RECURSOS LIBERADOS EN DESCARGA: %zu KB RECLAMADOS AL HEAP
+trans.audit.purged=RECURSOS LIBERADOS EN DESCARGA: PURGA DETERMINISTA COMPLETA (0 FUGAS)
+trans.audit.dangling=GARANTIA ANTI-DANGLING: ACTIVA (PUNTEROS ANULADOS A nullptr EN LIBERACION)
+trans.audit.drain=LATTE GPU DRAIN BARRIER: SINCRONIZADA (GX2DrawDone ANTES DE REASIGNAR VRAM)
+trans.audit.arenas=ARENAS EFIMERAS: FRAME (128KB) & SCENE (2MB) REINICIALIZADAS EN O(1)
+trans.audit.stream=STREAMING ASINCRONO CORE 2 (256KB BURST): %.2f MB / %.2f MB (%u ARCHIVOS)
+trans.audit.cache=ESTADO DE CACHE LATTE: FLUSH & INVALIDATE COMPLETADO SIN CORRUPCION
+
+# Modal de Pausa (SceneManager)
+pause.title=|| PAUSA
+pause.scene=ESCENA ACTUAL: [%s]
+pause.system=SISTEMA
+pause.subtitle=SIMULACION Y AUDIO DETENIDOS
+pause.btn.resume=> REANUDAR (BOTON + / A)
+pause.btn.options=* CONFIGURACION (BOTON - / X)
+pause.btn.menu=< VOLVER AL MENU (BOTON B)
+pause.hint1=TOCA UN BOTON O PRESIONA + EN EL GAMEPAD
+pause.hint2=PARA VOLVER AL JUEGO EN CUALQUIER MOMENTO
+
+# Monitor OSD (ResourceMonitor)
+osd.title=TELEMETRIA RECURSOS [-]
+osd.footer=FPS: %4.1f | [-] OCULTAR
+
+# Teclado Virtual (SoftwareKeyboard)
+swkbd.title=TECLADO VIRTUAL
+swkbd.hint=TECLADO FISICO / RATON / TACTIL / MANDO: [DPAD] MOVER  [A] PULSAR  [X] BORRAR  [+/ENTER] OK  [B/ESC] CANCELAR
+
+# Carga de Audio (AudioManager)
+audio.load.init=INICIALIZANDO HARDWARE DE AUDIO...
+audio.load.click=CARGANDO EFECTO SONORO TACTIL (CLICK.WAV)...
+audio.load.stream=INICIANDO STREAMING BGM PING-PONG (<= 256 KB RAM)...
+audio.load.bgm=CARGANDO BANDA SONORA (MUSIC.WAV) EN MEMORIA RAM...
+audio.load.done=CARGA COMPLETA! INICIANDO MENU PRINCIPAL...
+
+# QA Base y Modelos Cooker
+qabase.show_hud=(+) MOSTRAR HUD QA   (B) MENU
+qabase.cam_controls=L-STICK:MOVER  R-STICK:ROTAR  ZL/ZR:ALTURA  Y:RESET CAM  +:HUD  B:MENU
+model.house.code=COOKER ESTATICO
+model.house.title=VALIDACION DE MODELO ESTATICO COCINADO (DUTCH HOUSE .WMESH + .WTEX)
+model.house.controls=DPAD IZQ/DER:LUZ  A:GIRO  X:PROPS  -:TEXTURAS ON/OFF  L/R-STICK:CAM  B:MENU
+model.house.line1=ARCHIVOS .WMESH: CASA=%s (%uB) | PROPS=%s | ALPHA=%s
+model.house.line2=TEXTURAS .WTEX : CASA=%s | PROPS=%s | ALPHA=%s | GEOMETRIA: %u VERTS / %u TRIS
+model.house.line3=LUZ: %s | GIRO: %s | PROPS: %s | TEXTURAS (-): %s
+model.house.vcolor=SOLO VCOLOR
+model.bird.code=COOKER SKINNING
+model.bird.title=VALIDACION DE MODELO ANIMADO COCINADO (BIRD ORANGE .WMESH/.WSKEL/.WANIM/.WTEX)
+model.bird.controls=DPAD IZQ/DER:CLIP  ARR/ABJ:GIRO  A:PAUSA  X:ARCILLA  -:WTEX ON/OFF  B:MENU
+model.bird.line1=ARCHIVOS COOKER: WMESH=%s (%uB) | WSKEL=%s (%u HUESOS) | WANIM=%s | WTEX=%s
+model.bird.line2=CLIP [%u/%u]: %s (T=%.2f/%.2fs) | GEOMETRIA: %u VERTS / %u TRIS
+model.bird.line3=ANIM: %s | MODO: %s | WTEX (-): %s | GIRO: %s
+model.bird.clay=ARCILLA (CLAY)
+model.bird.vcolor=VCOLOR + OJOS
+
+# Suites QA G1 - G8
+qa.g1.title=PIPELINE, TRANSFORMACIONES (MVP/QUAT), MIPMAPS Y FILTRADO GX2
+qa.g1.controls=DPAD IZQ/DER:FILTRO  DPAD ARR/ABJ:UV WRAP  X:MIP COLOR-CODE  A:PAUSA ORBITA
+qa.g1.line1=FILTRO GX2 : %s
+qa.g1.line2=UV WRAP    : %s (CUBOS UV 3X)
+qa.g1.line3=TEXTURA    : %s | ORBITA: %s
+qa.g1.mips_legend=M0:BLANCO M1:CIAN M2:VERDE M3:AMAR M4:NAR M5+:ROJO
+qa.g1.tip=CONSEJO: PRESIONA (X) PARA VER TRANSICIONES DE MIPMAP
+
+qa.g2.title=PBR COOK-TORRANCE (5x5), MULTI-LUZ (DIR+4PT+SPOT) Y NORMAL/BUMP TBN
+qa.g2.controls=DPAD IZQ/DER:MODO SHADING  DPAD ARR/ABJ:ALBEDO  X:BUMP SCALE  A:PAUSA LUCES
+qa.g2.bump_med=MEDIO (2.5)
+qa.g2.bump_high=ALTO (5.0)
+qa.g2.orbit=ORBITA
+qa.g2.line1=SHADING : %s
+qa.g2.line2=ALBEDO  : %s | BUMP TBN: %s | LUCES: %s
+qa.g2.line3=MATRIZ 5x5: X=ROUGHNESS (0.08->0.94) | Y=METALLIC (0.0->1.0)
+qa.g2.tip=LUCES ACTIVAS: 1 DIRECCIONAL + 4 PUNTUALES + 1 SPOT LIGHT
+
+qa.g3.title=SOMBRAS 2-PASS GX2 (HARD / PCF 3x3 / PCF 5x5, BIAS Y ACNE/PANNING)
+qa.g3.controls=DPAD IZQ/DER:MODO PCF  DPAD ARR/ABJ:BIAS (ACNE/OPT/PAN)  X:FRONT-CULL  A:PAUSA SOL
+qa.g3.rotating=ROTANDO
+qa.g3.line1=SOMBRAS : %s
+qa.g3.line2=BIAS    : %s
+qa.g3.line3=SHADOW MAP: %ux%u D32F | FRONT-CULL: %s | SOL: %s
+qa.g3.tip=CONSEJO: PRUEBA CERO BIAS (ACNE) Y EXCESIVO (PETER PANNING)
+
+qa.g4.title=SKYBOX CUBEMAP, IBL PBR, VIDRIO REFRACTIVO (IOR) Y AGUA REALISTA
+qa.g4.controls=DPAD IZQ/DER:IBL ON/OFF  DPAD ARR/ABJ:IOR VIDRIO  X:SKYBOX (WCUBE/PROC)  A:PAUSA OLAS
+qa.g4.sky_proc=ATLAS PROCEDURAL (768x512)
+qa.g4.animated=ANIMADAS
+qa.g4.line1=SKYBOX  : %s | IBL PBR: %s
+qa.g4.line2=VIDRIO  : IOR = %s | OLAS AGUA: %s
+qa.g4.line3=IZQ->DER: CROMO | VIDRIO (SNELL) | PBR+IBL (R=0.15 / 0.45 / 0.80)
+qa.g4.tip=CONSEJO: ALTERNA IBL (DPAD IZQ/DER) Y SKYBOX (X) PARA VER REFLEJOS
+
+qa.g5.title=TRANSPARENCIA, ALPHA-CUTOUT, HDR (RGBA16F), TONE MAPPING ACES, BLOOM Y NIEBLA
+qa.g5.controls=DPAD IZQ/DER:TONEMAP  DPAD ARR/ABJ:NIEBLA  X:BLOOM  A:GAMMA sRGB  L/R:EXPOSICION
+qa.g5.linear=OFF (LINEAL)
+qa.g5.line1=TONEMAP : %s | EXPOSICION: %.2fX | GAMMA sRGB: %s
+qa.g5.line2=BLOOM   : %s (320x192 KAWASE 2D 5-TAP) | NIEBLA: %s
+qa.g5.line3=ESCENA  : 3 ORBES HDR 5.8X | 4 CELOSIAS ALPHA-CUTOUT | 3 VITRALES BACK-TO-FRONT
+qa.g5.tip=CONSEJO: COMPARA ACES VS OFF(CLAMP) Y GIRA DETRAS DE LOS VITRALES PARA VER SORTING
+
+qa.g6.title=INSTANCING MASIVO, FRUSTUM CULLING (DEBUG CAM) Y LOD DINAMICO
+qa.g6.controls=DPAD IZQ/DER:INSTANCIAS (256/512/1000)  DPAD ARR/ABJ:LOD  A:CULLING  X:DEBUG FRUSTUM
+qa.g6.frozen=CONGELADO (DEBUG)
+qa.g6.live=EN VIVO
+qa.g6.line1=INSTANCIAS: %u VISIBLES / %u TOTAL | CULLED: %u (%.1f%%) | HW DRAWS: %u
+qa.g6.line2=LOD DINAM.: %s (LOD0=%u VERDE | LOD1=%u AMAR | LOD2=%u ROJO)
+qa.g6.line3=CULLING: %s | DEBUG FRUSTUM: %s | BLOQUES ORBITALES: %u (PBR)
+qa.g6.tip=CONSEJO: PULSA (X) PARA CONGELAR EL FRUSTUM Y MUEVETE CON L-STICK PARA VER EL CULLING 3D
+
+qa.g7.title=TERRENO HEIGHTMAP SPLATTING, RUIDO 3D (MARMOL/MADERA), PARTICULAS Y TOON NPR
+qa.g7.controls=DPAD IZQ/DER:ESTILO (REAL/TOON)  DPAD ARR/ABJ:RUIDO 3D  X:PARTICULAS  A:PAUSA SOL
+qa.g7.orbiting=ORBITANDO
+qa.g7.line1=ESTILO  : %s | RUIDO 3D: %s
+qa.g7.line2=TERRENO : HEIGHTMAP 48x48 (4 BIOMAS) | PARTICULAS: %s (%u/%u ACTIVAS)
+qa.g7.line3=SOL     : %s | IZQ=MARMOL 3D | CENTRO=HOGUERA+TOON | DER=MADERA 3D
+qa.g7.tip=CONSEJO: ALTERNA REALISTA VS TOON+OUTLINE (DPAD IZQ/DER) Y OBSERVA LAS BANDAS Y SILUETAS
+
+qa.g8.title=RAY TRACING EN GPU (BVH STACKLESS), SOMBRAS PENUMBRA, HEATMAP Y RENDER SCALE
+qa.g8.controls=DPAD IZQ/DER:RENDER SCALE (360P..720P)  DPAD ARR/ABJ:SOMBRAS  X:BVH/BRUTE  A:HEATMAP  L/R:PAUSA
+qa.g8.brute=FUERZA BRUTA
+qa.g8.line1=RENDER SCALE: %s (%ux%u = %.0f%% PX) | ACELERACION: %s (%u NODOS)
+qa.g8.line2=SOMBRAS RT  : %s | HEATMAP COSTO BVH: %s
+qa.g8.line3=ESCENA GPU  : 12 ESFERAS REFLECTIVAS | ANIMACION: %s | UPSCALER BILINEAL HW
+qa.g8.tip=CONSEJO: ACTIVA HEATMAP (A) Y ALTERNA BVH VS BRUTE-FORCE (X) PARA VER EL AHORRO DE TESTS

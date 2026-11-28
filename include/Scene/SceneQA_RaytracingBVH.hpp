@@ -35,10 +35,10 @@ protected:
 
     [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "SUITE G8"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "RAY TRACING EN GPU (BVH STACKLESS), SOMBRAS PENUMBRA, HEATMAP Y RENDER SCALE";
+        return "qa.g8.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:RENDER SCALE (360P..720P)  DPAD ARR/ABJ:SOMBRAS  X:BVH/BRUTE  A:HEATMAP  L/R:PAUSA";
+        return "qa.g8.controls";
     }
 
 private:

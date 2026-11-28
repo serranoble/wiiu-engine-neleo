@@ -1,4 +1,5 @@
 #include "Scene/SceneQA_LightingPBR.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
 #include "Graphics/Render2D.hpp"
@@ -234,19 +235,19 @@ void SceneQA_LightingPBR::OnQARender3D(const Matrix4x4& /*viewMatrix*/, const Ma
 void SceneQA_LightingPBR::OnQARenderHUD() {
     Render2D::DrawBox(18, 92, 768, 126, ColorRGBA{10, 20, 36, 205}, ColorRGBA::Yellow());
 
-    const char* bumpLabel = (m_bumpPreset == 0u) ? "OFF (0.0)" : ((m_bumpPreset == 1u) ? "MEDIO (2.5)" : "ALTO (5.0)");
+    const char* bumpLabel = (m_bumpPreset == 0u) ? "OFF (0.0)"
+                          : ((m_bumpPreset == 1u) ? NELEO_LOC_CSTR("qa.g2.bump_med") : NELEO_LOC_CSTR("qa.g2.bump_high"));
     char line1[128];
     char line2[128];
-    char line3[128];
-    std::snprintf(line1, sizeof(line1), "SHADING : %s", GetShadingModeName());
-    std::snprintf(line2, sizeof(line2), "ALBEDO  : %s | BUMP TBN: %s | LUCES: %s",
-                  GetAlbedoPresetName(), bumpLabel, m_lightsPaused ? "PAUSA" : "ORBITA");
-    std::snprintf(line3, sizeof(line3), "MATRIZ 5x5: X=ROUGHNESS (0.08->0.94) | Y=METALLIC (0.0->1.0)");
+    std::snprintf(line1, sizeof(line1), NELEO_LOC_CSTR("qa.g2.line1"), GetShadingModeName());
+    std::snprintf(line2, sizeof(line2), NELEO_LOC_CSTR("qa.g2.line2"),
+                  GetAlbedoPresetName(), bumpLabel,
+                  m_lightsPaused ? NELEO_LOC_CSTR("common.paused") : NELEO_LOC_CSTR("qa.g2.orbit"));
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());
-    Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA{150, 255, 175, 255});
-    Render2D::DrawPixelString("LUCES ACTIVAS: 1 DIRECCIONAL + 4 PUNTUALES + 1 SPOT LIGHT",
+    Render2D::DrawPixelString(NELEO_LOC("qa.g2.line3"), 30, 156, 2, ColorRGBA{150, 255, 175, 255});
+    Render2D::DrawPixelString(NELEO_LOC("qa.g2.tip"),
                               30, 184, 2, ColorRGBA::Yellow());
 }
 

@@ -62,6 +62,13 @@ struct ControlsConfig {
 };
 
 /**
+ * @brief Parámetros generales y de localización del motor.
+ */
+struct GeneralConfig {
+    char language[16]{"es"};
+};
+
+/**
  * @brief Parámetros de red y servidor local/LAN (Jason Gregory Cap. 20).
  */
 struct NetConfig {
@@ -99,11 +106,14 @@ public:
     EngineConfig(EngineConfig&&) = delete;
     EngineConfig& operator=(EngineConfig&&) = delete;
 
+    GeneralConfig general;
     GraphicsConfig graphics;
     AudioConfig audio;
     ControlsConfig controls;
     NetConfig network;
 
+    [[nodiscard]] const GeneralConfig& GetGeneral() const noexcept { return general; }
+    [[nodiscard]] GeneralConfig& GetGeneral() noexcept { return general; }
     [[nodiscard]] const ControlsConfig& GetControls() const noexcept { return controls; }
     [[nodiscard]] ControlsConfig& GetControls() noexcept { return controls; }
     [[nodiscard]] const NetConfig& GetNetwork() const noexcept { return network; }

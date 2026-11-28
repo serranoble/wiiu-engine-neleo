@@ -1,4 +1,5 @@
 #include "Scene/SceneQA_PipelineTextures.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Graphics/Mesh/ProceduralMeshBuilder.hpp"
 #include "Graphics/Texture/TextureLoaderGX2.hpp"
 #include "Graphics/Render2D.hpp"
@@ -227,21 +228,21 @@ void SceneQA_PipelineTextures::OnQARenderHUD() {
     char line1[128];
     char line2[128];
     char line3[128];
-    std::snprintf(line1, sizeof(line1), "FILTRO GX2 : %s", GetFilterPresetName());
-    std::snprintf(line2, sizeof(line2), "UV WRAP    : %s (CUBOS UV 3X)", GetWrapModeName());
-    std::snprintf(line3, sizeof(line3), "TEXTURA    : %s | ORBITA: %s",
+    std::snprintf(line1, sizeof(line1), NELEO_LOC_CSTR("qa.g1.line1"), GetFilterPresetName());
+    std::snprintf(line2, sizeof(line2), NELEO_LOC_CSTR("qa.g1.line2"), GetWrapModeName());
+    std::snprintf(line3, sizeof(line3), NELEO_LOC_CSTR("qa.g1.line3"),
                   m_useColorCodedMips ? "MIPMAP COLOR-CODED" : "CHECKERBOX (9 MIPS)",
-                  m_orbitPaused ? "PAUSA" : "ACTIVA");
+                  m_orbitPaused ? NELEO_LOC_CSTR("common.paused") : NELEO_LOC_CSTR("common.active"));
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());
     Render2D::DrawPixelString(line3, 30, 156, 2, ColorRGBA{150, 255, 175, 255});
 
     if (m_useColorCodedMips) {
-        Render2D::DrawPixelString("M0:BLANCO M1:CIAN M2:VERDE M3:AMAR M4:NAR M5+:ROJO",
+        Render2D::DrawPixelString(NELEO_LOC("qa.g1.mips_legend"),
                                   30, 184, 2, ColorRGBA::Yellow());
     } else {
-        Render2D::DrawPixelString("CONSEJO: PRESIONA (X) PARA VER TRANSICIONES DE MIPMAP",
+        Render2D::DrawPixelString(NELEO_LOC("qa.g1.tip"),
                                   30, 184, 2, ColorRGBA{190, 215, 245, 255});
     }
 }

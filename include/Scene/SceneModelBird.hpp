@@ -38,12 +38,12 @@ protected:
     void OnQARender3D(const Matrix4x4& viewMatrix, const Matrix4x4& projMatrix) override;
     void OnQARenderHUD() override;
 
-    [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "COOKER SKINNING"; }
+    [[nodiscard]] const char* GetSuiteCode() const noexcept override { return "model.bird.code"; }
     [[nodiscard]] const char* GetSuiteTitle() const noexcept override {
-        return "VALIDACION DE MODELO ANIMADO COCINADO (BIRD ORANGE .WMESH/.WSKEL/.WANIM/.WTEX)";
+        return "model.bird.title";
     }
     [[nodiscard]] const char* GetControlsHint() const noexcept override {
-        return "DPAD IZQ/DER:CLIP  ARR/ABJ:GIRO  A:PAUSA  X:ARCILLA  -:WTEX ON/OFF  B:MENU";
+        return "model.bird.controls";
     }
 
 private:

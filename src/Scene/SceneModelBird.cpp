@@ -1,4 +1,5 @@
 #include "Scene/SceneModelBird.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/AssetManager.hpp"
 #include "Graphics/ForwardRendererGX2.hpp"
 #include "Graphics/Animation/AnimationLoader.hpp"
@@ -218,7 +219,7 @@ void SceneModelBird::OnQARenderHUD() {
 
     const char* clipName = (m_clipsLoaded && !m_clips.empty())
         ? m_clips[m_activeClipIdx % m_clips.size()].name
-        : "NINGUNO";
+        : NELEO_LOC_CSTR("common.none");
     const float clipDur = (m_clipsLoaded && !m_clips.empty())
         ? m_clips[m_activeClipIdx % m_clips.size()].duration
         : 0.0f;
@@ -230,7 +231,7 @@ void SceneModelBird::OnQARenderHUD() {
     char line2[128];
     char line3[128];
     std::snprintf(line1, sizeof(line1),
-                  "ARCHIVOS COOKER: WMESH=%s (%uB) | WSKEL=%s (%u HUESOS) | WANIM=%s | WTEX=%s",
+                  NELEO_LOC_CSTR("model.bird.line1"),
                   m_birdMeshLoaded ? "OK" : "ERR",
                   m_birdMeshLoaded ? m_birdMesh.GetHeader().vertexStride : 0u,
                   m_skelLoaded ? "OK" : "ERR",
@@ -238,7 +239,7 @@ void SceneModelBird::OnQARenderHUD() {
                   m_clipsLoaded ? "OK" : "ERR",
                   m_birdTexLoaded ? "OK" : "ERR");
     std::snprintf(line2, sizeof(line2),
-                  "CLIP [%u/%u]: %s (T=%.2f/%.2fs) | GEOMETRIA: %u VERTS / %u TRIS",
+                  NELEO_LOC_CSTR("model.bird.line2"),
                   m_clipsLoaded ? static_cast<unsigned>((m_activeClipIdx % m_clips.size()) + 1u) : 0u,
                   static_cast<unsigned>(m_clips.size()),
                   clipName,
@@ -247,11 +248,11 @@ void SceneModelBird::OnQARenderHUD() {
                   m_birdMeshLoaded ? m_birdMesh.GetVertexCount() : 0u,
                   m_birdMeshLoaded ? (m_birdMesh.GetIndexCount() / 3u) : 0u);
     std::snprintf(line3, sizeof(line3),
-                  "ANIM: %s | MODO: %s | WTEX (-): %s | GIRO: %s",
-                  m_animPaused ? "PAUSADA" : "ACTIVA",
-                  m_clayMode ? "ARCILLA (CLAY)" : "VCOLOR + OJOS",
+                  NELEO_LOC_CSTR("model.bird.line3"),
+                  m_animPaused ? NELEO_LOC_CSTR("common.paused") : NELEO_LOC_CSTR("common.active"),
+                  m_clayMode ? NELEO_LOC_CSTR("model.bird.clay") : NELEO_LOC_CSTR("model.bird.vcolor"),
                   m_useTextures ? "ON" : "OFF",
-                  m_autoRotate ? "ACTIVO" : "PAUSA");
+                  m_autoRotate ? NELEO_LOC_CSTR("common.active") : NELEO_LOC_CSTR("common.paused"));
 
     Render2D::DrawPixelString(line1, 30, 104, 2, ColorRGBA::Cyan());
     Render2D::DrawPixelString(line2, 30, 130, 2, ColorRGBA::White());

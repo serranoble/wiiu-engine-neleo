@@ -5,6 +5,7 @@
 #include "Scene/SceneModelHouse.hpp"
 #include "Scene/SceneModelBird.hpp"
 #include "Scene/SceneManager.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Input/InputManager.hpp"
 #include "Audio/AudioManager.hpp"
 #include "Graphics/Render2D.hpp"
@@ -30,42 +31,43 @@ void SceneMenu::InitMenuItems() {
     };
 
     // Botón 1: Laboratorio de Calidad Gráfica (Suites G1 a G8 — CGP + RTR4)
-    addMenuItem(176, "LABORATORIO GRAFICO (QA)",
-                "SUITES G1-G8: MIPMAPS, PBR, SOMBRAS, HDR Y RAY TRACING",
+    addMenuItem(176, NELEO_LOC("menu.item.qa.label"),
+                std::string(NELEO_LOC("menu.item.qa.desc")),
                 "ABRIR MODAL LABORATORIO GRAFICO", []() {
         SceneManager::Instance().GetModalStack().Push(std::make_unique<GraphicsQAModal>());
     }, ColorRGBA{38, 22, 62, 230}, ColorRGBA{155, 70, 230, 240}, ColorRGBA{195, 120, 255, 255}, ColorRGBA::Yellow(), ColorRGBA::White());
 
     // Botón 2: Validación Cooker — Modelo Estático (Casa)
-    addMenuItem(244, "MODELO ESTATICO: CASA (COOKER)",
-                "DUTCH HOUSE (.WMESH 48B + .WTEX + PROPS + ALPHA)",
+    addMenuItem(244, NELEO_LOC("menu.item.house.label"),
+                std::string(NELEO_LOC("menu.item.house.desc")),
                 "CARGAR CASA ESTATICA", []() {
         SceneManager::Instance().ChangeScene(std::make_unique<SceneModelHouse>());
     }, ColorRGBA{48, 32, 16, 230}, ColorRGBA{215, 140, 45, 240}, ColorRGBA{255, 185, 80, 255}, ColorRGBA::Yellow(), ColorRGBA::White());
 
     // Botón 3: Validación Cooker — Modelo Animado (Pájaro Skinned)
-    addMenuItem(312, "MODELO ANIMADO: PAJARO (COOKER)",
-                "BIRD ORANGE (.WMESH 80B + .WSKEL + .WANIM + SKINNING)",
+    addMenuItem(312, NELEO_LOC("menu.item.bird.label"),
+                std::string(NELEO_LOC("menu.item.bird.desc")),
                 "CARGAR PAJARO ANIMADO", []() {
         SceneManager::Instance().ChangeScene(std::make_unique<SceneModelBird>());
     }, ColorRGBA{48, 18, 36, 230}, ColorRGBA{210, 65, 140, 240}, ColorRGBA{255, 110, 180, 255}, ColorRGBA::Yellow(), ColorRGBA::White());
 
     // Botón 4: Opciones y Configuración Global del Motor
-    addMenuItem(380, "OPCIONES DEL MOTOR",
-                "FILTRADO GX2, VSYNC, AUDIO, HAPTICOS Y CONFIGURACION",
+    addMenuItem(380, NELEO_LOC("menu.item.options.label"),
+                std::string(NELEO_LOC("menu.item.options.desc")),
                 "SELECCION CATEGORIA OPCIONES", []() {
         SceneManager::Instance().ChangeScene(std::make_unique<SceneOptions>());
     }, ColorRGBA{15, 45, 30, 230}, ColorRGBA{0, 210, 130, 240}, ColorRGBA::Green(), ColorRGBA::Yellow(), ColorRGBA::White());
 
     // Botón 5: Modal de Prueba de Red (UDP + TCP) y Teclado Nativo Wii U
-    addMenuItem(448, "PRUEBA DE RED (UDP / TCP)",
-                "TECLADO WII U (NN::SWKBD), PING TCP, UDP Y RADAR",
+    addMenuItem(448, NELEO_LOC("menu.item.net.label"),
+                std::string(NELEO_LOC("menu.item.net.desc")),
                 "ABRIR MODAL PRUEBA RED", []() {
         SceneManager::Instance().GetModalStack().Push(std::make_unique<NetTestModal>());
     }, ColorRGBA{15, 35, 58, 230}, ColorRGBA{0, 175, 230, 240}, ColorRGBA::Cyan(), ColorRGBA::Yellow(), ColorRGBA::White());
 }
 
 void SceneMenu::OnEnter() {
+    InitMenuItems();
     AudioManager::Instance().PlayBGM();
 }
 
@@ -116,8 +118,8 @@ void SceneMenu::Render() {
 
     // 2. Título y Subtítulo Centrales
     Render2D::DrawPixelString("WIIU Demos by Neleo", 412, 56, 4, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("FRAMEWORK Y MOTOR GRAFICO C++20", 446, 106, 2, ColorRGBA::Yellow());
-    Render2D::DrawPixelString("PIPELINE 100% NATIVO GX2 + SNDCORE2 + ENGINE_NET", 352, 134, 2, ColorRGBA{160, 210, 255, 255});
+    Render2D::DrawPixelString(NELEO_LOC("menu.subtitle1"), 446, 106, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString(NELEO_LOC("menu.subtitle2"), 352, 134, 2, ColorRGBA{160, 210, 255, 255});
 
     // 3. Botones del Menú y Subtítulos
     for (size_t i = 0; i < m_menuItems.size(); ++i) {
@@ -134,9 +136,9 @@ void SceneMenu::Render() {
 
     // 4. Panel de Estado Informativo en la parte inferior
     Render2D::DrawBox(240, 524, 800, 100, ColorRGBA{10, 20, 35, 200}, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("ESTADO: 8 LIBRERIAS ESTATICAS (100% NATIVO - 0 SDL)", 250, 538, 2, ColorRGBA{120, 255, 160, 255});
-    Render2D::DrawPixelString("D-PAD ARRIBA/ABAJO + (A) O TACTIL PARA SELECCIONAR", 275, 566, 2, ColorRGBA::Yellow());
-    Render2D::DrawPixelString("COOKER: CASA + PAJARO | QA: G1-G8 | NET TEST", 275, 594, 2, ColorRGBA{200, 225, 255, 255});
+    Render2D::DrawPixelString(NELEO_LOC("menu.footer.status"), 250, 538, 2, ColorRGBA{120, 255, 160, 255});
+    Render2D::DrawPixelString(NELEO_LOC("menu.footer.controls"), 275, 566, 2, ColorRGBA::Yellow());
+    Render2D::DrawPixelString(NELEO_LOC("menu.footer.summary"), 275, 594, 2, ColorRGBA{200, 225, 255, 255});
 
     Render2D::End();
 }

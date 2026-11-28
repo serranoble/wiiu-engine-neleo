@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TEXT_EXTS = {".cpp", ".hpp", ".h", ".c", ".py", ".sh", ".md", ".txt", ".cmake", ".vert", ".frag", ".json"}
+TEXT_EXTS = {".cpp", ".hpp", ".h", ".c", ".py", ".sh", ".md", ".txt", ".cmake", ".vert", ".frag", ".json", ".lang", ".cfg"}
 TEXT_NAMES = {"CMakeLists.txt"}
 
 
@@ -244,6 +244,81 @@ def check_sdl_symbols() -> tuple[str, int]:
 
     sdl_syms = [line for line in out.splitlines() if " SDL_" in line or "\tSDL_" in line]
     return ("PASS" if not sdl_syms else "FAIL"), len(sdl_syms)
+
+
+def check_localization_parity() -> tuple[int, list[str]]:
+    lang_dir = ROOT / "assets" / "lang"
+    manifest = lang_dir / "languages.cfg"
+    issues: list[str] = []
+    if not manifest.exists():
+        return 0, ["assets/lang/languages.cfg missing"]
+
+    lang_files: list[tuple[str, Path]] = []
+    for raw in manifest.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) != 3:
+            issues.append(f"languages.cfg: invalid entry '{line}'")
+            continue
+        code, _, vfs_path = parts
+        rel = vfs_path.removeprefix("content:/")
+        lang_files.append((code, ROOT / "assets" / rel))
+
+    if len(lang_files) < 2:
+        issues.append(f"languages.cfg: expected >= 2 languages, found {len(lang_files)}")
+
+    fmt_re = re.compile(r"%(?:%|[-+0 #]*\d*(?:\.\d+)?(?:zu|llu|ld|lu|[sdifuxX]))")
+    catalogs: dict[str, dict[str, str]] = {}
+    for code, path in lang_files:
+        if not path.exists():
+            issues.append(f"{code}: missing file {path.relative_to(ROOT)}")
+            continue
+        entries: dict[str, str] = {}
+        for idx, raw in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+            line = raw.strip()
+            if not line or line.startswith(("#", ";")):
+                continue
+            if "=" not in line:
+                issues.append(f"{path.name}:{idx}: missing '='")
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            if not k:
+                issues.append(f"{path.name}:{idx}: empty key")
+                continue
+            if k in entries:
+                issues.append(f"{path.name}:{idx}: duplicate key '{k}'")
+            entries[k] = v
+            if any(ord(ch) > 127 for ch in v):
+                issues.append(f"{path.name}:{idx}: non-ASCII char in '{k}' (Render2D 5x7 requires ASCII)")
+        catalogs[code] = entries
+        if len(entries) > 768:
+            issues.append(f"{path.name}: {len(entries)} keys exceed LocalizationTable max load (768)")
+        val_bytes = sum(len(v) + 1 for v in entries.values())
+        if val_bytes > 32768:
+            issues.append(f"{path.name}: {val_bytes} value bytes exceed TEXT_BUFFER_CAPACITY (32768)")
+
+    if "es" in catalogs:
+        base_entries = catalogs["es"]
+        base_keys = set(base_entries.keys())
+        for code, entries in catalogs.items():
+            if code == "es":
+                continue
+            keys = set(entries.keys())
+            missing = sorted(base_keys - keys)
+            extra = sorted(keys - base_keys)
+            for mk in missing[:10]:
+                issues.append(f"{code}.lang missing key '{mk}' present in es.lang")
+            for ek in extra[:10]:
+                issues.append(f"{code}.lang has extra key '{ek}' not in es.lang")
+            for common_key in sorted(base_keys & keys):
+                base_fmts = [m for m in fmt_re.findall(base_entries[common_key]) if m != "%%"]
+                lang_fmts = [m for m in fmt_re.findall(entries[common_key]) if m != "%%"]
+                if base_fmts != lang_fmts:
+                    issues.append(f"{code}.lang key '{common_key}': printf specs {lang_fmts} != es.lang {base_fmts}")
+    return len(catalogs), issues
 
 
 def report_binaries() -> None:
@@ -479,6 +554,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     shader_count, shader_budget_issues = check_shader_budgets()
     sdl_status, sdl_count = check_sdl_symbols()
     dll_status, dll_unexpected = check_win_dlls()
+    lang_count, loc_issues = check_localization_parity()
 
     print(f"CRLF_CHECK: {'PASS (0)' if not crlf else f'FAIL ({len(crlf)})'}")
     for f in crlf[:15]:
@@ -508,6 +584,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     for sbi in shader_budget_issues[:15]:
         print(f"  SHADER: {sbi}")
 
+    print(f"LOCALIZATION_PARITY_CHECK: {'PASS' if not loc_issues else 'FAIL'} ({lang_count} langs, {len(loc_issues)} issues)")
+    for li in loc_issues[:15]:
+        print(f"  LOC: {li}")
+
     print(f"ELF_SDL_SYMBOLS: {sdl_status} ({sdl_count})")
     print(f"WIN_DLL_CHECK: {dll_status} ({len(dll_unexpected)})")
     for du in dll_unexpected[:15]:
@@ -523,6 +603,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         or bool(gl_issues)
         or bool(wmesh_issues)
         or bool(shader_budget_issues)
+        or bool(loc_issues)
         or (sdl_count > 0)
         or bool(dll_unexpected)
         or dll_status.startswith("ERROR")

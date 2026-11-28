@@ -8,8 +8,10 @@
 #include "Core/Spatial/SpatialBVH.hpp"
 #include "Core/Config/CVarRegistry.hpp"
 #include "Core/Config/EngineConfig.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 namespace Neleo::Diagnostics {
 
@@ -228,6 +230,27 @@ void CoreSelfTest::RunAll(EngineSelfTestReport& outReport) {
         const bool ok = integrityOk && workersOk && parallelOk;
         outReport.Record("CORE", "JOB_SYSTEM_PARALLEL_FOR", ok,
                          ok ? "SMP MULTI-CORE PARALLEL_FOR OK" : "FALLO JOB SYSTEM PARALLEL_FOR");
+    }
+
+    // 9. LocalizationTable + LocalizationManager aislado (0 side-effects sobre observadores vivos)
+    {
+        static LocalizationTable s_isolatedTable;
+        const size_t parsed = s_isolatedTable.ParseFromMemory(
+            "# comment\n"
+            "test.hello=HOLA\n"
+            "test.world=MUNDO\n"
+        );
+        const bool tableOk = (parsed == 2u) &&
+                             (s_isolatedTable.Find(HashLocKeyLiteral("test.hello")) == "HOLA") &&
+                             (s_isolatedTable.Find(HashLocKeyLiteral("test.world")) == "MUNDO") &&
+                             s_isolatedTable.Find(HashLocKeyLiteral("test.missing")).empty();
+        s_isolatedTable.Clear();
+
+        const char* locReason = "FALLO LOCALIZATION I18N";
+        const bool mgrOk = LocalizationManager::VerifyIntegrity(&locReason);
+        const bool ok = tableOk && mgrOk;
+        outReport.Record("CORE", "LOCALIZATION_I18N", ok,
+                         ok ? "I18N ES/EN/FALLBACK/OBS OK" : (tableOk ? locReason : "FAIL:TABLE_PARSE"));
     }
 }
 

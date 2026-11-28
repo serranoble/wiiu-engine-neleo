@@ -1,4 +1,5 @@
 #include "Input/SoftwareKeyboard.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/Window.hpp"
 #include "Core/MemoryManager.hpp"
 #include "Graphics/RHI/RHIPipelineCache.hpp"
@@ -150,7 +151,10 @@ bool SoftwareKeyboard::Show(const char* hintText,
     AsciiToUtf16(initialText, init16, 64u);
 
     nn::swkbd::AppearArg appearArg{};
-    appearArg.keyboardArg.configArg.languageType = nn::swkbd::LanguageType::Spanish;
+    appearArg.keyboardArg.configArg.languageType =
+        LocalizationManager::Instance().IsCurrentLanguage("en")
+            ? nn::swkbd::LanguageType::English
+            : nn::swkbd::LanguageType::Spanish;
     appearArg.keyboardArg.configArg.controllerType = nn::swkbd::ControllerType::DrcGamepad;
     appearArg.keyboardArg.configArg.disableNewLine = true;
     appearArg.keyboardArg.configArg.showWordSuggestions = false;
@@ -550,7 +554,7 @@ bool SoftwareKeyboard::Show(const char* hintText,
         Render2D::DrawBox(panelX, panelY, panelW, panelH,
                           ColorRGBA{14, 24, 42, 245}, ColorRGBA{85, 190, 255, 255});
 
-        const char* title = (hintText && hintText[0] != '\0') ? hintText : "TECLADO VIRTUAL";
+        const char* title = (hintText && hintText[0] != '\0') ? hintText : NELEO_LOC_CSTR("swkbd.title");
         Render2D::DrawPixelString(title, panelX + 36, panelY + 28, 2, ColorRGBA::Cyan());
 
         // Campo de texto editable con cursor parpadeante
@@ -601,7 +605,7 @@ bool SoftwareKeyboard::Show(const char* hintText,
         }
 
         Render2D::DrawPixelString(
-            "TECLADO FISICO / RATON / TACTIL / MANDO: [DPAD] MOVER  [A] PULSAR  [X] BORRAR  [+/ENTER] OK  [B/ESC] CANCELAR",
+            NELEO_LOC("swkbd.hint"),
             panelX + 36, panelY + panelH - 36, 1, ColorRGBA{180, 215, 245, 255});
 
         Render2D::End();

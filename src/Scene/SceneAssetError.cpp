@@ -4,6 +4,7 @@
 #include "Audio/AudioManager.hpp"
 #include "Graphics/Render2D.hpp"
 #include "Graphics/Color.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Core/StackString.hpp"
 
 namespace Neleo {
@@ -11,7 +12,7 @@ namespace Neleo {
 SceneAssetError::SceneAssetError(std::string targetSceneName, std::vector<std::string> missingAssets)
     : m_targetSceneName(std::move(targetSceneName)),
       m_missingAssets(std::move(missingAssets)),
-      m_acceptButton(360, 560, 560, 50, "[ ACEPTAR Y VOLVER AL MENU ]", 3) {
+      m_acceptButton(360, 560, 560, 50, NELEO_LOC("asset_err.btn_accept"), 3) {
     
     m_acceptButton.SetColors(
         ColorRGBA{170, 30, 30, 230},   // Normal Fill
@@ -65,13 +66,13 @@ void SceneAssetError::Render() {
     // 3. Banner Superior Rojo de Alerta
     Render2D::DrawBox(modalX, modalY, modalW, 54,
                       ColorRGBA{180, 25, 25, 240}, ColorRGBA{255, 80, 80, 255});
-    Render2D::DrawPixelString("[!] ERROR: RECURSOS NO ENCONTRADOS", modalX + 18, modalY + 14, 3, ColorRGBA::White());
+    Render2D::DrawPixelString(NELEO_LOC("asset_err.banner"), modalX + 18, modalY + 14, 3, ColorRGBA::White());
 
     // 4. Mensaje Principal
-    Render2D::DrawPixelString("NO SE PUDO INICIAR LA ESCENA:", modalX + 35, modalY + 75, 2, ColorRGBA{200, 215, 230, 255});
+    Render2D::DrawPixelString(NELEO_LOC("asset_err.scene_label"), modalX + 35, modalY + 75, 2, ColorRGBA{200, 215, 230, 255});
     Render2D::DrawPixelString(m_targetSceneName, modalX + 35, modalY + 105, 3, ColorRGBA::Yellow());
 
-    Render2D::DrawPixelString("LOS SIGUIENTES ARCHIVOS NO FUERON ENCONTRADOS EN EL SISTEMA:",
+    Render2D::DrawPixelString(NELEO_LOC("asset_err.list_header"),
                               modalX + 35, modalY + 155, 2, ColorRGBA::White());
 
     // 5. Caja de Lista de Assets Faltantes
@@ -85,21 +86,21 @@ void SceneAssetError::Render() {
     int lineY = listY + 18;
     for (size_t i = 0; i < m_missingAssets.size() && i < 5; ++i) {
         StackString<128> item;
-        item.Format("[-] ASSET REQUERIDO: %s", m_missingAssets[i].c_str());
+        item.Format(NELEO_LOC_CSTR("asset_err.item"), m_missingAssets[i].c_str());
         Render2D::DrawPixelString(item.string_view(), listX + 20, lineY, 2, ColorRGBA{255, 110, 110, 255});
         lineY += 36;
     }
 
     if (m_missingAssets.size() > 5) {
         StackString<128> moreText;
-        moreText.Format("... Y %zu ARCHIVOS ADICIONALES", m_missingAssets.size() - 5);
+        moreText.Format(NELEO_LOC_CSTR("asset_err.more"), m_missingAssets.size() - 5);
         Render2D::DrawPixelString(moreText.string_view(), listX + 20, lineY, 2, ColorRGBA{255, 170, 170, 255});
     }
 
     // 6. Indicaciones de Solución
-    Render2D::DrawPixelString("SOLUCION: VERIFICA QUE LOS ARCHIVOS ESTEN EN 'content/' O 'assets/'",
+    Render2D::DrawPixelString(NELEO_LOC("asset_err.solution1"),
                               modalX + 35, modalY + 415, 2, ColorRGBA::Cyan());
-    Render2D::DrawPixelString("JUNTO AL BINARIO DEL MOTOR (.WUHB / .RPX) Y RECOMPILA EL PROYECTO.",
+    Render2D::DrawPixelString(NELEO_LOC("asset_err.solution2"),
                               modalX + 35, modalY + 445, 2, ColorRGBA{0, 210, 240, 255});
 
     // 7. Botón Interactivo de Aceptar

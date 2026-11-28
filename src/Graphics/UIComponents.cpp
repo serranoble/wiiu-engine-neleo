@@ -1,5 +1,6 @@
 #include "Graphics/UIComponents.hpp"
 #include "Graphics/Render2D.hpp"
+#include "Core/Localization/LocalizationManager.hpp"
 #include "Scene/SceneManager.hpp"
 #include "Audio/AudioManager.hpp"
 #include <algorithm>
@@ -80,7 +81,7 @@ void UIButton::Render() const {
 
 // UIBackButton Implementation
 UIBackButton::UIBackButton()
-    : m_button(40, 35, 200, 46, "< VOLVER", 3) {
+    : m_button(40, 35, 200, 46, NELEO_LOC("ui.back"), 3) {
     m_button.SetColors(
         ColorRGBA{20, 30, 50, 220},   // Normal Fill
         ColorRGBA{200, 40, 40, 230},  // Hover Fill
@@ -88,6 +89,10 @@ UIBackButton::UIBackButton()
         ColorRGBA::Yellow(),          // Hover Border
         ColorRGBA::White()            // Text Color
     );
+}
+
+void UIBackButton::RefreshLabel() noexcept {
+    m_button.SetLabel(NELEO_LOC("ui.back"));
 }
 
 UIBackButton::UIBackButton(std::function<void()> onBack)
